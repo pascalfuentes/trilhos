@@ -76,9 +76,13 @@ occ_build:
     lsr     w14, w14, #6
     add     w13, w13, w14, lsl #9
     strb    w15, [x9, w13, uxtw]
-    cmp     w12, #O_SHELTER             // abrigo: posicao no canto do meio
-    b.ne    4f                          // do bloco 2 x 2
-    sub     w13, w13, #1
+    cmp     w12, #O_SHELTER             // abrigo, barraco e casa: posicao no
+    b.eq    31f                         // canto do meio do bloco 2 x 2
+    cmp     w12, #O_HUT
+    b.lo    4f
+    cmp     w12, #O_HOUSE
+    b.hi    4f
+31: sub     w13, w13, #1
     strb    w15, [x9, w13, uxtw]
     sub     w13, w13, #512
     strb    w15, [x9, w13, uxtw]

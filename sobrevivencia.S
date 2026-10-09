@@ -1050,8 +1050,8 @@ su_after_move:
     ldrb    w20, [x9, #6]
     cmp     w20, #O_BUSHE
     b.eq    su_nomine
-    cmp     w20, #O_SAPLING             // muda: deixe crescer
-    b.eq    su_nomine
+    cmp     w20, #O_SAPLING             // muda, arvore jovem, casas: nao
+    b.hs    su_nomine
     cmp     w20, #O_CROP                // trigo verde nao sai: espere
     b.ne    14f
     ldrb    w10, [x9, #7]
@@ -7144,7 +7144,7 @@ dirtab:
 minetime:
     .byte 45, 45, 70, 25, 0, 0, 0, 0, 0, 0, 0, 0, 6, 6, 6, 6
     .byte 6, 6, 6, 6, 40, 40, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6
-    .byte 6, 6, 6, 6, 20, 20, 15, 12, 6, 6, 6, 0
+    .byte 6, 6, 6, 6, 20, 20, 15, 12, 6, 6, 6, 0, 0, 0, 0
 
 // sprite de cada tipo de objeto (as pilhas usam o icone do item)
     .globl objsprite
@@ -7152,7 +7152,7 @@ objsprite:
     .byte 0, 1, 2, 3, 4, 0, 0, 0, 0, 0, 0, 0, 12, 13, 14, 15
     .byte 16, 17, 18, 19, 20, 21, 21, 23, 24, 25, 26, 27, 28, 29, 48, 49
     .byte 42, 43, 44, SPR_HOE, 45, 49, SPR_WILD, SPR_CROP, SPR_SEED, SPR_WHEAT, SPR_BREAD
-    .byte SPR_SAPLING
+    .byte SPR_SAPLING, SPR_YTREE, SPR_HUT, SPR_HOUSE
 
 // peso de cada item (decimos de kg)
     .p2align 1
@@ -7530,7 +7530,13 @@ objnames:
     .p2align 5
     .asciz "Pao largado"
     .p2align 5
-    .asciz "Muda (vira arvore)"
+    .asciz "Muda (jovem em 1 ano)"
+    .p2align 5
+    .asciz "Arvore jovem (adulta em 1 ano)"
+    .p2align 5
+    .asciz "Barraco (cabem 4)"
+    .p2align 5
+    .asciz "Casa (cabem 8)"
     .p2align 5
 
 m_start:        .asciz "Colete madeira e pedra. Faca uma fogueira (F) antes da noite!"

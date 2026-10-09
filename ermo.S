@@ -381,6 +381,24 @@ shot_mode:
     bl      set_zoom
     mov     w0, #1
     bl      people_selftest
+    ldr     w19, [x28, #G_ZOOM]         // a vila depois das obras
+    mov     w0, #3
+    bl      set_zoom
+    bl      draw_all
+    LA      x0, s_shot_village
+    bl      save_bmp
+    ldr     x0, [x28, #G_REN]
+    bl      F(SDL_RenderPresent)
+    mov     w0, #3                      // arvore genealogica
+    bl      people_selftest
+    bl      draw_all
+    LA      x0, s_shot_family
+    bl      save_bmp
+    ldr     x0, [x28, #G_REN]
+    bl      F(SDL_RenderPresent)
+    str     wzr, [x28, #G_PEOPLEOPEN]
+    mov     w0, w19
+    bl      set_zoom
     mov     w9, #1                      // o resto do teste sem a vila
     str     w9, [x28, #G_NOPEOPLE]
 
@@ -2916,6 +2934,48 @@ sprites:
     .byte 27,0,0,0,27
     .byte 18,0,0,0,18
     .p2align 7
+// 69: arvore jovem
+    .byte 5, 6, 2, 0
+    .byte 0,3,3,3,0
+    .byte 3,3,2,3,3
+    .byte 3,2,2,2,3
+    .byte 0,3,2,3,0
+    .byte 0,0,1,0,0
+    .byte 0,0,1,0,0
+    .p2align 7
+// 70: barraco (14 x 11; ocupa as vagas 70 e 71; telhado na cor da familia)
+    .byte 14, 11, 7, 0
+    .byte 0,0,0,0,0,0,9,9,0,0,0,0,0,0
+    .byte 0,0,0,0,0,9,8,8,9,0,0,0,0,0
+    .byte 0,0,0,0,9,8,8,8,8,9,0,0,0,0
+    .byte 0,0,0,9,8,8,8,8,8,8,9,0,0,0
+    .byte 0,0,9,8,8,8,8,8,8,8,8,9,0,0
+    .byte 0,9,8,8,8,8,8,8,8,8,8,8,9,0
+    .byte 9,9,9,9,9,9,9,9,9,9,9,9,9,9
+    .byte 0,31,1,31,1,31,18,18,31,1,31,1,31,0
+    .byte 0,31,1,31,1,31,18,18,31,1,31,1,31,0
+    .byte 0,31,1,31,1,31,18,18,31,1,31,1,31,0
+    .byte 0,1,1,1,1,1,18,18,1,1,1,1,1,0
+    .p2align 7
+// 72: casa (20 x 16; vagas 72 a 74; paredes claras, janelas, chamine)
+    .byte 20, 16, 10, 0
+    .byte 0,0,0,0,0,0,0,0,0,9,9,0,0,0,22,22,0,0,0,0
+    .byte 0,0,0,0,0,0,0,0,9,8,8,9,0,0,22,22,0,0,0,0
+    .byte 0,0,0,0,0,0,0,9,8,8,8,8,9,0,22,22,0,0,0,0
+    .byte 0,0,0,0,0,0,9,8,8,8,8,8,8,9,22,22,0,0,0,0
+    .byte 0,0,0,0,0,9,8,8,8,8,8,8,8,8,9,22,0,0,0,0
+    .byte 0,0,0,0,9,8,8,8,8,8,8,8,8,8,8,9,0,0,0,0
+    .byte 0,0,0,9,8,8,8,8,8,8,8,8,8,8,8,8,9,0,0,0
+    .byte 0,0,9,8,8,8,8,8,8,8,8,8,8,8,8,8,8,9,0,0
+    .byte 0,9,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,9,0
+    .byte 9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9
+    .byte 0,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,0
+    .byte 0,6,11,11,6,6,6,6,1,1,1,1,6,6,6,6,11,11,6,0
+    .byte 0,6,11,11,6,6,6,6,1,1,1,1,6,6,6,6,11,11,6,0
+    .byte 0,6,6,6,6,6,6,6,1,1,1,1,6,6,6,6,6,6,6,0
+    .byte 0,6,6,6,6,6,6,6,1,1,1,1,6,6,6,6,6,6,6,0
+    .byte 0,7,7,7,7,7,7,7,1,1,1,1,7,7,7,7,7,7,7,0
+    .p2align 7
 
 m_gridon:       .asciz "Grade ligada (G desliga)"
 m_gridoff:      .asciz "Grade desligada"
@@ -2954,6 +3014,8 @@ s_shot_fence:   .asciz "shot_cerca.bmp"
 s_shot_farm:    .asciz "shot_plantacao.bmp"
 s_shot_people:  .asciz "shot_pessoas.bmp"
 s_shot_panel:   .asciz "shot_painel.bmp"
+s_shot_village: .asciz "shot_vila.bmp"
+s_shot_family:  .asciz "shot_familias.bmp"
 s_shot_fish:    .asciz "shot_pesca.bmp"
 s_shot_hut:     .asciz "shot_abrigo.bmp"
 s_shot_sleep:   .asciz "shot_dormindo.bmp"

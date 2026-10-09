@@ -12,15 +12,16 @@
 //    vida e morrem. De noite vao dormir na cabana (ou perto de uma
 //    fogueira acesa). Em noite de inverno ou neve, fora da cabana e longe
 //    do fogo, passam frio. Lobos e ursos atacam; eles fogem.
-//  - Tarefas (painel P): Madeira, Pedra, Plantar, Arvores. Cada uma so
+//  - Tarefas (painel P): Floresta, Pedra, Plantar, Obras. Cada uma so
 //    trabalha dentro das zonas pintadas na grade (tecla Z) para ela, e
 //    guarda o que juntou no bau mais perto.
-//      Madeira: corta arvores da zona (4 por viagem).
+//      Floresta: corta as arvores adultas da zona (4 por viagem) e planta
+//        uma muda no lugar; sem arvore adulta, planta mudas no chao vazio
+//        (um quadrado sim, outro nao). Muda -> jovem (1 ano) -> adulta.
 //      Pedra: quebra pedras da zona (3 por viagem).
 //      Plantar: colhe o trigo maduro (e replanta), planta nas terras
 //        aradas vazias (pega sementes no bau) e ara o resto da zona.
-//      Arvores: planta mudas (um quadrado sim, outro nao); viram arvore
-//        em ~2 dias (nao crescem no inverno).
+//      Obras: barracos, casas e cercas das familias (vila.S).
 //  - Clique numa pessoa para seleciona-la; botao direito no mapa: ela
 //    vai ate la (e depois volta a tarefa).
 //  - Por onde se anda muito vira caminho de terra batida (mais rapido).
@@ -28,83 +29,9 @@
 
 #include "comum.h"
 
-.macro RGBA r, g, b, a
-    mov     w0, #\r
-    mov     w1, #\g
-    mov     w2, #\b
-    mov     w3, #\a
-    bl      setcolor
-.endm
+#include "pessoas.h"
 
-// constante float da tabela pconst (usa x16)
-.macro PF sreg, off
-    LA      x16, pconst
-    ldr     \sreg, [x16, #\off]
-.endm
-
-// pessoa (64 bytes)
-.equ P_U,      0                // posicao (float, celulas)
-.equ P_V,      4
-.equ P_GU,     8                // para onde vai
-.equ P_GV,     12
-.equ P_ALIVE,  16               // 1 = existe
-.equ P_SEX,    17               // 0 homem, 1 mulher
-.equ P_FAM,    18               // familia 0..2
-.equ P_JOB,    19               // tarefa (J_*)
-.equ P_AGE,    20               // u16: idade em dias (12 dias = 1 ano)
-.equ P_STATE,  22               // ST_*
-.equ P_NEXT,   23               // o que fazer ao chegar (NX_*)
-.equ P_TIMER,  24               // u16
-.equ P_ANIM,   26               // u16
-.equ P_TARGET, 28               // objeto ou celula do trabalho (-1)
-.equ P_HP,     32               // vida (float 0..100)
-.equ P_FOOD,   36               // fome (float 0..100; 100 = cheio)
-.equ P_FAITH,  40               // fe (float 0..100)
-.equ P_NAME,   44               // nome (0..23)
-.equ P_CITEM,  45               // item carregado + 1
-.equ P_CCOUNT, 46               // quantos
-.equ P_SEEDS,  47               // sementes no bolso
-.equ P_FLAGS,  48               // 1 dentro da cabana, 2 perto do fogo, 4 desvia pela esquerda
-.equ P_WKIND,  49               // tipo de trabalho (WK_*)
-.equ P_SKIPK,  50               // tipo do trabalho que nao conseguiu alcancar
-.equ P_BLOCK,  52               // u16: quadros travado
-.equ P_THINK,  54               // u16: espera para pensar de novo
-.equ P_SKIP,   56               // alvo que nao conseguiu alcancar (pula)
-.equ P_DET,    60               // u16: quadros desviando
-
-.equ ST_IDLE,  0
-.equ ST_WALK,  1
-.equ ST_WORK,  2
-.equ ST_SLEEP, 3
-.equ ST_WAIT,  4
-.equ ST_FLEE,  5
-
-.equ NX_NONE,    0
-.equ NX_WORK,    1
-.equ NX_DEPOSIT, 2
-.equ NX_EAT,     3
-.equ NX_SEEDS,   4
-.equ NX_SLEEP,   5
-.equ NX_ORDER,   6
-
-.equ WK_CHOP,    1
-.equ WK_MINE,    2
-.equ WK_HARV,    3
-.equ WK_PLANT,   4
-.equ WK_TILL,    5
-.equ WK_SAPLING, 6
-.equ WK_FORAGE,  7
-
-.equ CAUSE_FOME,  1
-.equ CAUSE_FRIO,  2
-.equ CAUSE_BICHO, 3
-.equ CAUSE_VELHO, 4
-.equ CAUSE_FE,    5
-
-.equ ADULTDAYS,  168            // 14 anos
-.equ BEDTIME,    27000          // 21:00: hora de ir dormir
 .equ PATHN,      16             // passadas para virar caminho
-.equ SAPLINGDONE, 144           // passos (10 s) ate a muda virar arvore
 .equ FINDR,      40             // raio de busca de quadrados para trabalhar
 
 // painel de pessoas e paleta de zonas (espaco da interface 640 x 360)
@@ -158,6 +85,7 @@ people_reset:
     str     wzr, [x28, #G_ZONESHOW]
     ldr     w9, [x28, #G_DAY]
     str     w9, [x28, #G_PLASTDAY]
+    bl      vila_reset
     bl      ppl_spawn_all
     ldr     w9, [x28, #G_SHOT]
     cbz     w9, 4f
@@ -166,6 +94,7 @@ people_reset:
     b       9f
 4:  str     wzr, [x28, #G_NOPEOPLE]
     bl      ppl_camp
+    bl      vila_found                  // um barraco para cada familia
 9:  ldp     x29, x30, [sp], #16
     ret
 
@@ -191,7 +120,26 @@ ppl_spawn_all:
     udiv    w21, w20, w10               // familia
     msub    w22, w21, w10, w20          // 0 pai, 1 mae, 2 e 3 filhos
     strb    w21, [x19, #P_FAM]
-    mov     w9, w22
+    LA      x9, kin                     // parentes
+    add     x9, x9, x20, lsl #3
+    mov     w10, #255
+    strb    w10, [x9, #K_FATHER]
+    strb    w10, [x9, #K_MOTHER]
+    strb    w10, [x9, #K_SPOUSE]
+    mov     w10, #1
+    strb    w10, [x9, #K_REC]
+    strb    w21, [x9, #K_SURN]
+    lsl     w10, w21, #2                // pai = familia * 4, mae = + 1
+    cmp     w22, #1
+    b.hi    11f
+    eor     w11, w22, #1                // pai e mae: casados
+    add     w11, w10, w11
+    strb    w11, [x9, #K_SPOUSE]
+    b       12f
+11: strb    w10, [x9, #K_FATHER]
+    add     w11, w10, #1
+    strb    w11, [x9, #K_MOTHER]
+12: mov     w9, w22
     cmp     w22, #2
     b.lo    2f
     bl      rng
@@ -213,13 +161,18 @@ ppl_spawn_all:
     add     w9, w9, #1
     b       22b
 23: strb    w0, [x19, #P_NAME]
-    cmp     w22, #2                     // idade: adultos 20-40, filhos 3-12
+    cmp     w22, #2                     // idade: adultos 30-42, filhos 14-17 e 3-11
     b.hs    3f
-    mov     w0, #21
+    mov     w0, #13
     bl      rng_mod
-    add     w0, w0, #20
+    add     w0, w0, #30
     b       4f
-3:  mov     w0, #10
+3:  b.ne    31f
+    mov     w0, #4
+    bl      rng_mod
+    add     w0, w0, #14
+    b       4f
+31: mov     w0, #9
     bl      rng_mod
     add     w0, w0, #3
 4:  mov     w9, #12
@@ -396,7 +349,8 @@ ppl_newchest:
     ldp     x29, x30, [sp], #48
     ret
 
-// ppl_land(s0 = u, s1 = v) -> w0 = 1 se da para ficar ali (terra, sem cerca)
+// ppl_land(s0 = u, s1 = v) -> w0 = 1 se da para ficar ali (terra; as
+// pessoas da vila passam pelas cercas)
 ppl_land:
     stp     x29, x30, [sp, #-32]!
     mov     x29, sp
@@ -414,12 +368,6 @@ ppl_land:
     b.gt    9f
     fcmp    s9, s2
     b.gt    9f
-    fmov    s4, s8
-    fmov    s5, s9
-    bl      fence_at
-    cmp     w0, #1
-    mov     w0, #0
-    b.eq    9f
     fmov    s0, s8
     fmov    s1, s9
     bl      elev_at
@@ -466,15 +414,7 @@ people_update:
     b.eq    1f
     str     w9, [x28, #G_PLASTDAY]
     bl      ppl_newday
-1:  ldr     w9, [x28, #G_SAPT]          // mudas crescem a cada 10 s
-    add     w9, w9, #1
-    cmp     w9, #600
-    b.lo    2f
-    str     wzr, [x28, #G_SAPT]
-    bl      sapling_tick
-    b       3f
-2:  str     w9, [x28, #G_SAPT]
-3:  ldr     s0, [x28, #G_PU]            // o personagem tambem faz caminho
+1:  ldr     s0, [x28, #G_PU]            // o personagem tambem faz caminho
     fcvtzs  w9, s0
     ldr     s0, [x28, #G_PV]
     fcvtzs  w10, s0
@@ -766,6 +706,13 @@ ppl_die:
     str     x21, [sp, #16]
     mov     w21, w0
     strb    wzr, [x19, #P_ALIVE]
+    LA      x9, kin                     // fica na arvore genealogica
+    add     x9, x9, x20, lsl #3
+    strb    w21, [x9, #K_CAUSE]
+    mov     w10, #2
+    cmp     w21, #CAUSE_FE
+    cinc    w10, w10, eq                // 3: foi embora
+    strb    w10, [x9, #K_REC]
     ldr     w9, [x28, #G_SELPERS]
     cmp     w9, w20
     b.ne    1f
@@ -784,10 +731,13 @@ ppl_die:
     ret
 
 // ppl_namecat(x0 = cursor, w1 = pessoa) -> x0: "Ana Silva"
+    .globl ppl_namecat
 ppl_namecat:
     stp     x29, x30, [sp, #-32]!
     mov     x29, sp
     str     x19, [sp, #16]
+    uxtw    x1, w1
+    str     x1, [sp, #24]
     LA      x9, people
     add     x19, x9, x1, lsl #6
     LA      x1, pnames
@@ -796,8 +746,11 @@ ppl_namecat:
     bl      strcat_cur
     LA      x1, s_sp
     bl      strcat_cur
+    LA      x9, kin                     // sobrenome (do pai)
+    ldr     x10, [sp, #24]
+    add     x9, x9, x10, lsl #3
+    ldrb    w9, [x9, #K_SURN]
     LA      x1, psurn
-    ldrb    w9, [x19, #P_FAM]
     add     x1, x1, x9, lsl #4
     bl      strcat_cur
     ldr     x19, [sp, #16]
@@ -857,49 +810,11 @@ ppl_newday:
     bl      ppl_die
 8:  add     w20, w20, #1
     b       2b
-9:  ldp     x21, x22, [sp, #32]
+9:  bl      vila_newday                 // arvores, casamentos, nascimentos
+    ldp     x21, x22, [sp, #32]
     ldp     x19, x20, [sp, #16]
     ldp     x29, x30, [sp], #48
     ret
-
-// sapling_tick: as mudas crescem; prontas, viram arvore (pinheiro no alto)
-sapling_tick:
-    ldr     w9, [x28, #G_SEASON]
-    cmp     w9, #3
-    b.eq    9f
-    ldr     w9, [x28, #G_NOBJ]
-    LA      x10, objs
-1:  cbz     w9, 9f
-    ldrb    w11, [x10, #6]
-    cmp     w11, #O_SAPLING
-    b.ne    2f
-    ldrb    w12, [x10, #7]
-    add     w12, w12, #1
-    strb    w12, [x10, #7]
-    cmp     w12, #SAPLINGDONE
-    b.lo    2f
-    ldrsh   w11, [x10, #4]
-    mov     w12, #O_TREE
-    cmp     w11, #E_GRASS
-    b.lt    11f
-    mov     w12, #O_PINE
-11: strb    w12, [x10, #6]
-    mov     w12, #4
-    strb    w12, [x10, #7]
-    ldrh    w11, [x10]                  // agora tapa a visao
-    lsr     w11, w11, #6
-    ldrh    w12, [x10, #2]
-    lsr     w12, w12, #6
-    add     w11, w11, w12, lsl #9
-    LA      x12, treecnt
-    ldrb    w13, [x12, w11, uxtw]
-    cmp     w13, #255
-    cinc    w13, w13, lo
-    strb    w13, [x12, w11, uxtw]
-2:  add     x10, x10, #8
-    sub     w9, w9, #1
-    b       1b
-9:  ret
 
 // path_step(w0 = celula): mais uma passada ali; muitas viram caminho  folha
 path_step:
@@ -1035,17 +950,25 @@ ppl_findwork:
     mov     x29, sp
     stp     x21, x22, [sp, #16]
     mov     w21, w0
-    cmp     w21, #J_WOOD
+    cmp     w21, #J_FOREST
     b.ne    2f
-    mov     w0, #O_TREE
+    mov     w0, #O_TREE                 // floresta: corta as adultas...
     mov     w1, #O_PINE
-    mov     w2, #Z_WOOD
+    mov     w2, #Z_FOREST
     mov     w3, #WK_CHOP
     PF      s0, 76
     bl      ppl_findobj
-    tbnz    w0, #31, 8f
+    tbnz    w0, #31, 1f
     mov     w1, #WK_CHOP
     bl      ppl_gowork_obj
+    b       7f
+1:  bl      ppl_ensure_occ              // ... senao planta mudas
+    mov     w0, #Z_FOREST
+    mov     w1, #WK_SAPLING
+    bl      ppl_findcell
+    tbnz    w0, #31, 8f
+    mov     w1, #WK_SAPLING
+    bl      ppl_gowork_cell
     b       7f
 2:  cmp     w21, #J_STONE
     b.ne    3f
@@ -1063,15 +986,10 @@ ppl_findwork:
     b.ne    4f
     bl      ppl_farmwork
     b       9f
-4:  cmp     w21, #J_TREES
+4:  cmp     w21, #J_BUILD
     b.ne    8f
-    bl      ppl_ensure_occ
-    mov     w0, #Z_TREES
-    mov     w1, #WK_SAPLING
-    bl      ppl_findcell
-    tbnz    w0, #31, 8f
-    mov     w1, #WK_SAPLING
-    bl      ppl_gowork_cell
+    bl      vila_buildwork              // obras (vila.S)
+    b       9f
 7:  mov     w0, #1
     b       9f
 8:  mov     w0, #0
@@ -1128,6 +1046,7 @@ ppl_ensure_occ:
 
 // ppl_reserved(w0 = alvo, w1 = tipo) -> w0 = 1 se outra pessoa ja vai
 // fazer esse trabalho (ou se esta pessoa nao conseguiu chegar la)   folha
+    .globl ppl_reserved
 ppl_reserved:
     ldr     w9, [x19, #P_SKIP]
     cmp     w9, w0
@@ -1454,6 +1373,7 @@ ppl_chestfind:
     ret
 
 // ppl_chestptr(w0 = objeto) -> x0 = contadores do bau (0 se nao e bau)  folha
+    .globl ppl_chestptr
 ppl_chestptr:
     tbnz    w0, #31, 8f
     LA      x9, objs
@@ -1471,6 +1391,7 @@ ppl_chestptr:
 // ---- ir ate um lugar ----
 
 // ppl_gopoint(s0 = u, s1 = v): vai para do lado do ponto (0,6 celula)  folha
+    .globl ppl_gopoint
 ppl_gopoint:
     ldr     s2, [x19, #P_U]
     fsub    s2, s2, s0
@@ -1507,6 +1428,7 @@ ppl_goobj:
     b       ppl_gopoint
 
 // ppl_gochest(w0 = bau, w1 = o que fazer la)
+    .globl ppl_gochest
 ppl_gochest:
     strb    w1, [x19, #P_NEXT]
     str     w0, [x19, #P_TARGET]
@@ -1609,7 +1531,19 @@ ppl_gosleep:
     mov     x29, sp
     stp     x21, x22, [sp, #16]
     stp     d8, d9, [sp, #32]
-    mov     w21, #-1
+    LA      x9, fams                    // a casa da familia
+    ldrb    w10, [x19, #P_FAM]
+    add     x9, x9, x10, lsl #5
+    ldr     w21, [x9, #F_HOUSE]
+    tbnz    w21, #31, 0f
+    LA      x10, objs
+    add     x10, x10, x21, lsl #3
+    ldrb    w11, [x10, #6]
+    cmp     w11, #O_HUT
+    b.lo    0f
+    cmp     w11, #O_HOUSE
+    b.ls    3f
+0:  mov     w21, #-1
     PF      s8, 120                     // ate 30 celulas
     ldr     w22, [x28, #G_NOBJ]
     mov     w9, #0
@@ -1885,9 +1819,13 @@ ppl_arrive:
     bl      ppl_eat
     b       8f
 3:  cmp     w9, #NX_SEEDS
-    b.ne    4f
+    b.ne    31f
     bl      ppl_takeseeds
     b       8f
+31: cmp     w9, #NX_PAY                 // obras: paga no bau e vai ao terreno
+    b.ne    4f
+    bl      vila_pay
+    b       9f
 4:  cmp     w9, #NX_SLEEP
     b.ne    5f
     ldr     w0, [x19, #P_TARGET]        // na cabana: some (dentro dela)
@@ -1896,8 +1834,12 @@ ppl_arrive:
     add     x9, x9, x0, lsl #3
     ldrb    w10, [x9, #6]
     cmp     w10, #O_SHELTER
-    b.ne    41f
-    ldrb    w9, [x19, #P_FLAGS]
+    b.eq    40f
+    cmp     w10, #O_HUT
+    b.lo    41f
+    cmp     w10, #O_HOUSE
+    b.hi    41f
+40: ldrb    w9, [x19, #P_FLAGS]
     orr     w9, w9, #1
     strb    w9, [x19, #P_FLAGS]
 41: mov     w9, #ST_SLEEP
@@ -1929,7 +1871,11 @@ ppl_valid:
     mov     w21, w0
     mov     w22, w1
     tbnz    w21, #31, 8f
-    cmp     w22, #WK_PLANT
+    cmp     w22, #WK_BUILD
+    b.ne    1f
+    bl      vila_valid
+    b       9f
+1:  cmp     w22, #WK_PLANT
     b.eq    30f
     cmp     w22, #WK_TILL
     b.eq    40f
@@ -2031,7 +1977,14 @@ ppl_workdone:
     mov     w1, w22
     bl      ppl_valid
     cbz     w0, 80f
-    cmp     w22, #WK_MINE
+    cmp     w22, #WK_BUILD              // obra: mais um passo
+    b.ne    10f
+    mov     w0, w21
+    bl      vila_step
+    cbnz    w0, 79f
+    bl      ppl_startwork
+    b       99f
+10: cmp     w22, #WK_MINE
     b.hi    20f
     // ---- madeira / pedra ----
     LA      x9, objs
@@ -2064,10 +2017,16 @@ ppl_workdone:
     add     w13, w13, w14, lsl #9
     LA      x14, treecnt
     ldrb    w15, [x14, w13, uxtw]
-    cbz     w15, 79f
+    cbz     w15, 14f
     sub     w15, w15, #1
     strb    w15, [x14, w13, uxtw]
-    b       79f
+14: LA      x14, zonegrid               // na floresta: planta uma muda no lugar
+    ldrb    w15, [x14, w13, uxtw]
+    cmp     w15, #Z_FOREST
+    b.ne    79f
+    mov     w0, w13
+    bl      ppl_sapling_at
+    b       78f
 13: ldrb    w12, [x19, #P_JOB]          // ainda cabe: continua
     LA      x13, jobcap
     ldrb    w13, [x13, x12]
@@ -2132,29 +2091,8 @@ ppl_workdone:
     b       78f
 50: cmp     w22, #WK_SAPLING
     b.ne    60f
-    and     w9, w21, #511
-    lsr     w10, w21, #9
-    scvtf   s0, w9
-    scvtf   s1, w10
-    PF      s2, 96
-    fadd    s0, s0, s2
-    fadd    s1, s1, s2
-    bl      elev_at
-    mov     w2, w0
-    and     w9, w21, #511
-    lsl     w0, w9, #6
-    add     w0, w0, #32
-    lsr     w9, w21, #9
-    lsl     w1, w9, #6
-    add     w1, w1, #32
-    mov     w3, #O_SAPLING
-    mov     w4, #0
-    bl      add_obj
-    ldr     w0, [x28, #G_NOBJ]
-    sub     w0, w0, #1
-    LA      x9, memtype
-    mov     w10, #O_SAPLING
-    strb    w10, [x9, w0, uxtw]
+    mov     w0, w21
+    bl      ppl_sapling_at
     b       78f
     // ---- frutas (com fome) ----
 60: LA      x9, objs
@@ -2189,6 +2127,45 @@ ppl_workdone:
 99: ldp     x23, x24, [sp, #32]
     ldp     x21, x22, [sp, #16]
     ldp     x29, x30, [sp], #48
+    ret
+
+// ppl_sapling_at(w0 = celula): planta uma muda no meio da celula (se
+// estiver livre)
+ppl_sapling_at:
+    stp     x29, x30, [sp, #-32]!
+    mov     x29, sp
+    str     x21, [sp, #16]
+    mov     w21, w0
+    LA      x9, fencegrid
+    ldrb    w9, [x9, w21, uxtw]
+    cbnz    w9, 9f
+    bl      obj_in_cell
+    tbz     w0, #31, 9f
+    and     w9, w21, #511
+    lsr     w10, w21, #9
+    scvtf   s0, w9
+    scvtf   s1, w10
+    PF      s2, 96
+    fadd    s0, s0, s2
+    fadd    s1, s1, s2
+    bl      elev_at
+    mov     w2, w0
+    and     w9, w21, #511
+    lsl     w0, w9, #6
+    add     w0, w0, #32
+    lsr     w9, w21, #9
+    lsl     w1, w9, #6
+    add     w1, w1, #32
+    mov     w3, #O_SAPLING
+    mov     w4, #0
+    bl      add_obj
+    ldr     w0, [x28, #G_NOBJ]
+    sub     w0, w0, #1
+    LA      x9, memtype
+    mov     w10, #O_SAPLING
+    strb    w10, [x9, w0, uxtw]
+9:  ldr     x21, [sp, #16]
+    ldp     x29, x30, [sp], #32
     ret
 
 // ppl_deposit: poe no bau o que carrega (e as sementes que sobram de 10)
@@ -2456,9 +2433,10 @@ people_draw:
     mov     w2, w23
     mov     w3, w21
     mov     w4, w24
-    LA      x9, famvar                  // cor da roupa: a da familia
+    LA      x9, fams                    // cor da roupa: a da familia
     ldrb    w10, [x19, #P_FAM]
-    ldrb    w5, [x9, x10]
+    add     x9, x9, x10, lsl #5
+    ldrb    w5, [x9, #F_VAR]
     bl      blit
     ldr     w9, [x28, #G_SELPERS]       // selecionada: setinha em cima
     cmp     w9, w20
@@ -2594,7 +2572,7 @@ people_key:
     str     wzr, [x28, #G_ZONEMODE]
     str     wzr, [x28, #G_ZDRAG]
     b       7f
-3:  mov     w9, #Z_WOOD
+3:  mov     w9, #Z_FOREST
     str     w9, [x28, #G_ZONEMODE]
     str     wzr, [x28, #G_CHAROPEN]
     str     wzr, [x28, #G_PLACE]
@@ -2781,8 +2759,12 @@ zone_fill:
 2:  cmp     w13, w2
     b.gt    3f
     add     w14, w13, w12, lsl #9
+    ldrb    w15, [x10, w14, uxtw]       // terreno de casa nao muda
+    cmp     w15, #Z_LOT
+    b.eq    21f
     strb    w4, [x10, w14, uxtw]
     add     w11, w11, #1
+21:
     add     w13, w13, #1
     b       2b
 3:  add     w12, w12, #1
@@ -2844,7 +2826,25 @@ people_ui_hit:
     cmp     w10, #PP_H
     b.hs    5f
     mov     w11, #-1
-    subs    w10, w10, #PP_ROW0
+    cmp     w10, #(PP_H - 17)           // embaixo: abas e paginas
+    b.lo    1f
+    mov     w11, #1000
+    cmp     w9, #72
+    b.lo    4f
+    mov     w11, #1001
+    cmp     w9, #154
+    b.lo    4f
+    mov     w11, #1002
+    sub     w12, w9, #320
+    cmp     w12, #22
+    b.lo    4f
+    mov     w11, #1003
+    sub     w12, w9, #384
+    cmp     w12, #22
+    b.lo    4f
+    mov     w11, #-1
+    b       4f
+1:  subs    w10, w10, #PP_ROW0
     b.lt    4f
     mov     w12, #16
     udiv    w12, w10, w12
@@ -2896,7 +2896,24 @@ people_ui_click:
     stp     x21, x22, [sp, #32]
     mov     w21, w0                     // botao
     tbnz    w1, #31, 9f
-    cmp     w2, #10
+    cmp     w1, #1000                   // abas e paginas
+    b.lo    0f
+    ldr     w9, [x28, #G_PPAGE]
+    cmp     w1, #1002
+    b.hs    63f
+    sub     w10, w1, #1000
+    str     w10, [x28, #G_PTAB]
+    str     wzr, [x28, #G_PPAGE]
+    b       9f
+63: b.ne    64f
+    subs    w9, w9, #1
+    csel    w9, wzr, w9, lt
+    str     w9, [x28, #G_PPAGE]
+    b       9f
+64: add     w9, w9, #1                  // (a ultima pagina segura no desenho)
+    str     w9, [x28, #G_PPAGE]
+    b       9f
+0:  cmp     w2, #10
     b.ne    1f
     str     w1, [x28, #G_ZONEMODE]      // paleta: escolhe o tipo
     b       9f
@@ -3038,13 +3055,32 @@ ppl_drawpanel:
     stp     x19, x20, [sp, #16]
     stp     x21, x22, [sp, #32]
     stp     x23, x24, [sp, #48]
+    LA      x0, ptitle                  // "Vila: 12 pessoas, ..."
+    bl      vila_title
     mov     w0, #PP_X
     mov     w1, #PP_Y
     mov     w2, #PP_W
     mov     w3, #PP_H
-    LA      x4, s_ptitle
+    LA      x4, ptitle
     bl      ui_panel
-    RGBA    170, 175, 195, 255          // cabecalho
+    LA      x9, prows
+    str     wzr, [x9]
+    ldr     w9, [x28, #G_PTAB]
+    cbz     w9, 10f
+    RGBA    170, 175, 195, 255          // aba Familias: arvore genealogica
+    mov     w0, #(PP_X + 6)
+    mov     w1, #(PP_Y + 17)
+    LA      x2, s_htree
+    bl      text
+    ldr     w0, [x28, #G_PPAGE]
+    mov     w9, #PP_ROWS
+    mul     w0, w0, w9
+    mov     w1, #(PP_X + 6)
+    mov     w2, #(PP_Y + PP_ROW0 + 2)
+    bl      vila_drawtree
+    mov     w23, w0
+    b       85f
+10: RGBA    170, 175, 195, 255          // cabecalho
     mov     w0, #(PP_X + 6)
     mov     w1, #(PP_Y + 17)
     LA      x2, s_hname
@@ -3071,6 +3107,9 @@ ppl_drawpanel:
     bl      text
     mov     w23, #0                     // linha
     mov     w20, #0                     // pessoa
+    ldr     w21, [x28, #G_PPAGE]        // pula as paginas de antes
+    mov     w9, #PP_ROWS
+    mul     w21, w21, w9
 1:  cmp     w20, #MAXPEOPLE
     b.ge    8f
     cmp     w23, #PP_ROWS
@@ -3079,7 +3118,10 @@ ppl_drawpanel:
     add     x19, x9, x20, lsl #6
     ldrb    w9, [x19, #P_ALIVE]
     cbz     w9, 7f
-    LA      x9, prowmap
+    cbz     w21, 11f
+    sub     w21, w21, #1
+    b       7f
+11: LA      x9, prowmap
     strb    w20, [x9, x23]
     mov     w9, #16
     mov     w10, #(PP_Y + PP_ROW0 + 2)
@@ -3156,15 +3198,100 @@ ppl_drawpanel:
     b       1b
 8:  LA      x9, prows
     str     w23, [x9]
-    RGBA    150, 150, 165, 255
-    mov     w0, #(PP_X + 6)
-    mov     w1, #(PP_Y + PP_H - 13)
-    LA      x2, s_pfoot
-    bl      text
+    ldr     w23, [x28, #G_PEOPLEN]      // total de linhas (paginas)
+85: bl      ppl_drawfoot
     ldp     x23, x24, [sp, #48]
     ldp     x21, x22, [sp, #32]
     ldp     x19, x20, [sp, #16]
     ldp     x29, x30, [sp], #64
+    ret
+
+// ppl_drawfoot(w23 = total de linhas): abas e paginas embaixo do painel
+ppl_drawfoot:
+    stp     x29, x30, [sp, #-32]!
+    mov     x29, sp
+    stp     x19, x20, [sp, #16]
+    add     w19, w23, #(PP_ROWS - 1)    // paginas
+    mov     w9, #PP_ROWS
+    udiv    w19, w19, w9
+    cmp     w19, #1
+    mov     w9, #1
+    csel    w19, w9, w19, lt
+    ldr     w20, [x28, #G_PPAGE]        // pagina dentro do que existe
+    cmp     w20, w19
+    b.lo    1f
+    sub     w20, w19, #1
+    str     w20, [x28, #G_PPAGE]
+1:  ldr     w9, [x28, #G_PTAB]          // abas
+    cbnz    w9, 2f
+    RGBA    60, 70, 110, 255
+    b       3f
+2:  RGBA    40, 46, 70, 255
+3:  mov     w0, #(PP_X + 4)
+    mov     w1, #(PP_Y + PP_H - 17)
+    mov     w2, #66
+    mov     w3, #14
+    bl      fillrect
+    ldr     w9, [x28, #G_PTAB]
+    cbz     w9, 4f
+    RGBA    60, 70, 110, 255
+    b       5f
+4:  RGBA    40, 46, 70, 255
+5:  mov     w0, #(PP_X + 74)
+    mov     w1, #(PP_Y + PP_H - 17)
+    mov     w2, #78
+    mov     w3, #14
+    bl      fillrect
+    RGBA    40, 46, 70, 255             // < e >
+    mov     w0, #(PP_X + 322)
+    mov     w1, #(PP_Y + PP_H - 17)
+    mov     w2, #18
+    mov     w3, #14
+    bl      fillrect
+    mov     w0, #(PP_X + 386)
+    mov     w1, #(PP_Y + PP_H - 17)
+    mov     w2, #18
+    mov     w3, #14
+    bl      fillrect
+    RGBA    235, 235, 240, 255
+    mov     w0, #(PP_X + 9)
+    mov     w1, #(PP_Y + PP_H - 14)
+    LA      x2, s_tabp
+    bl      text
+    mov     w0, #(PP_X + 81)
+    mov     w1, #(PP_Y + PP_H - 14)
+    LA      x2, s_tabf
+    bl      text
+    mov     w0, #(PP_X + 327)
+    mov     w1, #(PP_Y + PP_H - 14)
+    LA      x2, s_lt
+    bl      text
+    mov     w0, #(PP_X + 391)
+    mov     w1, #(PP_Y + PP_H - 14)
+    LA      x2, s_gt
+    bl      text
+    LA      x0, pbuf                    // "1/2"
+    add     w1, w20, #1
+    bl      numcat
+    LA      x1, s_slash
+    bl      strcat_cur
+    mov     w1, w19
+    bl      numcat
+    RGBA    200, 200, 210, 255
+    mov     w0, #(PP_X + 346)
+    mov     w1, #(PP_Y + PP_H - 14)
+    LA      x2, pbuf
+    bl      text
+    RGBA    150, 150, 165, 255          // dica
+    mov     w0, #(PP_X + 162)
+    mov     w1, #(PP_Y + PP_H - 14)
+    LA      x2, s_pfoot
+    ldr     w9, [x28, #G_PTAB]
+    cbz     w9, 6f
+    LA      x2, s_tfoot
+6:  bl      text
+    ldp     x19, x20, [sp, #16]
+    ldp     x29, x30, [sp], #32
     ret
 
 ppl_drawpalette:
@@ -3274,11 +3401,13 @@ ppl_drawsel:
 
 // =====================================================================
 //  Teste automatico (--shot)
-//    0: a vila em volta do personagem, bau, zonas e tarefas; 1 hora de
-//       jogo trabalhando (foto pintando zonas)
+//    0: a vila em volta do personagem: bau, 3 barracos, zonas e tarefas;
+//       1 hora de jogo trabalhando (foto pintando zonas)
 //    2: painel aberto (foto)
 //    1: mais 2 horas; confere o bau, a plantacao, as mudas, os
-//       caminhos, a noite, a idade e um lobo atacando alguem
+//       caminhos, as obras e a noite; passa 24 dias (as mudas crescem,
+//       casamentos, nascimentos), mais 2 horas de obras e um lobo
+//    3: aba Familias (foto da arvore genealogica)
 // =====================================================================
 
 // pt_count(w0 = tipo, w1 = zona ou 0) -> w0 = objetos desse tipo  folha
@@ -3332,6 +3461,43 @@ pt_num:
     bl      numcat
     ldr     x19, [sp, #16]
     ldp     x29, x30, [sp], #32
+    ret
+
+// pt_houses -> w0 casas (nivel 2), w1 cercas, w2 familias com casa ou
+// barraco, w3 familias com gente   folha
+pt_houses:
+    LA      x9, fams
+    mov     w10, #0
+    mov     w0, #0
+    mov     w1, #0
+    mov     w2, #0
+    mov     w3, #0
+1:  ldrb    w11, [x9, #F_USED]
+    cbz     w11, 2f
+    ldrb    w11, [x9, #F_LEVEL]
+    cmp     w11, #2
+    cinc    w0, w0, eq
+    cmp     w11, #1
+    cinc    w2, w2, hs
+    ldrb    w11, [x9, #F_FENCE]
+    add     w1, w1, w11
+    LA      x12, people                 // tem gente?
+    mov     w13, #0
+11: ldrb    w14, [x12, #P_ALIVE]
+    cbz     w14, 12f
+    ldrb    w14, [x12, #P_FAM]
+    cmp     w14, w10
+    b.ne    12f
+    add     w3, w3, #1
+    b       2f
+12: add     x12, x12, #PSIZE
+    add     w13, w13, #1
+    cmp     w13, #MAXPEOPLE
+    b.lt    11b
+2:  add     x9, x9, #FSIZE
+    add     w10, w10, #1
+    cmp     w10, #MAXFAM
+    b.lt    1b
     ret
 
 // pt_cellok(w0 = celula) -> w0 = 1 se e chao bom e livre (sem zona)  folha
@@ -3559,17 +3725,27 @@ people_selftest:
     b.eq    pt_stage1
     cmp     w21, #2
     b.eq    pt_stage2
+    cmp     w21, #3
+    b.eq    pt_stage3
     // ---- etapa 0 ----
     str     wzr, [x28, #G_NOPEOPLE]
     mov     w9, #3000                   // de manha
     str     w9, [x28, #G_TIME]
     bl      animals_reset
+    bl      vila_reset
     bl      ppl_spawn_all
     bl      ppl_camp
     LA      x9, pt_res
     str     w0, [x9]                    // o bau
-    // zonas: madeira em volta da arvore mais perto do bau (sem agua no
-    // caminho), pedra em volta da pedra; plantacao e mudas perto do bau
+    bl      ppl_chestptr                // material para as obras
+    cbz     x0, 0f
+    mov     w9, #40
+    str     w9, [x0, #(4 * IT_WOOD)]
+    mov     w9, #10
+    str     w9, [x0, #(4 * IT_STONE)]
+0:  bl      vila_found
+    // zonas: floresta em volta da arvore mais perto do bau (sem agua no
+    // caminho), pedra em volta da pedra; plantacao e moradia perto do bau
     LA      x19, people
     mov     w20, #0
     mov     w0, #O_TREE
@@ -3577,7 +3753,7 @@ people_selftest:
     bl      pt_reach
     tbnz    w0, #31, 1f
     mov     w1, #5
-    mov     w2, #Z_WOOD
+    mov     w2, #Z_FOREST
     bl      pt_zone_at
 1:  mov     w0, #O_ROCK
     mov     w1, #O_ROCK
@@ -3594,20 +3770,20 @@ people_selftest:
     mov     w1, #3                      // perto do bau
     mov     w2, #Z_FARM
     bl      pt_block
-    mov     w0, #4                      // mudas: 4 x 4
-    mov     w1, #4
-    mov     w2, #Z_TREES
+    mov     w0, #10                     // moradia: 2 terrenos
+    mov     w1, #5
+    mov     w2, #Z_HOME
     bl      pt_block
 3:  LA      x9, people                  // tarefas dos pais e maes
-    mov     w10, #J_WOOD
+    mov     w10, #J_FOREST
     strb    w10, [x9, #(0 * PSIZE + P_JOB)]
     mov     w10, #J_FARM
     strb    w10, [x9, #(1 * PSIZE + P_JOB)]
     mov     w10, #J_STONE
     strb    w10, [x9, #(4 * PSIZE + P_JOB)]
-    mov     w10, #J_TREES
+    mov     w10, #J_BUILD
     strb    w10, [x9, #(5 * PSIZE + P_JOB)]
-    mov     w10, #J_WOOD
+    mov     w10, #J_FOREST
     strb    w10, [x9, #(8 * PSIZE + P_JOB)]
     mov     w10, #J_FARM
     strb    w10, [x9, #(9 * PSIZE + P_JOB)]
@@ -3619,6 +3795,15 @@ people_selftest:
     str     w9, [x28, #G_SELPERS]
     str     wzr, [x28, #G_MSGT]
     str     wzr, [x28, #G_POPT]
+    b       pt_ret
+
+pt_stage3:
+    mov     w9, #1                      // foto: arvore genealogica
+    str     w9, [x28, #G_PEOPLEOPEN]
+    str     w9, [x28, #G_PTAB]
+    str     wzr, [x28, #G_PPAGE]
+    str     wzr, [x28, #G_ZONEMODE]
+    str     wzr, [x28, #G_MSGT]
     b       pt_ret
 
 pt_stage2:
@@ -3672,6 +3857,10 @@ pt_stage1:
     bl      pt_count
     LA      x9, pt_res
     str     w0, [x9, #16]
+    bl      pt_houses                   // casas e cercas
+    LA      x9, pt_res
+    str     w0, [x9, #44]
+    str     w1, [x9, #48]
     // ---- de noite: vao dormir ----
     mov     w9, #28000
     str     w9, [x28, #G_TIME]
@@ -3709,7 +3898,7 @@ pt_stage1:
     add     w10, w10, #1
     cmp     w10, #MAXPEOPLE
     b.lt    52b
-    // ---- 12 dias: um ano mais velho ----
+    // ---- 24 dias: dois anos mais velhos; as mudas viram arvore ----
     LA      x9, people
     ldrh    w22, [x9, #P_AGE]
     mov     w10, #12
@@ -3718,7 +3907,26 @@ pt_stage1:
 6:  bl      ppl_newday
     add     w25, w25, #1
     cmp     w25, #12
+    b.ne    61f
+    mov     w0, #O_YTREE                // depois de 1 ano: jovens
+    mov     w1, #0
+    bl      pt_count
+    LA      x9, pt_res
+    str     w0, [x9, #52]
+61: cmp     w25, #24
     b.lt    6b
+    mov     w0, #O_SAPLING              // depois de 2: quantas ainda nao
+    mov     w1, #0
+    bl      pt_count
+    mov     w26, w0
+    mov     w0, #O_YTREE
+    mov     w1, #0
+    bl      pt_count
+    add     w26, w26, w0
+    LA      x9, pt_res
+    ldr     w10, [x9, #16]
+    sub     w10, w10, w26
+    str     w10, [x9, #56]
     LA      x9, people
     ldrh    w23, [x9, #P_AGE]
     mov     w10, #12
@@ -3726,6 +3934,14 @@ pt_stage1:
     LA      x9, pt_res
     str     w22, [x9, #24]
     str     w23, [x9, #28]
+    mov     w9, #3000                   // mais 2 horas: obras para os casais novos
+    str     w9, [x28, #G_TIME]
+    mov     w0, #3600
+    bl      pt_run
+    bl      pt_houses
+    LA      x9, pt_res
+    str     w2, [x9, #60]
+    str     w3, [x9, #64]
     // ---- um lobo perto de uma pessoa longe do personagem ----
     LA      x19, people
     add     x19, x19, #(1 * PSIZE)      // a mae da primeira familia
@@ -3847,6 +4063,44 @@ pt_stage1:
     LA      x1, t_pnl
     bl      strcat_cur
     bl      sk_write
+    LA      x19, pt_res                 // a vila
+    LA      x9, vstat
+    ldr     w22, [x9]
+    ldr     w23, [x9, #4]
+    LA      x0, txt
+    LA      x1, t_q1
+    ldr     w2, [x19, #44]
+    bl      pt_num
+    LA      x1, t_q2
+    ldr     w2, [x19, #48]
+    bl      pt_num
+    LA      x1, t_q3
+    ldr     w2, [x19, #16]
+    bl      pt_num
+    LA      x1, t_q4
+    ldr     w2, [x19, #52]
+    bl      pt_num
+    LA      x1, t_q5
+    ldr     w2, [x19, #56]
+    bl      pt_num
+    LA      x1, t_q6
+    mov     w2, w22
+    bl      pt_num
+    LA      x1, t_q7
+    mov     w2, w23
+    bl      pt_num
+    LA      x1, t_q8
+    ldr     w2, [x19, #60]
+    bl      pt_num
+    LA      x1, t_q9
+    ldr     w2, [x19, #64]
+    bl      pt_num
+    LA      x1, t_q10
+    ldr     w2, [x28, #G_PEOPLEN]
+    bl      pt_num
+    LA      x1, t_pnl
+    bl      strcat_cur
+    bl      sk_write
 pt_ret:
     ldp     x25, x26, [sp, #64]
     ldp     x23, x24, [sp, #48]
@@ -3904,7 +4158,7 @@ ring8:
 // tempo de cada tipo de trabalho (quadros, com fe 50)
     .p2align 1
 worktime:
-    .hword 0, 150, 210, 60, 40, 90, 90, 40
+    .hword 0, 150, 210, 60, 40, 90, 90, 40, 150
 
 // o que cada tarefa carrega e quanto cabe
 jobitem:
@@ -3921,7 +4175,7 @@ campoff:
     .p2align 2
     .globl zonecolors
 zonecolors:
-    .word 0, 0xFFC08040, 0xFFA8A8C8, 0xFFF0D040, 0xFF40E080, 0xFFE04848
+    .word 0, 0xFF30B050, 0xFFA8A8C8, 0xFFF0D040, 0xFFE09060, 0xFFE04848, 0xFFB86A3C
 
     .p2align 3
 causemsgs:
@@ -3987,24 +4241,24 @@ psurn:
 jobnames:
     .asciz "Nenhuma"
     .p2align 4
-    .asciz "Madeira"
+    .asciz "Floresta"
     .p2align 4
     .asciz "Pedra"
     .p2align 4
     .asciz "Plantar"
     .p2align 4
-    .asciz "Arvores"
+    .asciz "Obras"
     .p2align 4
 zonenames:
     .asciz ""
     .p2align 4
-    .asciz "1 Madeira"
+    .asciz "1 Floresta"
     .p2align 4
     .asciz "2 Pedra"
     .p2align 4
     .asciz "3 Plantacao"
     .p2align 4
-    .asciz "4 Arvores"
+    .asciz "4 Moradia"
     .p2align 4
     .asciz "0 Apagar"
     .p2align 4
@@ -4043,7 +4297,14 @@ s_hjob:     .asciz "Tarefa"
 s_hfe:      .asciz "Fe"
 s_hfood:    .asciz "Fome"
 s_hhp:      .asciz "Vida"
-s_pfoot:    .asciz "Clique na tarefa: troca (dir.: volta)  Z: zonas"
+s_pfoot:    .asciz "clique na tarefa"
+s_tfoot:    .asciz "cinza: ja se foi"
+s_htree:    .asciz "Arvore genealogica (filho leva o sobrenome do pai)"
+s_tabp:     .asciz "Pessoas"
+s_tabf:     .asciz "Familias"
+s_lt:       .asciz "<"
+s_gt:       .asciz ">"
+s_slash:    .asciz "/"
 s_zfoot:    .asciz "Arraste no mapa"
 t_p1:       .asciz "pessoas: vivas="
 t_p2:       .asciz " | no bau: madeira="
@@ -4055,11 +4316,23 @@ t_p7:       .asciz " | caminho="
 t_p8:       .asciz " | de noite dormindo (ou indo)="
 t_p9:       .asciz " | idade: "
 t_p10:      .asciz " -> "
-t_p11:      .asciz " (12 dias) | lobo: vida 100 -> "
+t_p11:      .asciz " (24 dias) | lobo: vida 100 -> "
+t_q1:       .asciz "vila: casas (barraco -> casa)="
+t_q2:       .asciz " cercas="
+t_q3:       .asciz " | floresta: mudas="
+t_q4:       .asciz " -> jovens (1 ano)="
+t_q5:       .asciz " -> adultas (2 anos)="
+t_q6:       .asciz " | casamentos="
+t_q7:       .asciz " nascimentos="
+t_q8:       .asciz " | depois das obras: familias com casa="
+t_q9:       .asciz " de "
+t_q10:      .asciz " | vivos="
 t_pnl:      .asciz "\n"
+    .globl pmsgbuf, psurn, pnames, pconst
 pmsgbuf:    .space 96
 pbuf:       .space 64
-pt_res:     .word -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+ptitle:     .space 64
+pt_res:     .word -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 prows:      .word 0
 prowmap:    .space PP_ROWS
 

@@ -246,6 +246,9 @@
 .equ G_PEOPLEN,  928         // pessoas vivas
 .equ G_ZONESHOW, 932         // zonas no chao neste quadro (grid_prep)
 .equ G_PLCELL,   936         // celula do personagem (caminho)
+.equ G_PTAB,     940         // painel P: 0 Pessoas, 1 Familias
+.equ G_PPAGE,    944         // painel P: pagina
+.equ G_NOLOTT,   948         // quando avisou que falta zona de Moradia
 .equ GSIZE,      960
 
 .equ W_SUN,      0
@@ -323,8 +326,11 @@
 .equ O_WHEAT,    38          // trigo selvagem (da sementes)
 .equ O_CROP,     39          // trigo plantado (variante = quanto cresceu)
 .equ O_PILE2,    40          // pilhas dos itens 24.. (sementes, trigo, pao)
-.equ O_SAPLING,  43          // muda de arvore (variante = quanto cresceu)
-.equ O_LAST,     43          // ultimo tipo de objeto (pilhas: 12 + item ate 35 e 40 + item - 24)
+.equ O_SAPLING,  43          // muda de arvore (variante = dias)
+.equ O_YTREE,    44          // arvore jovem (variante = dias; nao se corta)
+.equ O_HUT,      45          // barraco de uma familia (bloco 2 x 2; variante = cor)
+.equ O_HOUSE,    46          // casa de uma familia
+.equ O_LAST,     46          // ultimo tipo de objeto (pilhas: 12 + item ate 35 e 40 + item - 24)
 .equ SPR_FENCE,  45
 .equ SPR_GATE,   49
 .equ SPR_BOBBER, 51
@@ -339,19 +345,23 @@
 .equ SPR_MAN,    63          // 63, 64: homem (2 quadros); roupa = cor da familia
 .equ SPR_KID,    65          // 65, 66: crianca
 .equ SPR_WOMAN,  67          // 67, 68: mulher
+.equ SPR_YTREE,  69          // arvore jovem
+.equ SPR_HUT,    70          // barraco (ocupa as vagas 70 e 71)
+.equ SPR_HOUSE,  72          // casa (vagas 72 a 74)
 // pessoas
-.equ MAXPEOPLE,  32
+.equ MAXPEOPLE,  64          // vagas (quem morreu fica, para a arvore genealogica)
 .equ PSIZE,      64
-.equ J_WOOD,     1           // tarefas (e tipos de zona)
+.equ J_FOREST,   1           // tarefas (e tipos de zona)
 .equ J_STONE,    2
 .equ J_FARM,     3
-.equ J_TREES,    4
+.equ J_BUILD,    4           // obras: barracos, casas e cercas
 .equ NJOBS,      5
-.equ Z_WOOD,     1
+.equ Z_FOREST,   1
 .equ Z_STONE,    2
 .equ Z_FARM,     3
-.equ Z_TREES,    4
+.equ Z_HOME,     4           // moradia: onde as familias novas constroem
 .equ Z_ERASE,    5
+.equ Z_LOT,      6           // terreno de uma casa (5 x 5)
 .equ MAXCROP,    512         // plantas
 .equ CROPRIPE,   192         // maduro (a variante vai de 0 a 192)
 .equ CROPP,      71          // chance de crescer por passo (em 1000)

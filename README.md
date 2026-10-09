@@ -37,8 +37,8 @@ Você é uma espécie de profeta que não envelhece, e chega com **3 famílias**
 | botão direito num item da mochila | larga 1 no chão (com Shift: a pilha toda) |
 | roda do mouse / `+` / `-` | zoom |
 | espaço | pausa |
-| P | painel das pessoas: clique na tarefa para trocar (botão direito volta) |
-| Z | pintar zonas de trabalho: 1-4 escolhe o tipo, 0 apaga, arraste no mapa (Z ou ESC sai) |
+| P | painel da vila: clique na tarefa para trocar (botão direito volta); embaixo, abas Pessoas / Famílias (árvore genealógica) e páginas `<` `>` |
+| Z | pintar zonas: 1 Floresta, 2 Pedra, 3 Plantação, 4 Moradia, 0 apaga; arraste no mapa (Z ou ESC sai) |
 | clique numa pessoa | seleciona (setinha e nome em cima) |
 | botão direito no mapa (com alguém selecionado) | a pessoa vai até lá |
 | G | liga/desliga a grade no chão |
@@ -184,26 +184,47 @@ Os animais aparecem longe da vista, cada um no seu terreno, e somem quando ficam
 
 **Pessoas (a vila)**
 
-- O jogo começa com **3 famílias** (Silva, Souza e Lima), cada uma com pai, mãe e 2 filhos, e um **baú** com frutas, pão e sementes. A roupa de cada família tem uma cor.
+- O jogo começa com **3 famílias** (Silva, Souza e Lima), cada uma com pai, mãe e 2 filhos, morando num **barraco**, e um **baú** com frutas, pão e sementes. A roupa e o telhado de cada família têm uma cor.
 - Você **não envelhece**. Eles sim: **1 ano a cada 12 dias** (uma estação dura 4 dias). Com **14 anos** uma criança pode trabalhar; bem velhos (65+) podem morrer.
 - **Fé:** quem fica a até 6 células de você ganha fé (rápido); longe, ela cai devagar. Fé alta = trabalha até **1,5x mais rápido**. Abaixo de 25 (nome em laranja) às vezes enrola e pode **recusar ordens**. Fé zerada: **vai embora**.
 - **Fome:** comem do baú (o que enche mais primeiro) quando a fome passa de 60%; sem nada no baú, colhem frutas nos arbustos. Sem comer, a vida cai até morrer.
-- **Sono:** às 21h vão dormir na **cabana** mais perto (somem lá dentro) ou em volta de uma **fogueira** acesa (até 30 células); senão, deitam onde estão. Em noite de inverno ou de neve, fora da cabana e longe do fogo, passam **frio**.
+- **Sono:** às 21h vão dormir **em casa** (somem lá dentro). Quem não tem casa vai para a cabana mais perto ou em volta de uma **fogueira** acesa (até 30 células); senão, deita onde está. Em noite de inverno ou de neve, fora de casa e longe do fogo, passam **frio**.
 - **Lobos e ursos** também atacam as pessoas (cabana e fogueira protegem). Elas fogem quando veem um.
 - **Tarefas** (painel **P**, só adultos): cada uma trabalha **só dentro das zonas** pintadas para ela (**Z**) e leva o que juntou para o baú mais perto:
 
 | Tarefa | O que faz na zona |
 |---|---|
-| Madeira | corta as árvores (leva 4 por viagem) |
+| Floresta | corta as árvores **adultas** (4 madeiras por viagem) e planta uma **muda** no lugar de cada uma que cai; sem árvore adulta, planta mudas no chão vazio (um quadrado sim, outro não). A madeira não acaba |
 | Pedra | quebra as pedras (3 por viagem) |
 | Plantar | colhe o trigo maduro e replanta, planta na terra arada vazia (pega sementes no baú) e ara o resto |
-| Árvores | planta mudas (um quadrado sim, outro não); viram árvore em ~2 dias (não crescem no inverno) |
+| Obras | constrói para as famílias: barraco, casa e cerca (veja abaixo) |
+
+- **Árvores crescem por ano:** muda → **jovem** com 1 ano (12 dias) → **adulta** com 2 anos, que dá madeira. Jovem não se corta. No inverno não crescem.
 
 - **Caminhos:** onde se anda muito (pessoas e você) o mato vira **terra batida**, e nela se anda 25-30% mais rápido. Caminho pouco usado volta a ser mato aos poucos.
 - Passe o mouse numa pessoa: nome, idade, tarefa, fé e se está com fome ou dormindo.
+- As pessoas da vila passam pelas cercas (abrem o portão); os bichos não.
 
 ![A vila trabalhando, com as zonas pintadas](screenshots/pessoas.png)
 ![Painel das pessoas](screenshots/painel.png)
+
+**Casas e a vila crescendo**
+
+- Cada família tem um **terreno 5 x 5** com a casa no meio. Quem tem a tarefa **Obras** pega o material no baú e constrói, nesta ordem:
+
+| Obra | Material | O que muda |
+|---|---|---|
+| Barraco | 10 madeira | para família nova (sem casa); cabem **4** |
+| Casa | 25 madeira, 10 pedra | o barraco vira casa; cabem **8** |
+| Cerca | 12 madeira | cerca em volta do terreno, com portão na frente |
+
+- Família nova constrói numa **zona de Moradia** (Z, 4): pinte onde a vila pode crescer. Cada terreno ocupado aparece com uma cor mais escura e não muda com outras zonas. Sem lugar, as Obras avisam.
+- **Casamentos:** rapaz e moça solteiros (16 anos ou mais, até 20 anos de diferença) de **sobrenomes diferentes** se casam e formam uma **família nova**, que precisa de barraco.
+- **Nascimentos:** casal com casa e lugar sobrando tem filhos de vez em quando (no máximo um a cada ano e meio; a mãe até 45 anos). O filho leva o **sobrenome do pai**.
+- **Árvore genealógica:** no painel **P**, aba **Famílias**: cada sobrenome com os pais, os filhos embaixo (com recuo) e o cônjuge ao lado. Quem morreu ou foi embora fica, em cinza.
+
+![A vila com casa, barracos e cerca](screenshots/vila.png)
+![Árvore genealógica](screenshots/familias.png)
 
 **Sobrevivência**
 
@@ -318,7 +339,9 @@ O **abrigo** protege do frio do clima e do granizo.
 | `cercas.S` | cercas e portões: grade de colisão, fileira travada em 8 direções, grade e prévia na tela, trocar cerca por portão |
 | `pesca.S` | vara de pesca: lançar, boia, mordida, fisgar, tipo de peixe pela água |
 | `plantacao.S` | trigo selvagem, enxada, sementes, crescimento (água, clima, estação), colheita e bichos que comem a plantação |
-| `pessoas.S` | a vila: famílias, idade, fé, fome e sono, tarefas e zonas, painel, ordens, mudas e caminhos de terra batida |
+| `pessoas.S` | as pessoas: idade, fé, fome e sono, tarefas e zonas, painel, ordens, floresta e caminhos de terra batida |
+| `vila.S` | casas e terrenos, obras (barraco, casa, cerca), casamentos, nascimentos, árvores que crescem por ano e a árvore genealógica |
+| `pessoas.h` | estruturas da pessoa, do parentesco e da casa |
 
 - **Geração:** ruído fractal num mapa de altura de 512x512, só com aritmética inteira. A mesma semente sempre gera o mesmo mundo.
 - **Terreno contínuo ("voxel space" isométrico):** cada coluna da tela anda pelo mundo de frente para trás e pinta só o que fica visível. As 1280 colunas são divididas entre **8 threads**, uma para cada núcleo.
@@ -344,7 +367,7 @@ sudo apt install libsdl3-dev   # ou compile o SDL3 a partir do código-fonte
 make run
 ```
 
-`./ermo --shot` roda sem interação: tira screenshots, mede o tempo de cada quadro e faz um teste automático (coleta duas árvores, uma pedra e um arbusto, monta uma fogueira, come e passa a noite; corre, anda carregado, larga e recolhe uma pilha de pedras, vê a skill cair sem treino, confere que a vida só sobe com a fome cheia; fabrica tudo, monta baú e abrigo, gasta o machado, acende a tocha à noite, passa a noite no abrigo e dorme das 22h às 06h; passa 10 s em cada um dos 8 climas (com foto); caça um cervo com o arco, enfrenta um lobo à noite com o machado e vê os animais aparecendo; faz um cercado e pesca; ara e planta 6 células perto da água, colhe o trigo maduro, confere que o verde não sai e que a enxada desfaz a terra (e perde a semente), faz pão, compara o crescimento com e sem água e no inverno, e solta um coelho perto do trigo sem cerca; monta a vila com zonas de madeira, pedra, plantação e árvores e deixa trabalhar 3 horas (com foto pintando zonas e do painel), confere o baú, a terra arada, o trigo, as mudas e os caminhos, manda todos dormir, passa 12 dias (1 ano) e solta um lobo perto de uma pessoa; depois nada num lago e vai para o mar aberto até o tubarão atacar).
+`./ermo --shot` roda sem interação: tira screenshots, mede o tempo de cada quadro e faz um teste automático (coleta duas árvores, uma pedra e um arbusto, monta uma fogueira, come e passa a noite; corre, anda carregado, larga e recolhe uma pilha de pedras, vê a skill cair sem treino, confere que a vida só sobe com a fome cheia; fabrica tudo, monta baú e abrigo, gasta o machado, acende a tocha à noite, passa a noite no abrigo e dorme das 22h às 06h; passa 10 s em cada um dos 8 climas (com foto); caça um cervo com o arco, enfrenta um lobo à noite com o machado e vê os animais aparecendo; faz um cercado e pesca; ara e planta 6 células perto da água, colhe o trigo maduro, confere que o verde não sai e que a enxada desfaz a terra (e perde a semente), faz pão, compara o crescimento com e sem água e no inverno, e solta um coelho perto do trigo sem cerca; monta a vila (3 barracos) com zonas de floresta, pedra, plantação e moradia e deixa trabalhar 3 horas (com foto pintando zonas e do painel), confere o baú, a terra arada, o trigo, as mudas, os caminhos e as obras (casa e cerca), manda todos dormir, passa 24 dias (as mudas viram jovens e depois adultas, casamentos e nascimentos), deixa as obras fazerem o barraco do casal novo (foto da vila e da árvore genealógica) e solta um lobo perto de uma pessoa; depois nada num lago e vai para o mar aberto até o tubarão atacar).
 
 ## Próximos passos
 
@@ -353,6 +376,7 @@ make run
 - [x] Animais e caça (arco, flechas, carne, couro)
 - [x] Pesca e plantação (trigo, enxada, sementes, pão)
 - [x] Pessoas: famílias, fé, idade, tarefas e zonas
+- [x] Casas que crescem (barraco, casa, cerca), casamentos, nascimentos e árvore genealógica
 - [ ] Pessoas caçando e pescando
 - [ ] Mais inimigos de noite
 - [ ] Salvar e carregar o jogo
