@@ -141,7 +141,58 @@
 .equ G_WATER,    280         // 0 terra, 1 raso, 2 fundo, 3 muito fundo
 .equ G_SHARK,    284         // tempo no mar aberto (o tubarao chega)
 .equ G_DEATHMSG, 288         // causa da morte (ponteiro)
-.equ GSIZE,      304
+.equ G_RUN,      296         // correndo neste quadro (Shift)
+.equ G_EXHAUST,  300         // stamina acabou: so corre de novo com 25
+.equ G_INVOPEN,  304         // janela da mochila aberta
+.equ G_CHAROPEN, 308         // janela do personagem aberta
+.equ G_TESTKEYS, 312         // teclas simuladas pelo teste (W S A D Shift)
+.equ G_WEIGHT,   316         // peso carregado (decimos de kg)
+.equ G_CAP,      320         // peso maximo sem ficar lento (decimos de kg)
+.equ G_SKILL,    324         // 5 skills (float 0..100)
+.equ G_SKIDLE,   344         // 5 x u16: quadros sem treinar cada skill
+.equ G_SKLAST,   356         // 5 x u8: ultimo nivel anunciado
+.equ GSIZE,      384
+
+// skills
+.equ SK_SWIM,    0           // natacao
+.equ SK_RUN,     1           // corrida
+.equ SK_CHOP,    2           // lenhador
+.equ SK_MINE,    3           // mineracao
+.equ SK_STR,     4           // forca
+.equ NSKILL,     5
+.equ SKREST,     1800        // 30 s sem treinar: a skill comeca a cair
+.equ G_SKSWIM,   (G_SKILL + 4 * SK_SWIM)
+.equ G_SKRUN,    (G_SKILL + 4 * SK_RUN)
+.equ G_SKCHOP,   (G_SKILL + 4 * SK_CHOP)
+.equ G_SKMINE,   (G_SKILL + 4 * SK_MINE)
+.equ G_SKSTR,    (G_SKILL + 4 * SK_STR)
+
+// itens da mochila (G_WOOD, G_STONE e G_BERRY sao um vetor)
+.equ NITEMS,     3
+.equ O_LOGS,     12          // pilhas largadas no chao (= sprite 12, 13, 14)
+.equ O_STONES,   13
+.equ O_BERRIES,  14
+.equ O_LAST,     14          // ultimo tipo de objeto desenhavel
+
+// interface (coordenadas do espaco de texto 640 x 360)
+.equ BTN_Y,      16
+.equ BTN_H,      14
+.equ BTNI_X,     404         // botao "Mochila"
+.equ BTNI_W,     104
+.equ BTNC_X,     512         // botao "Personagem"
+.equ BTNC_W,     124
+.equ INV_X,      416         // janela da mochila
+.equ INV_Y,      36
+.equ INV_W,      220
+.equ INV_H,      218
+.equ SLOT_X,     (INV_X + 13)
+.equ SLOT_Y,     (INV_Y + 48)
+.equ SLOT,       44          // lado do quadrado
+.equ SLOTSTEP,   50
+.equ CHR_X,      4           // janela do personagem (embaixo do status)
+.equ CHR_Y,      114
+.equ CHR_W,      216
+.equ CHR_H,      186
 
 // agua: 3 niveis (raso, fundo, mar aberto)
 .equ W_SHALLOW,  150         // ate esta profundidade (1/16 px) e raso
@@ -187,3 +238,22 @@
 .equ F_DROWN,    124
 .equ F_WETCOLD,  128
 .equ F_SHARKR,   132
+.equ F_RUNCOST,  136
+.equ F_RECOVREST, 140
+.equ F_RUNBASE,  144
+.equ F_RUNSK,    148
+.equ F_SWIMBASE, 152
+.equ F_SWIMSK,   156
+.equ F_SK6,      160
+.equ F_SK5,      164
+.equ F_HEAVY,    168
+.equ F_25,       172
+.equ F_XPSWIM,   176
+.equ F_XPRUN,    180
+.equ F_XPCHOP,   184
+.equ F_XPMINE,   188
+.equ F_XPSTR,    192
+.equ F_SKDECAY,  196
+.equ F_P105,     200
+.equ F_INV100,   204
+.equ F_TENTH,    208

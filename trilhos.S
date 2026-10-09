@@ -240,6 +240,17 @@ shot_mode:
     ldr     x0, [x28, #G_REN]
     bl      F(SDL_RenderPresent)
 
+    // skills, peso e mochila (foto com as duas janelas abertas)
+    mov     w0, #0
+    bl      surv_selftest_skills
+    bl      draw_all
+    LA      x0, s_shot_bag
+    bl      save_bmp
+    ldr     x0, [x28, #G_REN]
+    bl      F(SDL_RenderPresent)
+    mov     w0, #1
+    bl      surv_selftest_skills
+
     // agua: nadando, tubarao chegando e o fim
     mov     w0, #0
     bl      surv_selftest_water
@@ -1552,7 +1563,7 @@ do_loop:
     strb    w13, [x16, x25]             // a vista: lembra como esta agora
     b       2f
 1:  ldrb    w13, [x16, x25]             // na neblina: desenha o que lembra
-2:  cmp     w13, #8                     // removido ou nunca visto
+2:  cmp     w13, #(O_LAST + 1)          // removido ou nunca visto
     b.hs    do_skip
     sub     w0, w10, w11
     sub     w0, w0, w22
@@ -2074,6 +2085,31 @@ sprites:
     .byte 33,33,34,34,0
     .byte 32,32,32,32,32
     .p2align 7
+// 12: toras largadas no chao (tambem e o icone da madeira na mochila)
+    .byte 9, 6, 4, 0
+    .byte 0,0,6,31,31,31,31,0,0
+    .byte 0,0,7,1,1,1,1,0,0
+    .byte 0,6,31,31,31,31,31,31,0
+    .byte 0,7,1,1,1,1,1,1,0
+    .byte 6,31,31,31,31,31,31,31,31
+    .byte 7,1,1,1,1,1,1,1,1
+    .p2align 7
+// 13: pedras largadas
+    .byte 8, 5, 4, 0
+    .byte 0,0,0,20,20,0,0,0
+    .byte 0,20,20,21,21,20,0,0
+    .byte 20,21,21,22,20,21,21,0
+    .byte 21,21,22,22,21,21,22,22
+    .byte 0,22,22,0,22,22,22,0
+    .p2align 7
+// 14: frutas largadas
+    .byte 6, 5, 3, 0
+    .byte 0,0,0,3,3,0
+    .byte 0,23,23,3,23,0
+    .byte 23,32,23,23,32,23
+    .byte 23,23,23,23,23,23
+    .byte 0,23,23,0,23,0
+    .p2align 7
 
 s_wintitle:     .asciz "Trilhos - jogo de trens em Assembly ARM64"
 s_title:        .asciz "TRILHOS"
@@ -2101,6 +2137,7 @@ s_shot_near:    .asciz "shot_perto.bmp"
 s_shot_contour: .asciz "shot_curvas.bmp"
 s_shot_night:   .asciz "shot_noite.bmp"
 s_shot_swim:    .asciz "shot_nado.bmp"
+s_shot_bag:     .asciz "shot_mochila.bmp"
 s_shot_shark:   .asciz "shot_tubarao.bmp"
 s_shot_dead:    .asciz "shot_fim.bmp"
 

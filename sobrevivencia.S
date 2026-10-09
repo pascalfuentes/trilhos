@@ -13,9 +13,22 @@
 //  - Neblina de guerra: 360 raios saem do personagem (e das fogueiras);
 //    arvores tapam a visao. O raio diminui de noite. O que nunca foi
 //    visto fica preto; o que ja foi visto aparece como foi lembrado.
+//  - Shift corre (gasta stamina, como nadar). 5 skills sobem com o uso
+//    (natacao, corrida, lenhador, mineracao, forca) e caem devagar sem
+//    treino. A mochila tem limite de peso: acima dele, anda devagar.
+//    I abre a mochila, C abre o personagem (ou os botoes no canto).
 // =====================================================================
 
 #include "comum.h"
+
+// cor de desenho da interface (chama setcolor; usa x0-x3)
+.macro RGBA r, g, b, a
+    mov     w0, #\r
+    mov     w1, #\g
+    mov     w2, #\b
+    mov     w3, #\a
+    bl      setcolor
+.endm
 
     .text
     .p2align 2
@@ -279,7 +292,17 @@ surv_reset:
     str     wzr, [x28, #G_POPT]
     str     wzr, [x28, #G_WARNED]
     str     wzr, [x28, #G_PMOVING]
-    LA      x9, seen                    // nada foi descoberto ainda
+    str     wzr, [x28, #G_RUN]
+    str     wzr, [x28, #G_EXHAUST]
+    str     wzr, [x28, #G_INVOPEN]
+    str     wzr, [x28, #G_CHAROPEN]
+    str     wzr, [x28, #G_TESTKEYS]
+    add     x9, x28, #G_SKILL           // skills, tempo sem treino e niveis
+    stp     xzr, xzr, [x9]
+    stp     xzr, xzr, [x9, #16]
+    stp     xzr, xzr, [x9, #32]
+    bl      calc_weight
+    LA      x9, seen                   // nada foi descoberto ainda
     mov     w10, #(MAPN * MAPN / 16)
 1:  stp     xzr, xzr, [x9], #16
     subs    w10, w10, #1
@@ -401,9 +424,12 @@ find_obj_near:
 1:  cmp     w7, w5
     b.ge    9f
     ldrb    w8, [x6, #6]
-    cmp     w8, #O_BUSHE
+    cmp     w8, #O_BUSHE                // arvore, pedra, arbusto...
+    b.ls    11f
+    sub     w8, w8, #O_LOGS             // ... ou pilha largada
+    cmp     w8, #(O_LAST - O_LOGS)
     b.hi    2f
-    ldrh    w9, [x6]
+11: ldrh    w9, [x6]
     sub     w9, w9, w2
     cmp     w9, #80
     b.gt    2f
@@ -457,30 +483,45 @@ find_fire_near:
 
 // harvest(w0 = objeto): da 1 recurso e gasta o objeto
 harvest:
-    stp     x29, x30, [sp, #-16]!
+    stp     x29, x30, [sp, #-32]!
     mov     x29, sp
-    LA      x9, objs
-    add     x9, x9, x0, lsl #3
-    ldrb    w10, [x9, #6]               // tipo
-    cmp     w10, #O_ROCK
-    b.eq    2f
-    cmp     w10, #O_BUSH
-    b.eq    3f
-    ldr     w11, [x28, #G_WOOD]         // arvore ou pinheiro
+    stp     x19, x20, [sp, #16]
+    LA      x19, objs
+    add     x19, x19, x0, lsl #3
+    ldrb    w20, [x19, #6]              // tipo
+    // qual item: pilha largada, pedra, arbusto ou arvore
+    sub     w9, w20, #O_LOGS
+    cmp     w20, #O_LOGS
+    b.hs    1f
+    mov     w9, #1
+    cmp     w20, #O_ROCK
+    b.eq    1f
+    mov     w9, #2
+    cmp     w20, #O_BUSH
+    b.eq    1f
+    mov     w9, #0
+1:  add     x10, x28, #G_WOOD
+    ldr     w11, [x10, x9, lsl #2]
     add     w11, w11, #1
-    str     w11, [x28, #G_WOOD]
-    LA      x0, p_wood
-    b       4f
-2:  ldr     w11, [x28, #G_STONE]
-    add     w11, w11, #1
-    str     w11, [x28, #G_STONE]
-    LA      x0, p_stone
-    b       4f
-3:  ldr     w11, [x28, #G_BERRY]
-    add     w11, w11, #1
-    str     w11, [x28, #G_BERRY]
-    LA      x0, p_berry
-4:  ldrb    w11, [x9, #7]               // quanto ainda tem
+    str     w11, [x10, x9, lsl #2]
+    LA      x10, popitem
+    ldr     x0, [x10, x9, lsl #3]
+    bl      popup
+    // treino: arvores (lenhador) e pedras (mineracao)
+    cmp     w20, #O_PINE
+    b.hi    2f
+    mov     w0, #SK_CHOP
+    FC      s0, F_XPCHOP
+    bl      skill_train
+    b       3f
+2:  cmp     w20, #O_ROCK
+    b.ne    3f
+    mov     w0, #SK_MINE
+    FC      s0, F_XPMINE
+    bl      skill_train
+3:  mov     x9, x19
+    mov     w10, w20
+    ldrb    w11, [x9, #7]               // quanto ainda tem
     subs    w11, w11, #1
     csel    w11, wzr, w11, lt
     strb    w11, [x9, #7]
@@ -502,8 +543,8 @@ harvest:
     cbz     w13, 6f
     sub     w13, w13, #1
     strb    w13, [x12, w11, uxtw]
-6:  bl      popup
-    ldp     x29, x30, [sp], #16
+6:  ldp     x19, x20, [sp, #16]
+    ldp     x29, x30, [sp], #32
     ret
 
     .globl surv_update
@@ -523,10 +564,12 @@ surv_update:
     sub     w9, w9, #1
     str     w9, [x28, #G_POPT]
 2:  bl      update_ambient
+    bl      calc_weight
     ldr     w9, [x28, #G_DEAD]
     cbnz    w9, su_cam
     ldr     w9, [x28, #G_PAUSE]
     cbnz    w9, su_cam
+    bl      skills_tick                 // skills sem treino caem devagar
 
     // ---- relogio ----
     ldr     w9, [x28, #G_TIME]
@@ -551,35 +594,51 @@ surv_update:
     bl      set_msg
 
     // ---- movimento (WASD / setas, na direcao da tela) ----
+    // teclas -> w22: bit 0 W, 1 S, 2 A, 3 D, 4 Shift (o teste soma as suas)
 4:  ldr     x19, [x28, #G_KEYS]
-    fmov    s8, wzr                     // du
-    fmov    s9, wzr                     // dv
-    fmov    s0, #1.0
-    ldrb    w9, [x19, #26]              // W: sobe na tela = -u -v
+    ldr     w22, [x28, #G_TESTKEYS]
+    ldrb    w9, [x19, #26]              // W ou seta para cima
     ldrb    w10, [x19, #82]
     orr     w9, w9, w10
-    cbz     w9, 5f
-    fsub    s8, s8, s0
-    fsub    s9, s9, s0
-5:  ldrb    w9, [x19, #22]              // S: +u +v
+    cbz     w9, 41f
+    orr     w22, w22, #1
+41: ldrb    w9, [x19, #22]              // S
     ldrb    w10, [x19, #81]
     orr     w9, w9, w10
-    cbz     w9, 6f
-    fadd    s8, s8, s0
-    fadd    s9, s9, s0
-6:  ldrb    w9, [x19, #4]               // A: esquerda = -u +v
+    cbz     w9, 42f
+    orr     w22, w22, #2
+42: ldrb    w9, [x19, #4]               // A
     ldrb    w10, [x19, #80]
     orr     w9, w9, w10
-    cbz     w9, 7f
-    fsub    s8, s8, s0
-    fadd    s9, s9, s0
-7:  ldrb    w9, [x19, #7]               // D: direita = +u -v
+    cbz     w9, 43f
+    orr     w22, w22, #4
+43: ldrb    w9, [x19, #7]               // D
     ldrb    w10, [x19, #79]
     orr     w9, w9, w10
-    cbz     w9, 8f
+    cbz     w9, 44f
+    orr     w22, w22, #8
+44: ldrb    w9, [x19, #225]             // Shift esquerdo ou direito
+    ldrb    w10, [x19, #229]
+    orr     w9, w9, w10
+    cbz     w9, 45f
+    orr     w22, w22, #16
+45: fmov    s8, wzr                     // du
+    fmov    s9, wzr                     // dv
+    fmov    s0, #1.0
+    tbz     w22, #0, 5f                 // W: sobe na tela = -u -v
+    fsub    s8, s8, s0
+    fsub    s9, s9, s0
+5:  tbz     w22, #1, 6f                 // S: +u +v
+    fadd    s8, s8, s0
+    fadd    s9, s9, s0
+6:  tbz     w22, #2, 7f                 // A: esquerda = -u +v
+    fsub    s8, s8, s0
+    fadd    s9, s9, s0
+7:  tbz     w22, #3, 8f                 // D: direita = +u -v
     fadd    s8, s8, s0
     fsub    s9, s9, s0
-8:  fmul    s10, s8, s8
+8:  str     wzr, [x28, #G_RUN]
+    fmul    s10, s8, s8
     fmadd   s10, s9, s9, s10
     fcmp    s10, #0.0
     b.ne    9f
@@ -588,22 +647,55 @@ surv_update:
 9:  fsqrt   s10, s10
     FC      s11, F_SPEED
     fdiv    s11, s11, s10
-    ldr     w9, [x28, #G_WATER]         // na agua anda mais devagar
-    LA      x10, waterspeed
-    ldr     s0, [x10, x9, lsl #2]
+    ldr     w9, [x28, #G_WATER]
     cmp     w9, #2
-    b.lt    91f
+    b.lt    92f
+    // nadando: mais rapido com a skill; sem stamina, quase parado
     ldr     s1, [x28, #G_STAMINA]
     fcmp    s1, #0.0
     b.gt    91f
-    FC      s0, F_TIRED                 // sem folego: quase parado
-91: fmul    s11, s11, s0
+    FC      s0, F_TIRED
+    b       94f
+91: ldr     s1, [x28, #G_SKSWIM]
+    FC      s2, F_SWIMSK
+    FC      s0, F_SWIMBASE
+    fmadd   s0, s1, s2, s0              // 0.45 .. 0.80
+    b       94f
+92: LA      x10, waterspeed             // terra 1.0, agua rasa 0.6
+    ldr     s0, [x10, x9, lsl #2]
+    // correr (Shift): precisa de stamina e de nao estar sobrecarregado
+    tbz     w22, #4, 94f
+    ldr     w9, [x28, #G_EXHAUST]
+    cbnz    w9, 94f
+    ldr     w9, [x28, #G_WEIGHT]
+    ldr     w10, [x28, #G_CAP]
+    cmp     w9, w10
+    b.gt    94f
+    ldr     s1, [x28, #G_STAMINA]
+    fcmp    s1, #0.0
+    b.le    94f
+    mov     w9, #1
+    str     w9, [x28, #G_RUN]
+    ldr     s1, [x28, #G_SKRUN]
+    FC      s2, F_RUNSK
+    FC      s3, F_RUNBASE
+    fmadd   s1, s1, s2, s3              // 1.7 .. 2.2
+    fmul    s0, s0, s1
+94: ldr     w9, [x28, #G_WEIGHT]        // sobrecarregado: bem mais lento
+    ldr     w10, [x28, #G_CAP]
+    cmp     w9, w10
+    b.le    95f
+    FC      s1, F_HEAVY
+    fmul    s0, s0, s1
+95: fmul    s11, s11, s0
     fmul    s8, s8, s11
     fmul    s9, s9, s11
     mov     w9, #1
     str     w9, [x28, #G_PMOVING]
     ldr     w9, [x28, #G_PFRAME]
+    ldr     w10, [x28, #G_RUN]
     add     w9, w9, #1
+    add     w9, w9, w10                 // correndo: pernas mais rapidas
     str     w9, [x28, #G_PFRAME]
     // anda em u e em v (so nao pode sair do mapa)
     mov     w9, #509
@@ -665,6 +757,9 @@ su_after_move:
     str     w9, [x28, #G_HOVFIRE]
     ldr     w9, [x28, #G_HOVOK]
     cbz     w9, 11f
+    bl      mouse_ui                    // mouse em cima de botao ou janela?
+    bl      ui_hit
+    cbnz    w0, 11f
     ldr     w0, [x28, #G_HOVU]
     ldr     w1, [x28, #G_HOVV]
     bl      find_obj_near
@@ -702,13 +797,36 @@ su_after_move:
     FC      s1, F_REACH2
     fcmp    s0, s1
     b.gt    su_nomine
-    ldr     w9, [x28, #G_MINEOBJ]
+    ldr     w9, [x28, #G_WEIGHT]        // peso demais: nao pega mais nada
+    ldr     w10, [x28, #G_CAP]
+    add     w10, w10, w10, lsr #1
+    cmp     w9, w10
+    b.lt    111f
+    LA      x0, m_toheavy
+    bl      set_msg
+    b       su_nomine
+111: ldr    w9, [x28, #G_MINEOBJ]
     cmp     w9, w19
     b.eq    12f
     str     w19, [x28, #G_MINEOBJ]
     str     wzr, [x28, #G_MINEPROG]
 12: LA      x9, minetime
     ldrb    w10, [x9, x20]
+    fmov    s1, wzr                     // lenhador / mineracao: ate 2x mais rapido
+    cmp     w20, #O_PINE
+    b.hi    121f
+    ldr     s1, [x28, #G_SKCHOP]
+    b       122f
+121: cmp    w20, #O_ROCK
+    b.ne    122f
+    ldr     s1, [x28, #G_SKMINE]
+122: FC     s2, F_SK5
+    fmul    s1, s1, s2
+    fmov    s2, #1.0
+    fsub    s1, s2, s1
+    scvtf   s2, w10
+    fmul    s2, s2, s1
+    fcvtzs  w10, s2
     str     w10, [x28, #G_MINENEED]
     ldr     w9, [x28, #G_MINEPROG]
     add     w9, w9, #1
@@ -733,25 +851,90 @@ su_food:
     fmax    s0, s0, s1
     str     s0, [x28, #G_FOOD]
 
-    // ---- agua: folego e tubarao ----
+    // ---- stamina: nadar e correr gastam; parado em terra volta rapido ----
     ldr     w9, [x28, #G_WATER]
     ldr     s0, [x28, #G_STAMINA]
     cmp     w9, #2
     b.lt    210f
-    FC      s1, F_SWIMCOST              // nadando: cansa
+    ldr     s2, [x28, #G_SKSWIM]        // nadando: custo * (1 - 0.6 * natacao)
+    FC      s3, F_SK6
+    fmul    s2, s2, s3
+    fmov    s3, #1.0
+    fsub    s2, s3, s2
+    FC      s1, F_SWIMCOST
+    fmul    s1, s1, s2
+    ldr     w10, [x28, #G_WEIGHT]       // com peso demais afunda: o dobro
+    ldr     w11, [x28, #G_CAP]
+    cmp     w10, w11
+    b.le    209f
+    fadd    s1, s1, s1
+209: fsub   s0, s0, s1
+    b       212f
+210: ldr    w10, [x28, #G_RUN]
+    cbz     w10, 2101f
+    ldr     s2, [x28, #G_SKRUN]         // correndo: custo * (1 - 0.5 * corrida)
+    FC      s3, F_SK5
+    fmul    s2, s2, s3
+    fmov    s3, #1.0
+    fsub    s2, s3, s2
+    FC      s1, F_RUNCOST
+    fmul    s1, s1, s2
     fsub    s0, s0, s1
     b       212f
-210: cbz    w9, 211f
+2101: cbz   w9, 211f
     FC      s1, F_RECOVSH               // no raso: recupera devagar
     fadd    s0, s0, s1
     b       212f
-211: FC     s1, F_RECOV                 // em terra: recupera rapido
-    fadd    s0, s0, s1
+211: FC     s1, F_RECOV                 // em terra andando
+    ldr     w10, [x28, #G_PMOVING]
+    cbnz    w10, 2111f
+    FC      s1, F_RECOVREST             // parado: mais rapido
+2111: fadd  s0, s0, s1
 212: fmov   s1, wzr
     fmax    s0, s0, s1
     FC      s1, F_HUNDRED
     fmin    s0, s0, s1
     str     s0, [x28, #G_STAMINA]
+    fcmp    s0, #0.0                    // acabou: so corre de novo com 25
+    b.gt    2121f
+    mov     w9, #1
+    str     w9, [x28, #G_EXHAUST]
+    b       2122f
+2121: FC    s1, F_25
+    fcmp    s0, s1
+    b.lt    2122f
+    str     wzr, [x28, #G_EXHAUST]
+2122:
+
+    // ---- treino: nadar, correr e andar carregado ----
+    ldr     w9, [x28, #G_PMOVING]
+    cbz     w9, 219f
+    ldr     w9, [x28, #G_WATER]
+    cmp     w9, #2
+    b.lt    217f
+    mov     w0, #SK_SWIM
+    FC      s0, F_XPSWIM
+    bl      skill_train
+217: ldr    w9, [x28, #G_RUN]
+    cbz     w9, 218f
+    mov     w0, #SK_RUN
+    FC      s0, F_XPRUN
+    bl      skill_train
+218: ldr    w9, [x28, #G_WEIGHT]        // forca: andando com mais de 60% da carga
+    ldr     w10, [x28, #G_CAP]
+    mov     w11, #10
+    mul     w12, w9, w11
+    mov     w11, #6
+    mul     w13, w10, w11
+    cmp     w12, w13
+    b.lt    219f
+    FC      s0, F_XPSTR
+    cmp     w9, w10
+    b.le    2181f
+    fadd    s0, s0, s0                  // sobrecarregado treina o dobro
+2181: mov   w0, #SK_STR
+    bl      skill_train
+219:
     ldr     w9, [x28, #G_WATER]
     cmp     w9, #3
     b.ne    215f
@@ -944,8 +1127,20 @@ surv_key:
     bl      eat
     b       9f
 1:  cmp     w0, #9                      // F
-    b.ne    9f
+    b.ne    2f
     bl      build_fire
+    b       9f
+2:  cmp     w0, #12                     // I: mochila
+    b.ne    3f
+    ldr     w9, [x28, #G_INVOPEN]
+    eor     w9, w9, #1
+    str     w9, [x28, #G_INVOPEN]
+    b       9f
+3:  cmp     w0, #6                      // C: personagem
+    b.ne    9f
+    ldr     w9, [x28, #G_CHAROPEN]
+    eor     w9, w9, #1
+    str     w9, [x28, #G_CHAROPEN]
 9:  ldp     x29, x30, [sp], #16
     ret
 
@@ -1048,16 +1243,56 @@ bf_ret:
 surv_mouse:
     stp     x29, x30, [sp, #-32]!
     mov     x29, sp
-    str     x19, [sp, #16]
+    stp     x19, x20, [sp, #16]
     ldr     w9, [x28, #G_DEAD]
     cbnz    w9, sm_ret
-    cmp     w0, #1
-    b.ne    1f
-    str     w1, [x28, #G_LMB]           // esquerdo: coletar
-    b       sm_ret
-1:  cmp     w0, #3
+    mov     w19, w0
+    mov     w20, w1
+    cbnz    w20, 1f
+    cmp     w19, #1                     // soltou o esquerdo: para de coletar
     b.ne    sm_ret
-    cbz     w1, sm_ret
+    str     wzr, [x28, #G_LMB]
+    b       sm_ret
+    // apertou: primeiro os botoes e janelas da interface
+1:  bl      mouse_ui
+    bl      ui_hit
+    cmp     w0, #1
+    b.ne    2f
+    ldr     w9, [x28, #G_INVOPEN]
+    eor     w9, w9, #1
+    str     w9, [x28, #G_INVOPEN]
+    b       sm_ret
+2:  cmp     w0, #2
+    b.ne    3f
+    ldr     w9, [x28, #G_CHAROPEN]
+    eor     w9, w9, #1
+    str     w9, [x28, #G_CHAROPEN]
+    b       sm_ret
+3:  cmp     w0, #3                      // mochila: direito larga o item
+    b.ne    4f
+    cmp     w19, #3
+    b.ne    sm_ret
+    tbnz    w1, #31, sm_ret
+    mov     w0, w1
+    bl      inv_slot_item
+    tbnz    w0, #31, sm_ret
+    mov     w1, #1                      // 1 (com Shift: a pilha toda)
+    ldr     x9, [x28, #G_KEYS]
+    ldrb    w10, [x9, #225]
+    ldrb    w11, [x9, #229]
+    orr     w10, w10, w11
+    cbz     w10, 31f
+    mov     w1, #255
+31: bl      drop_item
+    b       sm_ret
+4:  cbnz    w0, sm_ret                  // janela do personagem: nada
+    cmp     w19, #1
+    b.ne    5f
+    mov     w9, #1                      // esquerdo no mundo: coletar
+    str     w9, [x28, #G_LMB]
+    b       sm_ret
+5:  cmp     w19, #3
+    b.ne    sm_ret
     ldr     w19, [x28, #G_HOVFIRE]      // direito numa fogueira: lenha
     tbnz    w19, #31, sm_ret
     mov     w0, w19
@@ -1086,7 +1321,7 @@ surv_mouse:
     LA      x0, p_log
     bl      popup
 sm_ret:
-    ldr     x19, [sp, #16]
+    ldp     x19, x20, [sp, #16]
     ldp     x29, x30, [sp], #32
     ret
 
@@ -1733,6 +1968,7 @@ surv_status:
     ret
 
 // bar(w0 = y, x1 = rotulo, s0 = valor 0..100, w2/w3/w4 = cor)
+// o rotulo fica em x = 10 e a barra (120 de largura) em x = 70
 bar:
     stp     x29, x30, [sp, #-64]!
     mov     x29, sp
@@ -1759,7 +1995,7 @@ bar:
     mov     w2, #40
     mov     w3, #255
     bl      setcolor
-    mov     w0, #60
+    mov     w0, #70
     sub     w1, w19, #1
     mov     w2, #120
     mov     w3, #9
@@ -1776,7 +2012,7 @@ bar:
     fdiv    s0, s0, s1
     fcvtzs  w2, s0
     cbz     w2, 1f
-    mov     w0, #60
+    mov     w0, #70
     sub     w1, w19, #1
     mov     w3, #9
     bl      fillrect
@@ -1855,7 +2091,7 @@ surv_ui:
     bl      bar
     // ---- na agua? ----
     ldr     w9, [x28, #G_WATER]
-    cbz     w9, ui_tip
+    cbz     w9, ui_heavy
     LA      x10, waternames
     add     x19, x10, x9, lsl #5
     mov     w0, #150                    // raso / nadando: azul claro
@@ -1876,7 +2112,26 @@ surv_ui:
     mov     w1, #94
     mov     x2, x19
     bl      text
+    // ---- sobrecarregado? ----
+ui_heavy:
+    ldr     w9, [x28, #G_WEIGHT]
+    ldr     w10, [x28, #G_CAP]
+    cmp     w9, w10
+    b.le    ui_tip
+    mov     w0, #255
+    mov     w1, #150
+    mov     w2, #70
+    mov     w3, #255
+    bl      setcolor
+    ldr     w9, [x28, #G_WATER]
+    mov     w1, #94
+    cbz     w9, 1f
+    mov     w1, #104
+1:  mov     w0, #8
+    LA      x2, s_heavy
+    bl      text
 ui_tip:
+    bl      ui_windows                  // botoes, mochila e personagem
 
     // ---- dica sobre o que esta sob o mouse ----
     ldr     s0, [x28, #G_MX]
@@ -2134,6 +2389,801 @@ ui_ret:
     ldp     x29, x30, [sp], #64
     ret
 
+// =====================================================================
+//  Skills, peso e mochila
+// =====================================================================
+
+// calc_weight: peso carregado e limite (que cresce com a forca)   folha
+calc_weight:
+    add     x9, x28, #G_WOOD
+    LA      x10, itemweight
+    mov     w11, #0
+    mov     x12, #0
+1:  ldr     w13, [x9, x12, lsl #2]
+    ldrh    w14, [x10, x12, lsl #1]
+    madd    w11, w13, w14, w11
+    add     x12, x12, #1
+    cmp     x12, #NITEMS
+    b.lt    1b
+    str     w11, [x28, #G_WEIGHT]
+    ldr     s0, [x28, #G_SKSTR]         // 30 kg + 0.3 kg por ponto de forca
+    fmov    s1, #3.0
+    fmul    s0, s0, s1
+    fcvtzs  w9, s0
+    add     w9, w9, #300
+    str     w9, [x28, #G_CAP]
+    ret
+
+// skills_tick: cada skill sem treino ha mais de 30 s cai devagar   folha
+skills_tick:
+    mov     x9, #0
+1:  add     x10, x28, #G_SKIDLE
+    ldrh    w11, [x10, x9, lsl #1]
+    mov     w12, #65535
+    cmp     w11, w12
+    cinc    w11, w11, lo
+    strh    w11, [x10, x9, lsl #1]
+    cmp     w11, #SKREST
+    b.ls    2f
+    add     x10, x28, #G_SKILL
+    ldr     s0, [x10, x9, lsl #2]
+    FC      s1, F_SKDECAY
+    fsub    s0, s0, s1
+    fmov    s1, wzr
+    fmax    s0, s0, s1
+    str     s0, [x10, x9, lsl #2]
+    FC      s1, F_TENTH                 // caiu de nivel: anuncia de novo
+    fmul    s0, s0, s1                  // quando subir outra vez
+    fcvtzs  w11, s0
+    add     x10, x28, #G_SKLAST
+    ldrb    w12, [x10, x9]
+    cmp     w11, w12
+    b.ge    2f
+    strb    w11, [x10, x9]
+2:  add     x9, x9, #1
+    cmp     x9, #NSKILL
+    b.lt    1b
+    ret
+
+// skill_train(w0 = skill, s0 = treino): sobe mais devagar perto do maximo
+skill_train:
+    stp     x29, x30, [sp, #-32]!
+    mov     x29, sp
+    stp     x19, x20, [sp, #16]
+    mov     w19, w0
+    add     x9, x28, #G_SKILL
+    ldr     s1, [x9, x19, lsl #2]
+    FC      s2, F_INV100
+    FC      s3, F_P105
+    fmsub   s2, s1, s2, s3              // 1.05 - v/100
+    fmadd   s1, s0, s2, s1              // v += treino * (1.05 - v/100)
+    FC      s2, F_HUNDRED
+    fmin    s1, s1, s2
+    str     s1, [x9, x19, lsl #2]
+    add     x10, x28, #G_SKIDLE
+    strh    wzr, [x10, x19, lsl #1]
+    FC      s2, F_TENTH
+    fmul    s1, s1, s2
+    fcvtzs  w20, s1                     // nivel 0..10
+    add     x10, x28, #G_SKLAST
+    ldrb    w11, [x10, x19]
+    cmp     w20, w11
+    b.le    9f
+    strb    w20, [x10, x19]
+    LA      x0, msgbuf                  // "Natacao subiu para o nivel 3!"
+    LA      x1, skillnames
+    add     x1, x1, x19, lsl #4
+    bl      strcat_cur
+    LA      x1, s_lvlup
+    bl      strcat_cur
+    mov     w1, w20
+    bl      numcat
+    LA      x1, s_excl
+    bl      strcat_cur
+    LA      x0, msgbuf
+    bl      set_msg
+9:  ldp     x19, x20, [sp, #16]
+    ldp     x29, x30, [sp], #32
+    ret
+
+// kgcat(x0 = cursor, w1 = decimos de kg) -> x0   ("12.5")
+kgcat:
+    stp     x29, x30, [sp, #-32]!
+    mov     x29, sp
+    str     x19, [sp, #16]
+    mov     w19, w1
+    mov     w9, #10
+    udiv    w1, w19, w9
+    bl      numcat
+    mov     w9, #46
+    strb    w9, [x0], #1
+    mov     w9, #10
+    udiv    w10, w19, w9
+    msub    w10, w10, w9, w19
+    add     w10, w10, #48
+    strb    w10, [x0], #1
+    strb    wzr, [x0]
+    ldr     x19, [sp, #16]
+    ldp     x29, x30, [sp], #32
+    ret
+
+// mouse_ui -> w0 = x, w1 = y no espaco da interface (640 x 360)   folha
+mouse_ui:
+    ldr     s0, [x28, #G_MX]
+    fcvtzs  w0, s0
+    asr     w0, w0, #1
+    ldr     s0, [x28, #G_MY]
+    fcvtzs  w1, s0
+    asr     w1, w1, #1
+    ret
+
+// ui_hit(w0 = x, w1 = y) -> w0: 0 mundo, 1 botao mochila, 2 botao
+// personagem, 3 janela da mochila (w1 = quadrado ou -1), 4 janela do
+// personagem.   folha: usa x0-x3, x9-x13
+ui_hit:
+    mov     w2, w0
+    mov     w3, w1
+    mov     w1, #-1
+    sub     w9, w3, #BTN_Y
+    cmp     w9, #BTN_H
+    b.hs    1f
+    sub     w9, w2, #BTNI_X
+    cmp     w9, #BTNI_W
+    mov     w0, #1
+    b.lo    9f
+    sub     w9, w2, #BTNC_X
+    cmp     w9, #BTNC_W
+    mov     w0, #2
+    b.lo    9f
+1:  ldr     w9, [x28, #G_INVOPEN]
+    cbz     w9, 3f
+    sub     w9, w2, #INV_X
+    cmp     w9, #INV_W
+    b.hs    3f
+    sub     w10, w3, #INV_Y
+    cmp     w10, #INV_H
+    b.hs    3f
+    mov     w0, #3
+    sub     w9, w2, #SLOT_X             // qual quadrado (4 x 3)?
+    sub     w10, w3, #SLOT_Y
+    tbnz    w9, #31, 9f
+    tbnz    w10, #31, 9f
+    mov     w11, #SLOTSTEP
+    udiv    w12, w9, w11
+    msub    w9, w12, w11, w9
+    cmp     w9, #SLOT
+    b.hs    9f
+    cmp     w12, #4
+    b.hs    9f
+    udiv    w13, w10, w11
+    msub    w10, w13, w11, w10
+    cmp     w10, #SLOT
+    b.hs    9f
+    cmp     w13, #3
+    b.hs    9f
+    add     w1, w12, w13, lsl #2
+    b       9f
+3:  mov     w0, #0
+    ldr     w9, [x28, #G_CHAROPEN]
+    cbz     w9, 9f
+    sub     w9, w2, #CHR_X
+    cmp     w9, #CHR_W
+    b.hs    9f
+    sub     w10, w3, #CHR_Y
+    cmp     w10, #CHR_H
+    b.hs    9f
+    mov     w0, #4
+9:  ret
+
+// inv_slot_item(w0 = quadrado) -> w0 = item (-1 = vazio)   folha
+// os itens que voce tem ocupam os quadrados em ordem
+inv_slot_item:
+    add     x9, x28, #G_WOOD
+    mov     w10, #0
+1:  cmp     w10, #NITEMS
+    b.ge    8f
+    ldr     w11, [x9, x10, lsl #2]
+    cbz     w11, 2f
+    cbz     w0, 9f
+    sub     w0, w0, #1
+2:  add     w10, w10, #1
+    b       1b
+8:  mov     w10, #-1
+9:  mov     w0, w10
+    ret
+
+// drop_item(w0 = item, w1 = quantos): larga no chao, numa pilha que
+// pode ser coletada de volta (junta com uma pilha igual ali do lado)
+drop_item:
+    stp     x29, x30, [sp, #-80]!
+    mov     x29, sp
+    stp     x19, x20, [sp, #16]
+    stp     x21, x22, [sp, #32]
+    stp     x23, x24, [sp, #48]
+    stp     d8, d9, [sp, #64]
+    mov     w19, w0
+    add     x9, x28, #G_WOOD
+    ldr     w10, [x9, x19, lsl #2]
+    cmp     w1, w10
+    csel    w20, w1, w10, lt            // nao larga mais do que tem
+    cbz     w20, 9f
+    ldr     s8, [x28, #G_PU]            // no chao, na frente do personagem
+    ldr     s9, [x28, #G_PV]
+    fmov    s0, #0.75
+    fadd    s8, s8, s0
+    fadd    s9, s9, s0
+    fmov    s0, s8
+    fmov    s1, s9
+    bl      elev_at
+    tbz     w0, #31, 1f
+    LA      x0, m_dropwater
+    bl      set_msg
+    b       9f
+1:  mov     w21, w0
+    FC      s2, F_64
+    fmul    s0, s8, s2
+    fcvtzs  w22, s0
+    fmul    s0, s9, s2
+    fcvtzs  w23, s0
+    add     w24, w19, #O_LOGS
+    ldr     w9, [x28, #G_NOBJ]
+    LA      x10, objs
+    mov     w11, #0
+2:  cmp     w11, w9
+    b.ge    5f
+    ldrb    w12, [x10, #6]
+    cmp     w12, w24
+    b.ne    4f
+    ldrh    w12, [x10]
+    sub     w12, w12, w22
+    cmp     w12, #96
+    b.gt    4f
+    cmn     w12, #96
+    b.lt    4f
+    ldrh    w12, [x10, #2]
+    sub     w12, w12, w23
+    cmp     w12, #96
+    b.gt    4f
+    cmn     w12, #96
+    b.lt    4f
+    ldrb    w12, [x10, #7]
+    add     w12, w12, w20
+    cmp     w12, #255
+    b.gt    4f
+    strb    w12, [x10, #7]
+    b       6f
+4:  add     x10, x10, #8
+    add     w11, w11, #1
+    b       2b
+5:  mov     w0, w22                     // pilha nova
+    mov     w1, w23
+    mov     w2, w21
+    mov     w3, w24
+    mov     w4, w20
+    bl      add_obj
+    ldr     w9, [x28, #G_NOBJ]
+    sub     w9, w9, #1
+    LA      x10, memtype
+    strb    w24, [x10, x9]
+6:  add     x9, x28, #G_WOOD
+    ldr     w10, [x9, x19, lsl #2]
+    sub     w10, w10, w20
+    str     w10, [x9, x19, lsl #2]
+    bl      calc_weight
+    LA      x0, p_drop
+    bl      popup
+9:  ldp     d8, d9, [sp, #64]
+    ldp     x23, x24, [sp, #48]
+    ldp     x21, x22, [sp, #32]
+    ldp     x19, x20, [sp, #16]
+    ldp     x29, x30, [sp], #80
+    ret
+
+// ---- pecas da interface ----------------------------------------------------
+
+// ui_frame(w0 x, w1 y, w2 largura, w3 altura): contorno de 1 pixel
+ui_frame:
+    stp     x29, x30, [sp, #-48]!
+    mov     x29, sp
+    stp     x19, x20, [sp, #16]
+    stp     x21, x22, [sp, #32]
+    mov     w19, w0
+    mov     w20, w1
+    mov     w21, w2
+    mov     w22, w3
+    mov     w3, #1
+    bl      fillrect
+    mov     w0, w19
+    add     w1, w20, w22
+    sub     w1, w1, #1
+    mov     w2, w21
+    mov     w3, #1
+    bl      fillrect
+    mov     w0, w19
+    mov     w1, w20
+    mov     w2, #1
+    mov     w3, w22
+    bl      fillrect
+    add     w0, w19, w21
+    sub     w0, w0, #1
+    mov     w1, w20
+    mov     w2, #1
+    mov     w3, w22
+    bl      fillrect
+    ldp     x21, x22, [sp, #32]
+    ldp     x19, x20, [sp, #16]
+    ldp     x29, x30, [sp], #48
+    ret
+
+// ui_panel(w0 x, w1 y, w2 larg., w3 alt., x4 titulo): janela com titulo
+ui_panel:
+    stp     x29, x30, [sp, #-64]!
+    mov     x29, sp
+    stp     x19, x20, [sp, #16]
+    stp     x21, x22, [sp, #32]
+    str     x23, [sp, #48]
+    mov     w19, w0
+    mov     w20, w1
+    mov     w21, w2
+    mov     w22, w3
+    mov     x23, x4
+    RGBA    12, 14, 22, 228
+    mov     w0, w19
+    mov     w1, w20
+    mov     w2, w21
+    mov     w3, w22
+    bl      fillrect
+    RGBA    45, 58, 88, 240
+    mov     w0, w19
+    mov     w1, w20
+    mov     w2, w21
+    mov     w3, #14
+    bl      fillrect
+    RGBA    130, 140, 165, 255
+    mov     w0, w19
+    mov     w1, w20
+    mov     w2, w21
+    mov     w3, w22
+    bl      ui_frame
+    RGBA    255, 235, 180, 255
+    add     w0, w19, #6
+    add     w1, w20, #3
+    mov     x2, x23
+    bl      text
+    ldr     x23, [sp, #48]
+    ldp     x21, x22, [sp, #32]
+    ldp     x19, x20, [sp, #16]
+    ldp     x29, x30, [sp], #64
+    ret
+
+// ui_button(w0 x, w1 largura, x2 texto, w3 1 = janela aberta)
+ui_button:
+    stp     x29, x30, [sp, #-48]!
+    mov     x29, sp
+    stp     x19, x20, [sp, #16]
+    stp     x21, x22, [sp, #32]
+    mov     w19, w0
+    mov     w20, w1
+    mov     x21, x2
+    mov     w22, w3
+    bl      mouse_ui                    // mouse em cima?
+    sub     w0, w0, w19
+    cmp     w0, w20
+    b.hs    1f
+    sub     w1, w1, #BTN_Y
+    cmp     w1, #BTN_H
+    b.hs    1f
+    orr     w22, w22, #2
+1:  tbz     w22, #0, 2f
+    RGBA    50, 90, 150, 235            // aberta
+    b       4f
+2:  tbz     w22, #1, 3f
+    RGBA    70, 72, 86, 230             // mouse em cima
+    b       4f
+3:  RGBA    0, 0, 0, 170
+4:  mov     w0, w19
+    mov     w1, #BTN_Y
+    mov     w2, w20
+    mov     w3, #BTN_H
+    bl      fillrect
+    RGBA    150, 160, 180, 255
+    mov     w0, w19
+    mov     w1, #BTN_Y
+    mov     w2, w20
+    mov     w3, #BTN_H
+    bl      ui_frame
+    RGBA    255, 255, 255, 255
+    mov     x0, x21
+    bl      mystrlen
+    lsl     w0, w0, #3
+    sub     w0, w20, w0
+    asr     w0, w0, #1
+    add     w0, w0, w19
+    mov     w1, #(BTN_Y + 3)
+    mov     x2, x21
+    bl      text
+    ldp     x21, x22, [sp, #32]
+    ldp     x19, x20, [sp, #16]
+    ldp     x29, x30, [sp], #48
+    ret
+
+// ui_icon(x0 sprite, w1 x, w2 y, w3 tamanho do pixel): sprite na interface
+ui_icon:
+    stp     x29, x30, [sp, #-80]!
+    mov     x29, sp
+    stp     x19, x20, [sp, #16]
+    stp     x21, x22, [sp, #32]
+    stp     x23, x24, [sp, #48]
+    str     x25, [sp, #64]
+    ldrb    w19, [x0]                   // largura
+    ldrb    w20, [x0, #1]               // altura
+    add     x21, x0, #4
+    mov     w22, w1
+    mov     w23, w2
+    mov     w24, w3
+    mov     w25, #0
+1:  mul     w9, w19, w20
+    cmp     w25, w9
+    b.ge    9f
+    ldrb    w9, [x21, x25]
+    cbz     w9, 2f
+    LA      x10, palette
+    ldr     w9, [x10, w9, uxtw #2]
+    ubfx    w0, w9, #16, #8
+    ubfx    w1, w9, #8, #8
+    and     w2, w9, #255
+    mov     w3, #255
+    bl      setcolor
+    udiv    w9, w25, w19                // linha
+    msub    w10, w9, w19, w25           // coluna
+    madd    w0, w10, w24, w22
+    madd    w1, w9, w24, w23
+    mov     w2, w24
+    mov     w3, w24
+    bl      fillrect
+2:  add     w25, w25, #1
+    b       1b
+9:  ldr     x25, [sp, #64]
+    ldp     x23, x24, [sp, #48]
+    ldp     x21, x22, [sp, #32]
+    ldp     x19, x20, [sp, #16]
+    ldp     x29, x30, [sp], #80
+    ret
+
+// ui_windows: botoes no canto e as janelas abertas
+ui_windows:
+    stp     x29, x30, [sp, #-16]!
+    mov     x29, sp
+    mov     w0, #BTNI_X
+    mov     w1, #BTNI_W
+    LA      x2, s_btninv
+    ldr     w3, [x28, #G_INVOPEN]
+    bl      ui_button
+    mov     w0, #BTNC_X
+    mov     w1, #BTNC_W
+    LA      x2, s_btnchar
+    ldr     w3, [x28, #G_CHAROPEN]
+    bl      ui_button
+    ldr     w9, [x28, #G_CHAROPEN]
+    cbz     w9, 1f
+    bl      draw_char
+1:  ldr     w9, [x28, #G_INVOPEN]
+    cbz     w9, 2f
+    bl      draw_inv
+2:  ldp     x29, x30, [sp], #16
+    ret
+
+// draw_inv: mochila em grade (4 x 3), com o peso em cima
+draw_inv:
+    stp     x29, x30, [sp, #-80]!
+    mov     x29, sp
+    stp     x19, x20, [sp, #16]
+    stp     x21, x22, [sp, #32]
+    stp     x23, x24, [sp, #48]
+    str     x25, [sp, #64]
+    mov     w0, #INV_X
+    mov     w1, #INV_Y
+    mov     w2, #INV_W
+    mov     w3, #INV_H
+    LA      x4, s_invtitle
+    bl      ui_panel
+    // "Peso 12.5 / 30.0 kg"
+    LA      x0, lbuf
+    LA      x1, s_peso
+    bl      strcat_cur
+    ldr     w1, [x28, #G_WEIGHT]
+    bl      kgcat
+    LA      x1, s_slash
+    bl      strcat_cur
+    ldr     w1, [x28, #G_CAP]
+    bl      kgcat
+    LA      x1, s_kg
+    bl      strcat_cur
+    ldr     w9, [x28, #G_WEIGHT]
+    ldr     w10, [x28, #G_CAP]
+    cmp     w9, w10
+    b.gt    1f
+    RGBA    220, 220, 220, 255
+    b       2f
+1:  RGBA    255, 130, 90, 255
+2:  mov     w0, #(INV_X + 8)
+    mov     w1, #(INV_Y + 20)
+    LA      x2, lbuf
+    bl      text
+    // barra de peso: verde ate 75%, amarela ate 100%, vermelha acima
+    RGBA    40, 40, 46, 255
+    mov     w0, #(INV_X + 8)
+    mov     w1, #(INV_Y + 32)
+    mov     w2, #(INV_W - 16)
+    mov     w3, #6
+    bl      fillrect
+    ldr     w9, [x28, #G_WEIGHT]
+    ldr     w10, [x28, #G_CAP]
+    mov     w11, #(INV_W - 16)
+    mul     w19, w9, w11
+    cmp     w10, #1
+    csinc   w10, w10, wzr, ge
+    udiv    w19, w19, w10
+    cmp     w19, w11
+    csel    w19, w11, w19, gt
+    lsl     w12, w9, #2
+    add     w13, w10, w10, lsl #1
+    cmp     w12, w13
+    b.gt    3f
+    RGBA    110, 200, 90, 255
+    b       5f
+3:  cmp     w9, w10
+    b.gt    4f
+    RGBA    235, 200, 60, 255
+    b       5f
+4:  RGBA    235, 75, 55, 255
+5:  cbz     w19, 6f
+    mov     w0, #(INV_X + 8)
+    mov     w1, #(INV_Y + 32)
+    mov     w2, w19
+    mov     w3, #6
+    bl      fillrect
+    // quadrados
+6:  bl      mouse_ui
+    bl      ui_hit
+    mov     w23, #-1                    // quadrado sob o mouse
+    cmp     w0, #3
+    b.ne    7f
+    mov     w23, w1
+7:  mov     w20, #0
+70: cmp     w20, #12
+    b.ge    8f
+    and     w9, w20, #3
+    mov     w10, #SLOTSTEP
+    mov     w11, #SLOT_X
+    madd    w21, w9, w10, w11           // x do quadrado
+    lsr     w9, w20, #2
+    mov     w11, #SLOT_Y
+    madd    w22, w9, w10, w11           // y
+    cmp     w20, w23
+    b.ne    71f
+    RGBA    70, 72, 92, 240
+    b       72f
+71: RGBA    28, 30, 38, 235
+72: mov     w0, w21
+    mov     w1, w22
+    mov     w2, #SLOT
+    mov     w3, #SLOT
+    bl      fillrect
+    RGBA    85, 90, 108, 255
+    mov     w0, w21
+    mov     w1, w22
+    mov     w2, #SLOT
+    mov     w3, #SLOT
+    bl      ui_frame
+    mov     w0, w20                     // tem item aqui?
+    bl      inv_slot_item
+    tbnz    w0, #31, 79f
+    mov     w24, w0
+    LA      x25, sprites                // icone (sprite 12, 13 ou 14) centrado
+    add     w9, w24, #O_LOGS
+    add     x25, x25, x9, lsl #7
+    ldrb    w9, [x25]
+    ldrb    w10, [x25, #1]
+    mov     w11, #3
+    mul     w9, w9, w11
+    mul     w10, w10, w11
+    mov     w11, #SLOT
+    sub     w9, w11, w9
+    asr     w9, w9, #1
+    add     w1, w21, w9
+    sub     w10, w11, w10
+    asr     w10, w10, #1
+    add     w2, w22, w10
+    sub     w2, w2, #4
+    mov     x0, x25
+    mov     w3, #3
+    bl      ui_icon
+    LA      x0, lbuf                    // quantidade no canto
+    add     x9, x28, #G_WOOD
+    ldr     w1, [x9, x24, lsl #2]
+    bl      numcat
+    LA      x0, lbuf
+    bl      mystrlen
+    lsl     w25, w0, #3
+    RGBA    0, 0, 0, 255
+    add     w0, w21, #(SLOT - 1)
+    sub     w0, w0, w25
+    add     w1, w22, #(SLOT - 9)
+    LA      x2, lbuf
+    bl      text
+    RGBA    255, 255, 255, 255
+    add     w0, w21, #(SLOT - 2)
+    sub     w0, w0, w25
+    add     w1, w22, #(SLOT - 10)
+    LA      x2, lbuf
+    bl      text
+79: add     w20, w20, #1
+    b       70b
+8:  RGBA    160, 160, 170, 255
+    mov     w0, #(INV_X + 8)
+    mov     w1, #(INV_Y + INV_H - 14)
+    LA      x2, s_invhint
+    bl      text
+    // dica do item sob o mouse: "Madeira x12 (18.0 kg)"
+    tbnz    w23, #31, 9f
+    mov     w0, w23
+    bl      inv_slot_item
+    tbnz    w0, #31, 9f
+    mov     w24, w0
+    LA      x0, lbuf
+    LA      x1, itemnames
+    add     x1, x1, x24, lsl #4
+    bl      strcat_cur
+    LA      x1, s_x
+    bl      strcat_cur
+    add     x9, x28, #G_WOOD
+    ldr     w1, [x9, x24, lsl #2]
+    mov     w25, w1
+    bl      numcat
+    LA      x1, s_paren
+    bl      strcat_cur
+    LA      x9, itemweight
+    ldrh    w9, [x9, x24, lsl #1]
+    mul     w1, w25, w9
+    bl      kgcat
+    LA      x1, s_kgparen
+    bl      strcat_cur
+    LA      x0, lbuf
+    bl      mystrlen
+    lsl     w9, w0, #3
+    bl      mouse_ui
+    add     w19, w0, #10
+    add     w20, w1, #6
+    mov     w10, #636                   // nao deixa sair da tela
+    sub     w10, w10, w9
+    cmp     w19, w10
+    csel    w19, w10, w19, gt
+    mov     w22, #1
+    bl      tooltip_box
+9:  ldr     x25, [sp, #64]
+    ldp     x23, x24, [sp, #48]
+    ldp     x21, x22, [sp, #32]
+    ldp     x19, x20, [sp, #16]
+    ldp     x29, x30, [sp], #80
+    ret
+
+// draw_char: janela do personagem com as skills
+draw_char:
+    stp     x29, x30, [sp, #-64]!
+    mov     x29, sp
+    stp     x19, x20, [sp, #16]
+    stp     x21, x22, [sp, #32]
+    str     d8, [sp, #48]
+    mov     w0, #CHR_X
+    mov     w1, #CHR_Y
+    mov     w2, #CHR_W
+    mov     w3, #CHR_H
+    LA      x4, s_chartitle
+    bl      ui_panel
+    mov     w19, #0
+1:  cmp     w19, #NSKILL
+    b.ge    5f
+    mov     w9, #26
+    mov     w10, #(CHR_Y + 22)
+    madd    w20, w19, w9, w10           // y da linha
+    add     x9, x28, #G_SKILL
+    ldr     s8, [x9, x19, lsl #2]
+    RGBA    230, 230, 235, 255          // nome
+    mov     w0, #(CHR_X + 8)
+    mov     w1, w20
+    LA      x2, skillnames
+    add     x2, x2, x19, lsl #4
+    bl      text
+    LA      x0, lbuf                    // "Nv 3"
+    LA      x1, s_nv
+    bl      strcat_cur
+    FC      s0, F_TENTH
+    fmul    s0, s8, s0
+    fcvtzs  w1, s0
+    bl      numcat
+    RGBA    255, 220, 120, 255
+    mov     w0, #(CHR_X + 120)
+    mov     w1, w20
+    LA      x2, lbuf
+    bl      text
+    // treinando agora (+) ou caindo (-)
+    add     x9, x28, #G_SKIDLE
+    ldrh    w21, [x9, x19, lsl #1]
+    cmp     w21, #90
+    b.hs    2f
+    RGBA    120, 235, 120, 255
+    LA      x22, s_up
+    b       3f
+2:  cmp     w21, #SKREST
+    b.ls    4f
+    fcmp    s8, #0.0
+    b.le    4f
+    RGBA    240, 150, 80, 255
+    LA      x22, s_down
+3:  mov     w0, #(CHR_X + CHR_W - 16)
+    mov     w1, w20
+    mov     x2, x22
+    bl      text
+    // barra 0..100 com marcas a cada nivel
+4:  RGBA    40, 40, 46, 255
+    mov     w0, #(CHR_X + 8)
+    add     w1, w20, #11
+    mov     w2, #(CHR_W - 16)
+    mov     w3, #6
+    bl      fillrect
+    LA      x9, skcolors
+    ldr     w9, [x9, x19, lsl #2]
+    ubfx    w0, w9, #16, #8
+    ubfx    w1, w9, #8, #8
+    and     w2, w9, #255
+    mov     w3, #255
+    bl      setcolor
+    fmov    s0, #2.0
+    fmul    s0, s8, s0
+    fcvtzs  w2, s0
+    cbz     w2, 41f
+    mov     w0, #(CHR_X + 8)
+    add     w1, w20, #11
+    mov     w3, #6
+    bl      fillrect
+41: RGBA    12, 12, 16, 255
+    mov     w21, #1
+42: mov     w9, #20
+    mov     w0, #(CHR_X + 8)
+    madd    w0, w21, w9, w0
+    add     w1, w20, #11
+    mov     w2, #1
+    mov     w3, #6
+    bl      fillrect
+    add     w21, w21, #1
+    cmp     w21, #10
+    b.lt    42b
+    add     w19, w19, #1
+    b       1b
+5:  LA      x0, lbuf                    // "Carga maxima: 33.0 kg"
+    LA      x1, s_carga
+    bl      strcat_cur
+    ldr     w1, [x28, #G_CAP]
+    bl      kgcat
+    LA      x1, s_kg
+    bl      strcat_cur
+    RGBA    220, 220, 220, 255
+    mov     w0, #(CHR_X + 8)
+    mov     w1, #(CHR_Y + CHR_H - 30)
+    LA      x2, lbuf
+    bl      text
+    RGBA    150, 150, 160, 255
+    mov     w0, #(CHR_X + 8)
+    mov     w1, #(CHR_Y + CHR_H - 16)
+    LA      x2, s_legend
+    bl      text
+    ldr     d8, [sp, #48]
+    ldp     x21, x22, [sp, #32]
+    ldp     x19, x20, [sp, #16]
+    ldp     x29, x30, [sp], #64
+    ret
+
 // tooltip_box: desenha lbuf em (w19, w20) com fundo; w22 = 1 ao alcance
 tooltip_box:
     stp     x29, x30, [sp, #-16]!
@@ -2245,8 +3295,10 @@ mine_test:
     mov     w21, #0
 1:  bl      surv_update
     ldrb    w9, [x20, #6]
-    cmp     w9, #O_BUSHE
-    b.hs    2f                          // acabou (sem frutas ou removido)
+    cmp     w9, #O_BUSHE                // acabou (sem frutas ou removido)
+    b.eq    2f
+    cmp     w9, #O_GONE
+    b.eq    2f
     add     w21, w21, #1
     cmp     w21, #800
     b.lt    1b
@@ -2347,6 +3399,181 @@ surv_selftest:
     ldr     x19, [sp, #16]
     ldp     x29, x30, [sp], #32
     ret
+
+// surv_selftest_skills(w0 = etapa): teste da corrida, peso e mochila
+//   0: corre, anda carregado, larga pedras e abre as janelas (para a foto)
+//   1: deixa a corrida sem treino (ela cai), recolhe a pilha e fecha tudo
+    .globl surv_selftest_skills
+surv_selftest_skills:
+    stp     x29, x30, [sp, #-48]!
+    mov     x29, sp
+    stp     x19, x20, [sp, #16]
+    stp     x21, x22, [sp, #32]
+    str     wzr, [x28, #G_HOVOK]
+    str     wzr, [x28, #G_LMB]
+    mov     w9, #1500                   // de dia
+    str     w9, [x28, #G_TIME]
+    cbnz    w0, sk_stage1
+    FC      s0, F_HUNDRED
+    str     s0, [x28, #G_STAMINA]
+    str     wzr, [x28, #G_EXHAUST]
+    // corre 2 s para cima e 2 s de volta (W/S + Shift)
+    mov     w20, #0                     // quadros correndo de verdade
+    mov     w19, #0
+1:  mov     w9, #17
+    cmp     w19, #120
+    b.lt    11f
+    mov     w9, #18
+11: str     w9, [x28, #G_TESTKEYS]
+    bl      surv_update
+    ldr     w9, [x28, #G_RUN]
+    add     w20, w20, w9
+    add     w19, w19, #1
+    cmp     w19, #240
+    b.lt    1b
+    // pega 40 pedras e anda 3 s (forca)
+    ldr     w9, [x28, #G_STONE]
+    add     w9, w9, #40
+    str     w9, [x28, #G_STONE]
+    mov     w19, #0
+2:  mov     w9, #4
+    cmp     w19, #90
+    b.lt    21f
+    mov     w9, #8
+21: str     w9, [x28, #G_TESTKEYS]
+    bl      surv_update
+    add     w19, w19, #1
+    cmp     w19, #180
+    b.lt    2b
+    str     wzr, [x28, #G_TESTKEYS]
+    // larga 10 pedras
+    mov     w0, #1
+    mov     w1, #10
+    bl      drop_item
+    mov     w21, #0
+    ldr     w9, [x28, #G_NOBJ]
+    sub     w9, w9, #1
+    LA      x10, objs
+    add     x10, x10, x9, lsl #3
+    ldrb    w11, [x10, #6]
+    cmp     w11, #O_STONES
+    b.ne    22f
+    ldrb    w21, [x10, #7]
+22: LA      x0, txt
+    LA      x1, t_13
+    bl      strcat_cur
+    mov     w1, w20
+    bl      numcat
+    LA      x1, t_14
+    bl      strcat_cur
+    ldr     s0, [x28, #G_STAMINA]
+    fcvtzs  w1, s0
+    bl      numcat
+    LA      x1, t_15
+    bl      strcat_cur
+    ldr     w1, [x28, #G_WEIGHT]
+    bl      kgcat
+    LA      x1, s_slash
+    bl      strcat_cur
+    ldr     w1, [x28, #G_CAP]
+    bl      kgcat
+    LA      x1, t_16
+    bl      strcat_cur
+    mov     w1, w21
+    bl      numcat
+    LA      x1, t_17
+    bl      strcat_cur
+    mov     w19, #0                     // as 5 skills (0..100)
+3:  add     x9, x28, #G_SKILL
+    ldr     s0, [x9, x19, lsl #2]
+    fcvtzs  w1, s0
+    bl      numcat
+    add     w19, w19, #1
+    cmp     w19, #NSKILL
+    b.ge    31f
+    mov     w9, #47                     // '/'
+    strb    w9, [x0], #1
+    b       3b
+31: LA      x1, s_nl
+    bl      strcat_cur
+    bl      sk_write
+    // abre as janelas, com o mouse no primeiro quadrado da mochila
+    mov     w9, #1
+    str     w9, [x28, #G_INVOPEN]
+    str     w9, [x28, #G_CHAROPEN]
+    mov     w9, #((SLOT_X + 22) * 2)
+    scvtf   s0, w9
+    str     s0, [x28, #G_MX]
+    mov     w9, #((SLOT_Y + 22) * 2)
+    scvtf   s0, w9
+    str     s0, [x28, #G_MY]
+    b       sk_ret
+
+sk_stage1:
+    str     wzr, [x28, #G_INVOPEN]
+    str     wzr, [x28, #G_CHAROPEN]
+    str     wzr, [x28, #G_MX]
+    str     wzr, [x28, #G_MY]
+    str     wzr, [x28, #G_TESTKEYS]
+    // corrida sem treino ha 30 s: 10 s parado e ela cai um pouco
+    mov     w9, #SKREST
+    strh    w9, [x28, #(G_SKIDLE + 2 * SK_RUN)]
+    ldr     s0, [x28, #G_SKRUN]
+    FC      s1, F_HUNDRED
+    fmul    s0, s0, s1
+    fcvtzs  w20, s0                     // antes (x100)
+    mov     w19, #0
+4:  bl      surv_update
+    add     w19, w19, #1
+    cmp     w19, #600
+    b.lt    4b
+    ldr     s0, [x28, #G_SKRUN]
+    FC      s1, F_HUNDRED
+    fmul    s0, s0, s1
+    fcvtzs  w21, s0                     // depois
+    // devolve 30 pedras e recolhe a pilha de 10
+    ldr     w9, [x28, #G_STONE]
+    subs    w9, w9, #30
+    csel    w9, wzr, w9, lt
+    str     w9, [x28, #G_STONE]
+    mov     w22, w9
+    mov     w0, #O_STONES
+    mov     w1, #O_STONES
+    bl      mine_test
+    ldr     w9, [x28, #G_STONE]
+    sub     w22, w9, w22                // quantas voltaram
+    sub     w9, w9, w22
+    str     w9, [x28, #G_STONE]         // tira de novo (o teste da agua vem a seguir)
+    str     wzr, [x28, #G_HOVOK]
+    LA      x0, txt
+    LA      x1, t_18
+    bl      strcat_cur
+    mov     w1, w20
+    bl      numcat
+    LA      x1, t_19
+    bl      strcat_cur
+    mov     w1, w21
+    bl      numcat
+    LA      x1, t_20
+    bl      strcat_cur
+    mov     w1, w22
+    bl      numcat
+    LA      x1, s_nl
+    bl      strcat_cur
+    bl      sk_write
+sk_ret:
+    ldp     x21, x22, [sp, #32]
+    ldp     x19, x20, [sp, #16]
+    ldp     x29, x30, [sp], #48
+    ret
+
+// sk_write(x0 = fim do texto em txt): imprime txt
+sk_write:
+    LA      x9, txt
+    sub     x2, x0, x9
+    mov     x1, x9
+    mov     w0, #1
+    b       F(write)
 
 // surv_selftest_water(w0 = etapa): teste automatico da agua
 //   0: coloca o personagem em agua funda longe da borda e deixa nadar
@@ -2520,11 +3747,30 @@ fconsts:
     .float 0.3              // F_TREEBLK (quanto cada arvore tapa)
     .float 0.22             // F_TIRED (velocidade sem folego)
     .float 0.12             // F_SWIMCOST (100 -> 0 em ~14 s nadando)
-    .float 0.5              // F_RECOV (folego volta em terra)
+    .float 0.2              // F_RECOV (stamina volta andando em terra)
     .float 0.2              // F_RECOVSH (no raso)
     .float 0.25             // F_DROWN (vida perdida afogando)
     .float 0.04             // F_WETCOLD (a agua esfria)
     .float 3.0              // F_SHARKR (raio inicial da barbatana)
+    .float 0.3              // F_RUNCOST (100 -> 0 em ~5.5 s correndo)
+    .float 0.4              // F_RECOVREST (parado em terra)
+    .float 1.7              // F_RUNBASE (velocidade correndo, skill 0)
+    .float 0.005            // F_RUNSK (+0.5 com skill 100)
+    .float 0.45             // F_SWIMBASE (velocidade nadando, skill 0)
+    .float 0.0035           // F_SWIMSK (+0.35 com skill 100)
+    .float 0.006            // F_SK6 (skill 100 corta 60%)
+    .float 0.005            // F_SK5 (skill 100 corta 50%)
+    .float 0.55             // F_HEAVY (velocidade sobrecarregado)
+    .float 25.0             // F_25
+    .float 0.012            // F_XPSWIM (por quadro nadando)
+    .float 0.01             // F_XPRUN (por quadro correndo)
+    .float 1.2              // F_XPCHOP (por madeira)
+    .float 1.5              // F_XPMINE (por pedra)
+    .float 0.006            // F_XPSTR (por quadro andando carregado)
+    .float 0.00025          // F_SKDECAY (~1 ponto por minuto sem treino)
+    .float 1.05             // F_P105
+    .float 0.01             // F_INV100
+    .float 0.1              // F_TENTH
 
 // velocidade em cada nivel de agua: terra, raso, fundo, mar aberto
 waterspeed:
@@ -2549,9 +3795,46 @@ dirtab:
     .hword -64, 0,  -59, -24, -45, -45, -24, -59
     .hword 0, -64,   24, -59,  45, -45,  59, -24
 
-// quadros para coletar 1 unidade: arvore, pinheiro, pedra, arbusto
+// quadros para coletar 1 unidade: arvore, pinheiro, pedra, arbusto,
+// ... e as pilhas largadas no chao (tipos 12, 13, 14)
 minetime:
     .byte 45, 45, 70, 25, 0, 0, 0, 0
+    .byte 0, 0, 0, 0, 6, 6, 6, 0
+
+// peso de cada item (decimos de kg): madeira, pedra, fruta
+    .p2align 1
+itemweight:
+    .hword 15, 20, 1
+
+// texto que sobe ao coletar cada item
+    .p2align 3
+popitem:
+    .quad p_wood, p_stone, p_berry
+
+// nomes (16 bytes cada)
+    .p2align 4
+itemnames:
+    .asciz "Madeira"
+    .p2align 4
+    .asciz "Pedra"
+    .p2align 4
+    .asciz "Frutas"
+    .p2align 4
+skillnames:
+    .asciz "Natacao"
+    .p2align 4
+    .asciz "Corrida"
+    .p2align 4
+    .asciz "Lenhador"
+    .p2align 4
+    .asciz "Mineracao"
+    .p2align 4
+    .asciz "Forca"
+    .p2align 4
+
+// cor da barra de cada skill (0x00RRGGBB)
+skcolors:
+    .word 0x0050B4F0, 0x00F0D050, 0x00B47A44, 0x00A8B0BC, 0x00E05A46
 
 // nomes dos objetos (32 bytes cada)
     .p2align 5
@@ -2565,6 +3848,26 @@ objnames:
     .asciz "Arbusto com frutas"
     .p2align 5
     .asciz "Arbusto (sem frutas)"
+    .p2align 5
+    .asciz ""                           // 5-11: nao sao objetos do mapa
+    .p2align 5
+    .asciz ""
+    .p2align 5
+    .asciz ""
+    .p2align 5
+    .asciz ""
+    .p2align 5
+    .asciz ""
+    .p2align 5
+    .asciz ""
+    .p2align 5
+    .asciz ""
+    .p2align 5
+    .asciz "Toras largadas"
+    .p2align 5
+    .asciz "Pedras largadas"
+    .p2align 5
+    .asciz "Frutas largadas"
     .p2align 5
 
 m_start:        .asciz "Colete madeira e pedra. Faca uma fogueira (F) antes da noite!"
@@ -2591,14 +3894,14 @@ s_berry:        .asciz "   Frutas "
 s_hp:           .asciz "Vida"
 s_food:         .asciz "Fome"
 s_warm:         .asciz "Calor"
-s_stamina:      .asciz "Folego"
+s_stamina:      .asciz "Stamina"
 m_shark1:       .asciz "Agua muito funda! Um tubarao esta vindo... volte!"
 m_eaten:        .asciz "Um tubarao comeu voce!"
 m_drowned:      .asciz "Voce se afogou"
 m_starved:      .asciz "Voce morreu de fome"
 m_froze:        .asciz "Voce morreu de frio"
 t_9:            .asciz "agua: nadando nivel="
-t_10:           .asciz " folego="
+t_10:           .asciz " stamina="
 t_11:           .asciz " | mar aberto: tubarao="
 t_12:           .asciz " morto="
 s_paren:        .asciz " ("
@@ -2606,12 +3909,41 @@ s_paren2:       .asciz ")"
 s_far:          .asciz " - longe"
 s_fire:         .asciz "Fogueira: "
 s_firehint:     .asciz " s (botao direito: +lenha)"
-s_hint:         .asciz "WASD: andar  clique: coletar  E: comer  F: fogueira  espaco: pausa"
+s_hint:         .asciz "WASD: andar  Shift: correr  clique: coletar  E: comer  F: fogo  I/C: janelas"
 s_dead1:        .asciz "FIM DE JOGO"
 s_dead2:        .asciz "Voce sobreviveu "
 s_dead3:        .asciz " noite(s)"
 s_dead4:        .asciz "ENTER: novo mundo     ESC: menu"
 s_nl:           .asciz "\n"
+m_toheavy:      .asciz "Pesado demais! Largue algo na mochila (I)"
+m_dropwater:    .asciz "Nao da para largar na agua"
+p_drop:         .asciz "Largou"
+s_heavy:        .asciz "Sobrecarregado: anda devagar"
+s_lvlup:        .asciz " subiu para o nivel "
+s_excl:         .asciz "!"
+s_btninv:       .asciz "Mochila [I]"
+s_btnchar:      .asciz "Personagem [C]"
+s_invtitle:     .asciz "Mochila"
+s_chartitle:    .asciz "Personagem - skills"
+s_peso:         .asciz "Peso "
+s_slash:        .asciz " / "
+s_kg:           .asciz " kg"
+s_kgparen:      .asciz " kg)"
+s_x:            .asciz " x"
+s_invhint:      .asciz "Botao direito: largar"
+s_nv:           .asciz "Nv "
+s_up:           .asciz "+"
+s_down:         .asciz "-"
+s_carga:        .asciz "Carga maxima: "
+s_legend:       .asciz "+ subindo   - caindo"
+t_13:           .asciz "skills: correu="
+t_14:           .asciz " stamina="
+t_15:           .asciz " peso="
+t_16:           .asciz " kg pilha="
+t_17:           .asciz " | nado/corrida/lenha/minerio/forca="
+t_18:           .asciz "skills: corrida sem treino "
+t_19:           .asciz " -> "
+t_20:           .asciz " | recolheu pedras="
 t_1:            .asciz "sobrevivencia: madeira="
 t_2:            .asciz " pedra="
 t_3:            .asciz " frutas="
@@ -2625,6 +3957,7 @@ t_8:            .asciz " luz="
 GBSS fires,    512
 GBSS lightbuf, 921600
 GBSS lbuf,     128
+GBSS msgbuf,   64
 GBSS vis,      262144                   // visao agora (0..255 por celula)
 GBSS seen,     262144                   // memoria: o que ja foi visto
 GBSS treecnt,  262144                   // arvores por celula (tapam a visao)
