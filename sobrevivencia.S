@@ -1,5 +1,5 @@
 // =====================================================================
-//  sobrevivencia.S - personagem, coleta, fome, frio e fogueiras
+//  sobrevivencia.S - personagem, coleta, fome, frio, fogueiras e neblina
 //
 //  - WASD anda (na direcao da tela); a camera segue o personagem.
 //  - Segurar o botao esquerdo sobre uma arvore, pedra ou arbusto perto
@@ -10,6 +10,9 @@
 //    Sem comida ou sem calor, a vida acaba.
 //  - A noite e feita escurecendo o framebuffer e somando a luz das
 //    fogueiras (e de uma lanterna fraca do personagem).
+//  - Neblina de guerra: 360 raios saem do personagem (e das fogueiras);
+//    arvores tapam a visao. O raio diminui de noite. O que nunca foi
+//    visto fica preto; o que ja foi visto aparece como foi lembrado.
 // =====================================================================
 
 #include "comum.h"
@@ -231,6 +234,7 @@ gr_next:
     add     w19, w19, #1
     b       gr_loop
 gr_done:
+    bl      build_treegrid
     ldr     x25, [sp, #64]
     ldp     x23, x24, [sp, #48]
     ldp     x21, x22, [sp, #32]
@@ -271,6 +275,11 @@ surv_reset:
     str     wzr, [x28, #G_POPT]
     str     wzr, [x28, #G_WARNED]
     str     wzr, [x28, #G_PMOVING]
+    LA      x9, seen                    // nada foi descoberto ainda
+    mov     w10, #(MAPN * MAPN / 16)
+1:  stp     xzr, xzr, [x9], #16
+    subs    w10, w10, #1
+    b.ne    1b
     // procura terra firme em espiral a partir do centro do mapa
     mov     w19, #0                     // raio
 sr_r:
@@ -356,7 +365,8 @@ update_ambient:
     lsl     w10, w10, #8
     mov     w11, #(DAYLEN - T_DAWN)
     udiv    w10, w10, w11
-2:  // canal = 256 + (noite - 256) * k / 256
+2:  str     w10, [x28, #G_NIGHTK]
+    // canal = 256 + (noite - 256) * k / 256
     mov     w11, #(60 - 256)
     mul     w11, w11, w10
     asr     w11, w11, #8
@@ -476,6 +486,18 @@ harvest:
     b.ne    5f
     mov     w12, #O_BUSHE               // arbusto fica sem frutas
 5:  strb    w12, [x9, #6]
+    cmp     w10, #O_PINE                // arvore caiu: deixa de tapar a visao
+    b.hi    6f
+    ldrh    w11, [x9]
+    lsr     w11, w11, #6
+    ldrh    w12, [x9, #2]
+    lsr     w12, w12, #6
+    add     w11, w11, w12, lsl #9
+    LA      x12, treecnt
+    ldrb    w13, [x12, w11, uxtw]
+    cbz     w13, 6f
+    sub     w13, w13, #1
+    strb    w13, [x12, w11, uxtw]
 6:  bl      popup
     ldp     x29, x30, [sp], #16
     ret
@@ -602,7 +624,20 @@ su_after_move:
     ldr     w0, [x28, #G_HOVU]
     ldr     w1, [x28, #G_HOVV]
     bl      find_obj_near
-    str     w0, [x28, #G_HOVOBJ]
+    tbnz    w0, #31, 101f
+    LA      x9, objs                    // so vale se estiver a vista
+    add     x9, x9, x0, lsl #3
+    ldrh    w10, [x9]
+    lsr     w10, w10, #6
+    ldrh    w11, [x9, #2]
+    lsr     w11, w11, #6
+    add     w10, w10, w11, lsl #9
+    LA      x9, vis
+    ldrb    w10, [x9, w10, uxtw]
+    cmp     w10, #VIS_MIN
+    b.hs    101f
+    mov     w0, #-1
+101: str    w0, [x28, #G_HOVOBJ]
     ldr     w0, [x28, #G_HOVU]
     ldr     w1, [x28, #G_HOVV]
     bl      find_fire_near
@@ -768,6 +803,7 @@ su_food:
 
 su_cam:
     bl      follow_camera
+    bl      update_vision
     ldp     d10, d11, [sp, #64]
     ldp     d8, d9, [sp, #48]
     ldp     x21, x22, [sp, #32]
@@ -1068,14 +1104,14 @@ surv_light:
     b.lt    1f
     ldr     w9, [x28, #G_AMBB]
     cmp     w9, #255
-    b.ge    sl_ret                      // de dia: nada a fazer
+    b.ge    sl_post                     // de dia: so a neblina
 1:  LA      x9, lightbuf                // zera o buffer de luz
     mov     w10, #(SCRW * SCRH / 16)
 2:  stp     xzr, xzr, [x9], #16
     subs    w10, w10, #1
     b.ne    2b
     ldr     w21, [x28, #G_Z256]
-    // luz das fogueiras (6 celulas, tremulando)
+    // luz das fogueiras (9 celulas, tremulando)
     mov     w19, #0
 3:  ldr     w9, [x28, #G_NFIRE]
     cmp     w19, w9
@@ -1123,50 +1159,348 @@ surv_light:
     sub     w1, w1, w9
     mov     w3, #110
     bl      add_light
-    // aplica: cor = cor * (ambiente + luz * tom do fogo)
-    LA      x9, fb
-    LA      x10, lightbuf
-    MOVI32  w11, (SCRW * SCRH)
-    ldr     w12, [x28, #G_AMBR]
-    ldr     w13, [x28, #G_AMBG]
-    ldr     w14, [x28, #G_AMBB]
-    mov     w7, #255
-5:  ldrb    w15, [x10], #1
-    ldr     w0, [x9]
-    mov     w3, #294                    // vermelho do fogo
-    mul     w3, w15, w3
-    add     w3, w12, w3, lsr #8
-    mov     w4, #225                    // verde
-    mul     w4, w15, w4
-    add     w4, w13, w4, lsr #8
-    mov     w5, #150                    // azul
-    mul     w5, w15, w5
-    add     w5, w14, w5, lsr #8
-    ubfx    w1, w0, #16, #8
-    mul     w1, w1, w3
-    lsr     w1, w1, #8
-    cmp     w1, w7
-    csel    w1, w1, w7, ls
-    ubfx    w2, w0, #8, #8
-    mul     w2, w2, w4
-    lsr     w2, w2, #8
-    cmp     w2, w7
-    csel    w2, w2, w7, ls
-    and     w6, w0, #255
-    mul     w6, w6, w5
-    lsr     w6, w6, #8
-    cmp     w6, w7
-    csel    w6, w6, w7, ls
-    orr     w0, w6, w2, lsl #8
-    orr     w0, w0, w1, lsl #16
-    orr     w0, w0, #0xFF000000
-    str     w0, [x9], #4
-    subs    w11, w11, #1
-    b.ne    5b
-sl_ret:
+    // passada final (neblina + luz) dividida entre as threads
+sl_post:
+    LA      x0, post_cols
+    bl      par_cols
     ldp     x21, x22, [sp, #32]
     ldp     x19, x20, [sp, #16]
     ldp     x29, x30, [sp], #48
+    ret
+
+// post_cols(w0 = primeira coluna, w1 = coluna final exclusiva)
+// Para cada pixel: acha o ponto do mundo pelo z-buffer, le a visao e a
+// memoria (interpolados) e aplica a neblina; de noite aplica a luz.
+//   nunca visto  -> preto
+//   ja visto     -> mais escuro e sem cor (o que a gente lembra)
+//   a vista      -> normal
+// folha: usa x0-x17
+    .globl post_cols
+post_cols:
+    sub     sp, sp, #64
+    str     w0, [sp]
+    str     w1, [sp, #4]
+    ldr     w9, [x28, #G_K]
+    str     w9, [sp, #8]
+    mov     w10, #640
+    mul     w10, w10, w9
+    ldr     w11, [x28, #G_CX]
+    sub     w11, w11, w10
+    str     w11, [sp, #12]              // (u-v) da coluna 0
+    ldr     w9, [x28, #G_AMBR]
+    str     w9, [sp, #16]
+    ldr     w9, [x28, #G_AMBG]
+    str     w9, [sp, #20]
+    ldr     w9, [x28, #G_AMBB]
+    str     w9, [sp, #24]
+    mov     w10, #0                     // tem luz de noite?
+    ldr     w9, [x28, #G_AMBR]
+    cmp     w9, #255
+    cset    w10, lt
+    ldr     w9, [x28, #G_AMBB]
+    cmp     w9, #255
+    cinc    w10, w10, lt
+    str     w10, [sp, #28]
+    LA      x16, fb
+    LA      x17, zb
+    LA      x15, lightbuf
+    LA      x14, vis
+    LA      x13, seen
+    mov     w12, #0                     // y
+pc_row:
+    ldr     w11, [sp]                   // x
+pc_px:
+    add     w10, w11, w12, lsl #10
+    add     w10, w10, w12, lsl #8       // indice do pixel
+    ldrh    w0, [x17, w10, uxtw #1]     // profundidade = (u+v)
+    ldr     w1, [sp, #8]
+    ldr     w2, [sp, #12]
+    madd    w1, w11, w1, w2             // (u-v) desta coluna
+    add     w2, w0, w1
+    asr     w2, w2, #1                  // u (1/64 de celula)
+    sub     w3, w0, w1
+    asr     w3, w3, #1                  // v
+    mov     w4, #32640
+    cmp     w2, w4
+    b.hs    pc_black
+    cmp     w3, w4
+    b.hs    pc_black
+    lsr     w4, w2, #6
+    lsr     w5, w3, #6
+    add     w4, w4, w5, lsl #9          // celula
+    and     w2, w2, #63
+    lsl     w2, w2, #2                  // fracao u (0..252)
+    and     w3, w3, #63
+    lsl     w3, w3, #2                  // fracao v
+    add     x5, x13, w4, uxtw           // memoria (bilinear)
+    ldrb    w6, [x5]
+    ldrb    w7, [x5, #1]
+    sub     w7, w7, w6
+    mul     w7, w7, w2
+    add     w6, w6, w7, asr #8
+    ldrb    w7, [x5, #512]
+    ldrb    w8, [x5, #513]
+    sub     w8, w8, w7
+    mul     w8, w8, w2
+    add     w7, w7, w8, asr #8
+    sub     w7, w7, w6
+    mul     w7, w7, w3
+    add     w6, w6, w7, asr #8          // S
+    cbz     w6, pc_black
+    add     x5, x14, w4, uxtw           // visao agora (bilinear)
+    ldrb    w9, [x5]
+    ldrb    w7, [x5, #1]
+    sub     w7, w7, w9
+    mul     w7, w7, w2
+    add     w9, w9, w7, asr #8
+    ldrb    w7, [x5, #512]
+    ldrb    w8, [x5, #513]
+    sub     w8, w8, w7
+    mul     w8, w8, w2
+    add     w7, w7, w8, asr #8
+    sub     w7, w7, w9
+    mul     w7, w7, w3
+    add     w9, w9, w7, asr #8          // V
+    ldr     w0, [x16, w10, uxtw #2]
+    ubfx    w1, w0, #16, #8             // r
+    ubfx    w2, w0, #8, #8              // g
+    and     w3, w0, #255                // b
+    mov     w4, #77                     // cinza
+    mul     w4, w1, w4
+    mov     w5, #151
+    madd    w4, w2, w5, w4
+    mov     w5, #28
+    madd    w4, w3, w5, w4
+    lsr     w4, w4, #8
+    // lembrado = (cor + cinza) / 4 ; final = lembrado + (cor - lembrado) * V
+    add     w5, w1, w4
+    lsr     w5, w5, #2
+    sub     w7, w1, w5
+    mul     w7, w7, w9
+    add     w1, w5, w7, asr #8
+    mul     w1, w1, w6
+    lsr     w1, w1, #8
+    add     w5, w2, w4
+    lsr     w5, w5, #2
+    sub     w7, w2, w5
+    mul     w7, w7, w9
+    add     w2, w5, w7, asr #8
+    mul     w2, w2, w6
+    lsr     w2, w2, #8
+    add     w5, w3, w4
+    lsr     w5, w5, #2
+    add     w5, w5, #6                  // um pouco azulado
+    sub     w7, w3, w5
+    mul     w7, w7, w9
+    add     w3, w5, w7, asr #8
+    mul     w3, w3, w6
+    lsr     w3, w3, #8
+    // luz da noite
+    ldr     w5, [sp, #28]
+    cbz     w5, pc_store
+    ldrb    w5, [x15, w10, uxtw]        // luz das fogueiras
+    mov     w8, #255
+    ldr     w7, [sp, #16]
+    mov     w4, #294
+    mul     w4, w5, w4
+    add     w7, w7, w4, lsr #8
+    mul     w1, w1, w7
+    lsr     w1, w1, #8
+    cmp     w1, w8
+    csel    w1, w1, w8, ls
+    ldr     w7, [sp, #20]
+    mov     w4, #225
+    mul     w4, w5, w4
+    add     w7, w7, w4, lsr #8
+    mul     w2, w2, w7
+    lsr     w2, w2, #8
+    cmp     w2, w8
+    csel    w2, w2, w8, ls
+    ldr     w7, [sp, #24]
+    mov     w4, #150
+    mul     w4, w5, w4
+    add     w7, w7, w4, lsr #8
+    mul     w3, w3, w7
+    lsr     w3, w3, #8
+    cmp     w3, w8
+    csel    w3, w3, w8, ls
+pc_store:
+    orr     w0, w3, w2, lsl #8
+    orr     w0, w0, w1, lsl #16
+    orr     w0, w0, #0xFF000000
+    str     w0, [x16, w10, uxtw #2]
+    b       pc_next
+pc_black:
+    mov     w0, #0xFF000000
+    str     w0, [x16, w10, uxtw #2]
+pc_next:
+    add     w11, w11, #1
+    ldr     w4, [sp, #4]
+    cmp     w11, w4
+    b.lt    pc_px
+    add     w12, w12, #1
+    cmp     w12, #SCRH
+    b.lt    pc_row
+    add     sp, sp, #64
+    ret
+
+// =====================================================================
+//  Visao (neblina de guerra)
+// =====================================================================
+
+// build_treegrid: conta as arvores de cada celula e esquece tudo
+    .globl build_treegrid
+build_treegrid:
+    LA      x9, treecnt
+    mov     w10, #(MAPN * MAPN / 16)
+1:  stp     xzr, xzr, [x9], #16
+    subs    w10, w10, #1
+    b.ne    1b
+    LA      x9, treecnt
+    LA      x10, objs
+    LA      x11, memtype
+    mov     w15, #254                   // 254 = nunca visto
+    ldr     w12, [x28, #G_NOBJ]
+2:  cbz     w12, 9f
+    strb    w15, [x11], #1
+    ldrb    w13, [x10, #6]
+    cmp     w13, #O_PINE
+    b.hi    3f
+    ldrh    w13, [x10]
+    lsr     w13, w13, #6
+    ldrh    w14, [x10, #2]
+    lsr     w14, w14, #6
+    add     w13, w13, w14, lsl #9
+    ldrb    w14, [x9, w13, uxtw]
+    cmp     w14, #255
+    cinc    w14, w14, lo
+    strb    w14, [x9, w13, uxtw]
+3:  add     x10, x10, #8
+    sub     w12, w12, #1
+    b       2b
+9:  ret
+
+// cast_vision(s0 = u, s1 = v, s2 = raio): 360 raios a partir do ponto.
+// Cada arvore no caminho tapa um pouco; o raio para quando fica opaco.
+// Marca a visao agora (vis) e a memoria (seen). folha: x0-x15, s0-s3, s16-s31
+cast_vision:
+    fmov    s16, s0
+    fmov    s17, s1
+    fmov    s18, s2
+    FC      s19, F_COS1
+    FC      s20, F_SIN1
+    fmov    s21, #1.0                   // direcao do raio
+    fmov    s22, wzr
+    FC      s23, F_RAYSTEP
+    FC      s24, F_P7
+    fmul    s24, s24, s18               // ate 70% do raio: visao cheia
+    FC      s25, F_TREEBLK
+    FC      s26, F_P3
+    fmul    s26, s26, s18
+    fmov    s27, #1.0
+    fdiv    s26, s27, s26               // 1 / (30% do raio)
+    FC      s30, F_255
+    FC      s31, F_P8
+    LA      x10, vis
+    LA      x11, seen
+    LA      x12, treecnt
+    mov     w13, #360
+cv_ray:
+    fmov    s28, wzr                    // distancia
+    fmov    s29, #1.0                   // transparencia
+    mov     w14, #-1                    // ultima celula
+cv_step:
+    fmadd   s0, s21, s28, s16
+    fmadd   s1, s22, s28, s17
+    fcvtzs  w0, s0
+    fcvtzs  w1, s1
+    cmp     w0, #511
+    b.hs    cv_end
+    cmp     w1, #511
+    b.hs    cv_end
+    add     w2, w0, w1, lsl #9
+    cmp     w2, w14
+    b.eq    cv_next
+    mov     w14, w2
+    fmov    s2, #1.0
+    fcmp    s28, s24
+    b.le    1f
+    fsub    s2, s18, s28                // borda suave
+    fmul    s2, s2, s26
+1:  fmul    s2, s2, s29
+    fmul    s2, s2, s30
+    fcvtzs  w3, s2
+    cmp     w3, #0
+    csel    w3, wzr, w3, lt
+    ldrb    w4, [x10, x2]
+    cmp     w3, w4
+    b.ls    2f
+    strb    w3, [x10, x2]
+2:  ldrb    w4, [x11, x2]
+    cmp     w3, w4
+    b.ls    3f
+    strb    w3, [x11, x2]
+3:  fcmp    s28, s31                    // a propria celula nao tapa
+    b.lt    cv_next
+    ldrb    w4, [x12, x2]
+    cbz     w4, cv_next
+    scvtf   s3, w4
+    fmsub   s29, s3, s25, s29           // cada arvore tapa um pouco
+    fcmp    s29, #0.0
+    b.le    cv_end
+cv_next:
+    fadd    s28, s28, s23
+    fcmp    s28, s18
+    b.lt    cv_step
+cv_end:
+    fmul    s0, s21, s19                // gira 1 grau
+    fmsub   s0, s22, s20, s0
+    fmul    s1, s21, s20
+    fmadd   s1, s22, s19, s1
+    fmov    s21, s0
+    fmov    s22, s1
+    subs    w13, w13, #1
+    b.ne    cv_ray
+    ret
+
+// update_vision: recalcula o que esta a vista (personagem + fogueiras)
+update_vision:
+    stp     x29, x30, [sp, #-32]!
+    mov     x29, sp
+    stp     x19, x20, [sp, #16]
+    LA      x9, vis
+    mov     w10, #(MAPN * MAPN / 16)
+1:  stp     xzr, xzr, [x9], #16
+    subs    w10, w10, #1
+    b.ne    1b
+    // raio: 15 celulas de dia, 5 de noite (gradual no entardecer)
+    ldr     w9, [x28, #G_NIGHTK]
+    scvtf   s0, w9
+    FC      s1, F_VISDAY
+    FC      s2, F_VISNIGHT
+    fsub    s3, s2, s1
+    fmul    s3, s3, s0
+    FC      s4, F_INV256
+    fmul    s3, s3, s4
+    fadd    s2, s1, s3
+    ldr     s0, [x28, #G_PU]
+    ldr     s1, [x28, #G_PV]
+    bl      cast_vision
+    // fogueiras iluminam em volta
+    mov     w19, #0
+2:  ldr     w9, [x28, #G_NFIRE]
+    cmp     w19, w9
+    b.ge    3f
+    LA      x20, fires
+    add     x20, x20, x19, lsl #4
+    ldr     s0, [x20]
+    ldr     s1, [x20, #4]
+    FC      s2, F_FIREVIS
+    bl      cast_vision
+    add     w19, w19, #1
+    b       2b
+3:  ldp     x19, x20, [sp, #16]
+    ldp     x29, x30, [sp], #32
     ret
 
 // =====================================================================
@@ -1813,6 +2147,18 @@ fconsts:
     .float 25.0             // F_FIRE2 (calor ate 5 celulas)
     .float 40.0             // F_FORTY
     .float 15.0             // F_EAT
+    .float 15.0             // F_VISDAY (raio de visao de dia, celulas)
+    .float 5.0              // F_VISNIGHT (de noite)
+    .float 0.00390625       // F_INV256
+    .float 6.5              // F_FIREVIS (fogueira ilumina em volta)
+    .float 0.99984770       // F_COS1 (cos 1 grau)
+    .float 0.01745241       // F_SIN1 (sen 1 grau)
+    .float 0.35             // F_RAYSTEP
+    .float 0.7              // F_P7
+    .float 0.3              // F_P3
+    .float 0.8              // F_P8
+    .float 255.0            // F_255
+    .float 0.3              // F_TREEBLK (quanto cada arvore tapa)
 
     .p2align 2
 dirtab:
@@ -1887,3 +2233,7 @@ t_8:            .asciz " luz="
 GBSS fires,    512
 GBSS lightbuf, 921600
 GBSS lbuf,     128
+GBSS vis,      262144                   // visao agora (0..255 por celula)
+GBSS seen,     262144                   // memoria: o que ja foi visto
+GBSS treecnt,  262144                   // arvores por celula (tapam a visao)
+GBSS memtype,  200000                   // como cada objeto foi visto por ultimo

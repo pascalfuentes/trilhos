@@ -35,6 +35,13 @@ Você aparece sozinho num mundo gerado aleatoriamente: terreno contínuo, mar, p
 - **Vida:** volta devagar quando você está alimentado e aquecido.
 - **Dia e noite:** um dia dura 3 minutos. A noite escurece a tela de verdade; só a fogueira e uma luz fraca em volta do personagem iluminam.
 
+**Neblina de guerra**
+
+- O mapa começa todo **preto**: você descobre andando.
+- O personagem enxerga até **15 células de dia** e **5 de noite** (diminui aos poucos no entardecer). Fogueiras acesas também revelam em volta.
+- **Árvores tapam a visão**: dentro da floresta você enxerga bem menos.
+- O que você já viu mas não está vendo agora aparece **escurecido e sem cor**, do jeito que estava da última vez. Um arbusto que voltou a dar frutas longe dos seus olhos continua aparecendo vazio até você voltar lá.
+
 ## Como funciona
 
 | Arquivo | O que tem |
@@ -46,7 +53,8 @@ Você aparece sozinho num mundo gerado aleatoriamente: terreno contínuo, mar, p
 - **Geração:** ruído fractal num mapa de altura de 512x512, só com aritmética inteira. A mesma semente sempre gera o mesmo mundo.
 - **Terreno contínuo ("voxel space" isométrico):** cada coluna da tela anda pelo mundo de frente para trás e pinta só o que fica visível. As 1280 colunas são divididas entre **8 threads**, uma para cada núcleo.
 - **Objetos com z-buffer:** árvores, pedras, arbustos, fogueiras e o personagem respeitam a profundidade do terreno.
-- **Noite:** depois de desenhar o mundo, cada pixel é multiplicado pela luz ambiente (azulada) mais a luz das fogueiras (alaranjada, tremulando), guardada num buffer de luz.
+- **Visão:** a cada quadro saem 360 raios do personagem e de cada fogueira. Cada raio perde transparência ao passar por células com árvores. O resultado vai para dois mapas: "vendo agora" e "já visto". Cada objeto guarda também o estado em que foi visto por último.
+- **Neblina e noite:** depois de desenhar o mundo, cada pixel descobre a que ponto do mapa pertence (pelo z-buffer), lê os dois mapas com interpolação suave e escurece/descolore o que não está à vista; de noite multiplica pela luz ambiente mais a luz das fogueiras. Essa passada também roda nas 8 threads.
 - **SDL3** só abre a janela, lê teclado e mouse e mostra o framebuffer na tela.
 
 ## Compilar e rodar (macOS com Apple Silicon)

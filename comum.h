@@ -134,7 +134,11 @@
 .equ G_POPMSG,   256         // texto flutuante: ponteiro
 .equ G_WARNED,   264         // ja avisou que esta escurecendo hoje
 .equ G_INGAME,   268         // existe uma partida em andamento
-.equ GSIZE,      272
+.equ G_NIGHTK,   272         // 0 = dia ... 256 = noite
+.equ GSIZE,      288
+
+// neblina: celula visivel se vis >= VIS_MIN
+.equ VIS_MIN,    40
 
 // ---- constantes float (offsets na tabela fconsts, em sobrevivencia.S) ---
 .equ F_64,       0
@@ -152,3 +156,15 @@
 .equ F_FIRE2,    48
 .equ F_FORTY,    52
 .equ F_EAT,      56
+.equ F_VISDAY,   60
+.equ F_VISNIGHT, 64
+.equ F_INV256,   68
+.equ F_FIREVIS,  72
+.equ F_COS1,     76
+.equ F_SIN1,     80
+.equ F_RAYSTEP,  84
+.equ F_P7,       88
+.equ F_P3,       92
+.equ F_P8,       96
+.equ F_255,      100
+.equ F_TREEBLK,  104

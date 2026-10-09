@@ -1,5 +1,5 @@
 // =====================================================================
-//  TRILHOS - um jogo de sobrevivencia (estilo Factorio), escrito em
+//  TRILHOS - um jogo de sobrevivencia (estilo Factorio), todo escrito em
 //  assembly ARM64 (AArch64). Roda no macOS (Apple Silicon) e no Linux ARM64.
 //
 //  Terreno continuo (sem tiles): um mapa de altura 512x512 interpolado
@@ -194,6 +194,8 @@ shot_mode:
     mov     w21, #30
 6:  bl      draw_terrain
     bl      draw_objects
+    bl      surv_draw
+    bl      surv_light                  // neblina (e luz, se for noite)
     subs    w21, w21, #1
     b.ne    6b
     bl      F(SDL_GetTicksNS)
@@ -1112,11 +1114,17 @@ calc_hover:
 //  160 colunas, desenhadas ao mesmo tempo por 8 threads (nucleos).
 // =====================================================================
 .equ NTHREADS, 8
-draw_terrain:
+
+// par_cols(x0 = funcao): roda funcao(w0 = col inicial, w1 = col final)
+// em 8 threads, cada uma com uma faixa de 160 colunas da tela
+    .globl par_cols
+par_cols:
     stp     x29, x30, [sp, #-48]!
     mov     x29, sp
     stp     x19, x20, [sp, #16]
     str     x21, [sp, #32]
+    LA      x9, parfunc
+    str     x0, [x9]
     LA      x19, trange
     mov     w20, #0
 1:  mov     w9, #(SCRW / NTHREADS)      // faixa i: colunas [160*i, 160*(i+1))
@@ -1132,21 +1140,25 @@ draw_terrain:
 2:  LA      x21, tids
     add     x0, x21, x20, lsl #3
     mov     x1, #0
-    LA      x2, terrain_thread
+    LA      x2, par_thread
     add     x3, x19, x20, lsl #3
     bl      F(pthread_create)
     cbz     w0, 3f
-    str     xzr, [x21, x20, lsl #3]     // nao criou: desenha aqui mesmo
+    str     xzr, [x21, x20, lsl #3]     // nao criou: faz aqui mesmo
     add     x9, x19, x20, lsl #3
     ldr     w0, [x9]
     ldr     w1, [x9, #4]
-    bl      draw_cols
+    LA      x9, parfunc
+    ldr     x9, [x9]
+    blr     x9
 3:  add     w20, w20, #1
     cmp     w20, #NTHREADS
     b.lt    2b
     ldr     w0, [x19]                   // a faixa 0 fica com esta thread
     ldr     w1, [x19, #4]
-    bl      draw_cols
+    LA      x9, parfunc
+    ldr     x9, [x9]
+    blr     x9
     mov     w20, #1                     // espera as outras terminarem
 4:  LA      x21, tids
     ldr     x0, [x21, x20, lsl #3]
@@ -1161,19 +1173,25 @@ draw_terrain:
     ldp     x29, x30, [sp], #48
     ret
 
-// terrain_thread(x0 = faixa): ponto de entrada de cada thread
-terrain_thread:
+// par_thread(x0 = faixa): ponto de entrada de cada thread
+par_thread:
     stp     x29, x30, [sp, #-32]!
     mov     x29, sp
     str     x28, [sp, #16]
     LA      x28, G                      // cada thread tem seus registradores
     ldr     w1, [x0, #4]
     ldr     w0, [x0]
-    bl      draw_cols
+    LA      x9, parfunc
+    ldr     x9, [x9]
+    blr     x9
     ldr     x28, [sp, #16]
     ldp     x29, x30, [sp], #32
     mov     x0, #0
     ret
+
+draw_terrain:
+    LA      x0, draw_cols
+    b       par_cols
 
 // draw_cols(w0 = primeira coluna, w1 = coluna final exclusiva)
 draw_cols:
@@ -1498,7 +1516,20 @@ do_loop:
     ldrsh   w12, [x9, #4]
     ldrb    w13, [x9, #6]
     ldrb    w14, [x9, #7]
-    cmp     w13, #8                     // objeto removido (255)
+    ldr     w15, [x28, #G_STATE]
+    cbz     w15, 2f                     // titulo: sem neblina
+    lsr     w15, w10, #6                // celula do objeto
+    lsr     w16, w11, #6
+    add     w15, w15, w16, lsl #9
+    LA      x16, vis
+    ldrb    w15, [x16, w15, uxtw]
+    LA      x16, memtype
+    cmp     w15, #VIS_MIN
+    b.lo    1f
+    strb    w13, [x16, x25]             // a vista: lembra como esta agora
+    b       2f
+1:  ldrb    w13, [x16, x25]             // na neblina: desenha o que lembra
+2:  cmp     w13, #8                     // removido ou nunca visto
     b.hs    do_skip
     sub     w0, w10, w11
     sub     w0, w0, w22
@@ -2034,5 +2065,6 @@ GBSS txt, 256
 GBSS noisetab, 65536
 GBSS trange, 64
 GBSS tids, 64
+GBSS parfunc, 16
 GBSS zb, 1843200
 GBSS fb, 3686400
