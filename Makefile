@@ -5,7 +5,7 @@
 
 CC ?= cc
 UNAME := $(shell uname)
-SRCS := trilhos.S ferrovia.S
+SRCS := trilhos.S sobrevivencia.S
 
 SDL_LIBS := $(shell pkg-config --libs sdl3 2>/dev/null)
 ifeq ($(SDL_LIBS),)
