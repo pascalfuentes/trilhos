@@ -2,7 +2,7 @@
 
 Um jogo de sobrevivência no estilo Factorio, escrito em **assembly ARM64** (AArch64).
 
-Você aparece sozinho num mundo gerado aleatoriamente: terreno contínuo, mar, praias, florestas, montanhas com neve. Precisa coletar madeira, pedra e frutas, fabricar ferramentas e construções, não morrer de fome e passar a noite perto de uma fogueira. Quanto mais você faz uma coisa, melhor fica nela, e para se curar precisa estar de barriga cheia.
+Você aparece sozinho num mundo gerado aleatoriamente: terreno contínuo, mar, praias, florestas, montanhas com neve. Precisa coletar madeira, pedra e frutas, fabricar ferramentas e construções, não morrer de fome e passar a noite perto de uma fogueira, enfrentando as estações e o clima (chuva, tempestade, calorão, neve, granizo, enchente). Quanto mais você faz uma coisa, melhor fica nela, e para se curar precisa estar de barriga cheia.
 
 ![Dia](screenshots/jogo.png)
 ![Noite](screenshots/noite.png)
@@ -107,6 +107,34 @@ Cada skill vai de nível 0 a 10.
 
 ![Mochila e skills](screenshots/mochila.png)
 
+**Estações e clima**
+
+O ano tem 4 estações de 3 dias cada (36 minutos), e o jogo começa na primavera. Dentro de cada estação, o clima muda a cada poucos minutos, sorteado do que é comum naquela época:
+
+| Estação | Clima comum |
+|---|---|
+| Primavera | sol, nublado, chuva, às vezes tempestade |
+| Verão | sol e calorão, às vezes tempestade |
+| Outono | chuva, nublado, tempestades |
+| Inverno | neve, nublado, granizo |
+
+Depois de uma tempestade (fora do inverno), metade das vezes vem uma **enchente**. Cada clima entra e sai devagar, em uns 20 s. O nome da estação e do clima fica na barra de cima.
+
+| Clima | Efeito |
+|---|---|
+| Sol | normal |
+| Nublado | um pouco mais escuro |
+| Chuva | esfria, a fogueira queima 2x mais rápido, enxerga menos; frutas voltam 2x mais rápido |
+| Tempestade | escuro, relâmpagos, esfria bastante, fogueira queima 4x mais rápido, enxerga bem menos, mais lento e cansa mais |
+| Calorão | esquenta (até de noite), 2x mais fome, cansa 50% mais e recupera a stamina pela metade |
+| Neve | frio forte até de dia, anda 20% mais devagar, mais fome |
+| Granizo | machuca fora do abrigo ("Granizo: perdendo vida!") |
+| Enchente | a água sobe até 120: praias e campos baixos viram água rasa ou funda por uns 4 minutos e depois baixam; fogueiras alagadas apagam |
+
+O **abrigo** protege do frio do clima e do granizo.
+
+![Os 8 climas](screenshots/clima.png)
+
 **Água**
 
 | Nível | Onde | O que acontece |
@@ -132,6 +160,7 @@ Cada skill vai de nível 0 a 10.
 | `comum.h` | macros e constantes compartilhadas |
 | `trilhos.S` | janela, entrada, geração do mundo, terreno, árvores |
 | `sobrevivencia.S` | personagem, coleta, mochila, skills, fabricar, baús, abrigos, fome, calor, fogueiras, água, noite e interface |
+| `clima.S` | estações, sorteio do clima, efeitos, chuva/neve/granizo, cor do clima e relâmpago |
 
 - **Geração:** ruído fractal num mapa de altura de 512x512, só com aritmética inteira. A mesma semente sempre gera o mesmo mundo.
 - **Terreno contínuo ("voxel space" isométrico):** cada coluna da tela anda pelo mundo de frente para trás e pinta só o que fica visível. As 1280 colunas são divididas entre **8 threads**, uma para cada núcleo.
@@ -139,6 +168,7 @@ Cada skill vai de nível 0 a 10.
 - **Visão:** a cada quadro saem 360 raios do personagem e de cada fogueira. Cada raio perde transparência ao passar por células com árvores. O resultado vai para dois mapas: "vendo agora" e "já visto". Cada objeto guarda também o estado em que foi visto por último.
 - **Neblina e noite:** depois de desenhar o mundo, cada pixel descobre a que ponto do mapa pertence (pelo z-buffer), lê os dois mapas com interpolação suave e escurece/descolore o que não está à vista; de noite multiplica pela luz ambiente mais a luz das fogueiras. Essa passada também roda nas 8 threads.
 - **Interface:** botões, janelas e ícones são desenhados com retângulos pelo SDL; os ícones da mochila são os mesmos sprites das pilhas no chão.
+- **Clima:** a chuva, a neve e o granizo são partículas sem estado: a posição de cada uma sai de um hash do seu número e do quadro atual, então não precisa guardar nada. A cor do clima é misturada em cada pixel na proporção do brilho dele (a neblina preta continua preta), nas 8 threads. Na enchente, o terreno abaixo do nível da água é desenhado como água na superfície.
 - **SDL3** só abre a janela, lê teclado e mouse e mostra o framebuffer na tela.
 
 ## Compilar e rodar (macOS com Apple Silicon)
@@ -156,7 +186,7 @@ sudo apt install libsdl3-dev   # ou compile o SDL3 a partir do código-fonte
 make run
 ```
 
-`./trilhos --shot` roda sem interação: tira screenshots, mede o tempo de cada quadro e faz um teste automático (coleta duas árvores, uma pedra e um arbusto, monta uma fogueira, come e passa a noite; corre, anda carregado, larga e recolhe uma pilha de pedras, vê a skill cair sem treino, confere que a vida só sobe com a fome cheia; fabrica tudo, monta baú e abrigo, gasta o machado, acende a tocha à noite e dorme no abrigo; depois nada num lago e vai para o mar aberto até o tubarão atacar).
+`./trilhos --shot` roda sem interação: tira screenshots, mede o tempo de cada quadro e faz um teste automático (coleta duas árvores, uma pedra e um arbusto, monta uma fogueira, come e passa a noite; corre, anda carregado, larga e recolhe uma pilha de pedras, vê a skill cair sem treino, confere que a vida só sobe com a fome cheia; fabrica tudo, monta baú e abrigo, gasta o machado, acende a tocha à noite e dorme no abrigo; passa 10 s em cada um dos 8 climas (com foto); depois nada num lago e vai para o mar aberto até o tubarão atacar).
 
 ## Próximos passos
 
