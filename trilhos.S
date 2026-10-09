@@ -322,6 +322,26 @@ shot_mode:
     mov     w0, #1
     bl      surv_selftest_hunt
 
+    // cercas (foto) e pesca (foto)
+    mov     w0, #0
+    bl      surv_selftest_build
+    bl      draw_all
+    LA      x0, s_shot_fence
+    bl      save_bmp
+    ldr     x0, [x28, #G_REN]
+    bl      F(SDL_RenderPresent)
+    mov     w0, #1
+    bl      surv_selftest_build
+    mov     w0, #2
+    bl      surv_selftest_build
+    bl      draw_all
+    LA      x0, s_shot_fish
+    bl      save_bmp
+    ldr     x0, [x28, #G_REN]
+    bl      F(SDL_RenderPresent)
+    mov     w0, #3
+    bl      surv_selftest_build
+
     // agua: nadando, tubarao chegando e o fim
     mov     w0, #0
     bl      surv_selftest_water
@@ -1672,8 +1692,33 @@ do_loop:
     cmp     w2, w9
     b.gt    do_skip
     add     w4, w10, w11                // profundidade
-    LA      x0, sprites
-    add     x0, x0, x13, lsl #7
+    LA      x9, objsprite               // sprite do tipo de objeto
+    ldrb    w15, [x9, x13]
+    cmp     w13, #O_FENCE               // cerca: trilhos para os vizinhos
+    b.eq    61f
+    cmp     w13, #O_GATE
+    b.ne    63f
+61: lsr     w16, w10, #6
+    lsr     w9, w11, #6
+    add     w16, w16, w9, lsl #9
+    LA      x9, fencegrid
+    add     x9, x9, w16, uxtw
+    cmp     w13, #O_GATE
+    b.eq    62f
+    ldrb    w16, [x9, #1]               // vizinho em +u
+    cmp     w16, #0
+    cinc    w15, w15, ne
+    ldrb    w16, [x9, #512]             // vizinho em +v
+    cbz     w16, 63f
+    add     w15, w15, #2
+    b       63f
+62: ldurb   w16, [x9, #-1]              // portao: na fileira de u ou de v?
+    ldrb    w9, [x9, #1]
+    orr     w16, w16, w9
+    cmp     w16, #0
+    cinc    w15, w15, eq
+63: LA      x0, sprites
+    add     x0, x0, x15, lsl #7
     mov     w3, w24
     mov     w5, w14
     bl      blit
@@ -2444,6 +2489,98 @@ sprites:
     .byte 0,38,38,38,38,38,0
     .byte 0,38,0,38,0,38,0
     .p2align 7
+// 42: vara de pesca
+    .byte 7, 8, 3, 0
+    .byte 0,0,0,0,0,0,31
+    .byte 0,0,0,0,0,31,32
+    .byte 0,0,0,0,31,0,32
+    .byte 0,0,0,31,0,0,32
+    .byte 0,0,31,0,0,0,32
+    .byte 0,31,0,0,0,0,17
+    .byte 31,0,0,0,0,0,0
+    .byte 1,0,0,0,0,0,0
+    .p2align 7
+// 43: peixe
+    .byte 8, 4, 4, 0
+    .byte 0,0,13,13,13,0,0,13
+    .byte 0,13,12,12,13,13,13,13
+    .byte 13,18,12,12,12,13,13,0
+    .byte 0,13,13,13,13,0,0,13
+    .p2align 7
+// 44: peixe assado
+    .byte 8, 4, 4, 0
+    .byte 0,0,36,36,36,0,0,36
+    .byte 0,36,35,35,36,36,36,36
+    .byte 36,18,35,25,35,36,36,0
+    .byte 0,36,36,36,36,0,0,36
+    .p2align 7
+// 45: cerca: poste
+    .byte 9, 7, 4, 0
+    .byte 0,0,0,0,10,0,0,0,0
+    .byte 0,0,0,0,31,0,0,0,0
+    .byte 0,0,0,0,31,0,0,0,0
+    .byte 0,0,0,0,31,0,0,0,0
+    .byte 0,0,0,0,31,0,0,0,0
+    .byte 0,0,0,0,31,0,0,0,0
+    .byte 0,0,0,0,1,0,0,0,0
+    .p2align 7
+// 46: cerca: trilho em +u
+    .byte 9, 7, 4, 0
+    .byte 0,0,0,0,10,0,0,0,0
+    .byte 0,0,0,0,31,0,0,0,0
+    .byte 0,0,0,0,31,36,0,0,0
+    .byte 0,0,0,0,31,0,36,36,0
+    .byte 0,0,0,0,31,36,0,0,0
+    .byte 0,0,0,0,31,0,36,36,0
+    .byte 0,0,0,0,1,0,0,0,0
+    .p2align 7
+// 47: cerca: trilho em +v
+    .byte 9, 7, 4, 0
+    .byte 0,0,0,0,10,0,0,0,0
+    .byte 0,0,0,0,31,0,0,0,0
+    .byte 0,0,0,36,31,0,0,0,0
+    .byte 0,36,36,0,31,0,0,0,0
+    .byte 0,0,0,36,31,0,0,0,0
+    .byte 0,36,36,0,31,0,0,0,0
+    .byte 0,0,0,0,1,0,0,0,0
+    .p2align 7
+// 48: cerca: os dois
+    .byte 9, 7, 4, 0
+    .byte 0,0,0,0,10,0,0,0,0
+    .byte 0,0,0,0,31,0,0,0,0
+    .byte 0,0,0,36,31,36,0,0,0
+    .byte 0,36,36,0,31,0,36,36,0
+    .byte 0,0,0,36,31,36,0,0,0
+    .byte 0,36,36,0,31,0,36,36,0
+    .byte 0,0,0,0,1,0,0,0,0
+    .p2align 7
+// 49: portao ao longo de u
+    .byte 9, 7, 4, 0
+    .byte 0,0,0,0,10,0,0,0,0
+    .byte 0,0,0,0,31,35,0,0,0
+    .byte 0,0,0,0,31,36,35,35,0
+    .byte 0,0,0,0,31,35,36,36,0
+    .byte 0,0,0,0,31,35,35,35,0
+    .byte 0,0,0,0,31,0,35,35,0
+    .byte 0,0,0,0,1,0,0,0,0
+    .p2align 7
+// 50: portao ao longo de v
+    .byte 9, 7, 4, 0
+    .byte 0,0,0,0,10,0,0,0,0
+    .byte 0,0,0,35,31,0,0,0,0
+    .byte 0,35,35,36,31,0,0,0,0
+    .byte 0,36,36,35,31,0,0,0,0
+    .byte 0,35,35,35,31,0,0,0,0
+    .byte 0,35,35,0,31,0,0,0,0
+    .byte 0,0,0,0,1,0,0,0,0
+    .p2align 7
+// 51: boia
+    .byte 3, 4, 1, 0
+    .byte 0,17,0
+    .byte 17,17,17
+    .byte 37,37,37
+    .byte 0,37,0
+    .p2align 7
 
 s_wintitle:     .asciz "Trilhos - jogo de trens em Assembly ARM64"
 s_title:        .asciz "TRILHOS"
@@ -2476,6 +2613,8 @@ s_shot_craft:   .asciz "shot_fabricar.bmp"
 s_shot_torch:   .asciz "shot_tocha.bmp"
 s_shot_clima:   .asciz "shot_clima0.bmp"
 s_shot_anim:    .asciz "shot_animais.bmp"
+s_shot_fence:   .asciz "shot_cerca.bmp"
+s_shot_fish:    .asciz "shot_pesca.bmp"
 s_shot_hut:     .asciz "shot_abrigo.bmp"
 s_shot_sleep:   .asciz "shot_dormindo.bmp"
 s_shot_shark:   .asciz "shot_tubarao.bmp"

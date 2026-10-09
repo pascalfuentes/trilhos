@@ -148,9 +148,7 @@
 .equ G_TESTKEYS, 312         // teclas simuladas pelo teste (W S A D Shift)
 .equ G_WEIGHT,   316         // peso carregado (decimos de kg)
 .equ G_CAP,      320         // peso maximo sem ficar lento (decimos de kg)
-.equ G_SKILL,    324         // 5 skills (float 0..100)
-.equ G_SKIDLE,   344         // 5 x u16: quadros sem treinar cada skill
-.equ G_SKLAST,   356         // 5 x u8: ultimo nivel anunciado
+                             // 324-363: livre (as skills foram para 704)
 .equ G_STAMAX,   364         // stamina maxima (float; cresce com corrida e natacao)
 .equ G_SATED,    368         // quadros que a fome ainda fica cheia (vida so sobe assim)
 .equ G_CRAFTOPEN, 372        // janela de fabricar aberta
@@ -201,7 +199,18 @@
 .equ G_WOOD,     (G_INV + 0)
 .equ G_STONE,    (G_INV + 4)
 .equ G_BERRY,    (G_INV + 8)
-.equ GSIZE,      768
+.equ G_SKILL,    704         // 6 skills (float 0..100)
+.equ G_SKIDLE,   728         // 6 x u16: quadros sem treinar cada skill
+.equ G_SKLAST,   740         // 6 x u8: ultimo nivel anunciado
+// cercas e pesca
+.equ G_FDRAG,    748         // arrastando uma fileira de cercas
+.equ G_FLASTU,   752         // ultima celula com cerca na fileira
+.equ G_FLASTV,   756
+.equ G_FISH,     760         // pesca: 0 nada, 1 esperando, 2 mordeu!
+.equ G_FISHT,    764         // quadros ate morder / para fisgar
+.equ G_BOBU,     768         // boia (float, celulas)
+.equ G_BOBV,     772
+.equ GSIZE,      832
 
 .equ W_SUN,      0
 .equ W_CLOUDY,   1
@@ -222,7 +231,8 @@
 .equ SK_CHOP,    2           // lenhador
 .equ SK_MINE,    3           // mineracao
 .equ SK_STR,     4           // forca
-.equ NSKILL,     5
+.equ SK_FISH,    5           // pesca
+.equ NSKILL,     6
 .equ SATTIME,    14400       // fome cheia segura 4 min antes de cair
 .equ SKREST,     7200        // 2 min sem treinar: a skill comeca a cair
 .equ G_SKSWIM,   (G_SKILL + 4 * SK_SWIM)
@@ -230,6 +240,7 @@
 .equ G_SKCHOP,   (G_SKILL + 4 * SK_CHOP)
 .equ G_SKMINE,   (G_SKILL + 4 * SK_MINE)
 .equ G_SKSTR,    (G_SKILL + 4 * SK_STR)
+.equ G_SKFISH,   (G_SKILL + 4 * SK_FISH)
 
 // itens da mochila (vetor em G_INV)
 .equ IT_WOOD,    0
@@ -250,9 +261,14 @@
 .equ IT_HIDE,    15          // couro
 .equ IT_COAT,    16          // roupa de couro (metade do frio)
 .equ IT_LBAG,    17          // mochila de couro (+20 kg)
-.equ NITEMS,     18
-.equ IT_FIRSTBUILD, 8        // 8..10 sao colocados no mapa (nao se largam)
-.equ IT_LASTBUILD, 10
+.equ IT_FENCE,   18          // cerca (construcao, arrasta em fileira)
+.equ IT_GATE,    19          // portao (construcao)
+.equ IT_ROD,     20          // vara de pesca
+.equ IT_FISH,    21          // peixe cru
+.equ IT_CFISH,   22          // peixe assado
+.equ NITEMS,     23
+// construcoes (vao para o mapa, nao se largam): fogueira, bau, abrigo,
+// cerca e portao -> tabela itembuild
 
 // objetos que voce cria
 .equ O_LOGS,     12          // pilhas largadas: 12 + item (sprites 12..19)
@@ -260,7 +276,13 @@
 .equ O_BERRIES,  14
 .equ O_CHEST,    20          // bau (sprite 20)
 .equ O_SHELTER,  21          // abrigo (sprite 21)
-.equ O_LAST,     29          // pilhas vao ate 12 + 17 (sprites 23..29: itens novos)
+.equ O_FENCE,    36          // cerca (sprites 45..48 conforme os vizinhos)
+.equ O_GATE,     37          // portao (sprites 49..50)
+.equ O_LAST,     37          // pilhas: 12 + item (ate 34); o sprite vem de objsprite
+.equ SPR_FENCE,  45
+.equ SPR_GATE,   49
+.equ SPR_BOBBER, 51
+.equ FENCEREACH, 64          // cercas ate 8 celulas do personagem (8^2)
 
 // animais (sprites 30..41, dois quadros cada)
 .equ A_RABBIT,   0
@@ -273,7 +295,8 @@
 .equ MAXANIM,    48          // vagas na lista
 .equ MAXALIVE,   18          // no maximo vivos ao mesmo tempo
 .equ MAXARROW,   16
-.equ HB_X,       242         // barra "na mao" (4 quadrados) embaixo, no meio
+.equ HB_X,       222         // barra "na mao" (5 quadrados) embaixo, no meio
+.equ NHOTBAR,    5
 .equ HB_Y,       306
 
 .equ TOOLDUR,    40          // usos de um machado ou picareta
@@ -283,7 +306,7 @@
 .equ FIREMAX,    43200       // no maximo 12 min
 .equ MAXCHEST,   64          // cada bau: 32 contadores (128 bytes)
 .equ MAXSHELTER, 32
-.equ NRECIPES,   13
+.equ NRECIPES,   17
 
 // interface (coordenadas do espaco de texto 640 x 360)
 .equ BTN_Y,      16
@@ -295,7 +318,7 @@
 .equ INV_X,      416         // janela da mochila
 .equ INV_Y,      36
 .equ INV_W,      220
-.equ INV_H,      226
+.equ INV_H,      266
 .equ SLOT_X,     (INV_X + 12) // mochila: grade 5 x 4
 .equ SLOT_Y,     (INV_Y + 48)
 .equ SLOT,       36          // lado do quadrado
@@ -303,17 +326,17 @@
 .equ CHR_X,      4           // janela do personagem (embaixo do status)
 .equ CHR_Y,      126
 .equ CHR_W,      216
-.equ CHR_H,      186
+.equ CHR_H,      212
 .equ BTNF_X,     284         // botao "Fabricar"
 .equ BTNF_W,     116
 .equ CRF_X,      224         // janela de fabricar (e do bau, no mesmo lugar)
-.equ CRF_Y,      36
+.equ CRF_Y,      32
 .equ CRF_W,      188
-.equ CRF_H,      236
+.equ CRF_H,      272
 .equ CRF_GX,     (CRF_X + 16) // fabricar: grade de icones 4 x 4
 .equ CRF_GY,     (CRF_Y + 20)
 .equ CHS_SLOTX,  (CRF_X + 16) // bau: grade 4 x 5
-.equ CHS_SLOTY,  (CRF_Y + 22)
+.equ CHS_SLOTY,  (CRF_Y + 20)
 
 // agua: 3 niveis (raso, fundo, mar aberto)
 .equ W_SHALLOW,  150         // ate esta profundidade (1/16 px) e raso

@@ -10,7 +10,7 @@
 //    quando voce chega perto ou quando sao feridos.
 //  - Perigosos (lobo, urso) perseguem e mordem; de dia so de perto.
 //    Tem medo de fogo: perto de uma fogueira (ou no abrigo) voce esta
-//    seguro. Nenhum entra na agua.
+//    seguro. Nenhum entra na agua nem passa por cercas e portoes.
 //  - Abatidos, deixam pilhas de carne e couro no chao.
 //  - Flechas voam em linha reta ate acertar um animal ou cair.
 // =====================================================================
@@ -422,6 +422,10 @@ au_move:
     b.lt    au_block
     fcmp    s9, s3
     b.gt    au_block
+    fmov    s4, s8                      // cerca ou portao: nao passa
+    fmov    s5, s9
+    bl      fence_at
+    cbnz    w0, au_block
     fmov    s0, s8
     fmov    s1, s9
     bl      elev_at
@@ -930,6 +934,7 @@ spawntab:
 // dano do golpe pelo que esta na mao (item + 1; 0 = maos vazias)
 handdmg:
     .byte 1, 1, 1, 1, 3, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
+    .byte 1, 1, 1, 1, 1, 1, 1, 1
 
     .p2align 2
 adirtab:

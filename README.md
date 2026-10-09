@@ -15,12 +15,15 @@ Você aparece sozinho num mundo gerado aleatoriamente: terreno contínuo, mar, p
 | WASD / setas | andar |
 | Shift (segurando) | correr |
 | segurar o botão esquerdo | coletar a árvore, pedra ou arbusto sob o mouse (até 3 células de distância) |
-| E | comer (frutas assadas primeiro: +50; frutas: +15) |
+| E | comer (o que encher mais primeiro: carne assada, frutas assadas, peixe assado...) |
 | F | fabricar uma fogueira e escolher onde montar |
 | Tab ou botão **Fabricar** | abre a janela de fabricar |
 | clique no mapa (com uma construção na mão) | coloca a construção; botão direito ou ESC cancela |
 | 1 / 2 / 3 | põe na mão o machado, a picareta ou o arco (de novo: mãos vazias) |
 | 4 | põe ou tira a tocha da outra mão |
+| 5 | põe na mão a vara de pesca |
+| arrastar com cercas na mão | faz uma fileira de cercas seguindo o mouse |
+| clique na água com a vara na mão | lança a linha; quando aparecer "Peixe! Clique!", clique para fisgar |
 | clique com o arco na mão | atira uma flecha onde está o mouse |
 | clique num animal perto | golpe (machado tira mais vida) |
 | botão direito num baú | abre o baú (clique num item passa de um lado para o outro) |
@@ -64,6 +67,10 @@ Como no Minecraft e no Factorio, uma grade de ícones mostra tudo o que dá para
 | Cesto | 6 madeira | +10 kg no limite da mochila (só um conta) |
 | Roupa de couro | 4 couro | metade do frio (noite, água e clima) |
 | Mochila de couro | 3 couro, 2 madeira | +20 kg no limite (soma com o cesto) |
+| Cercas (4) | 2 madeira | ninguém passa: nem animais, nem você (construção, arrasta em linha) |
+| Portão | 4 madeira | você passa, os animais não (construção; pode trocar uma cerca) |
+| Vara de pesca | 3 madeira, 2 frutas | na mão: pesca na água |
+| Peixe assado | 1 peixe, perto de uma fogueira | enche 40 de fome (cru: só 8) |
 
 - O desgaste das ferramentas e o tempo da tocha acesa aparecem como uma barrinha embaixo do ícone na mochila. Quando o machado ou a picareta quebra, o próximo (se você tiver) entra novo.
 - Para **desmontar** um baú ou um abrigo, segure o botão esquerdo nele: ele volta para a mochila. O baú precisa estar vazio.
@@ -85,7 +92,7 @@ A cabana tem uma porta do tamanho do personagem.
 
 **Na mão**
 
-- Embaixo da tela fica a barra **na mão**: 1 machado, 2 picareta, 3 arco e 4 tocha. O que você segura tem a borda amarela, e o número no arco é quantas flechas sobram.
+- Embaixo da tela fica a barra **na mão**: 1 machado, 2 picareta, 3 arco, 4 tocha e 5 vara de pesca. O que você segura tem a borda amarela, e o número no arco é quantas flechas sobram.
 - Machado e picareta só ajudam (e só gastam) se estiverem na mão.
 - A **tocha** vai na **outra mão**: dá para segurar o arco ou o machado e ainda ter luz à noite. Ela só se gasta quando queima até o fim.
 
@@ -111,6 +118,33 @@ Os animais aparecem longe da vista, cada um no seu terreno, e somem quando ficam
 
 ![Animais](screenshots/animais.png)
 
+**Cercas e portão**
+
+- Fabrique cercas (4 por 2 madeiras) e clique nelas na mochila (ou fabrique e já saia colocando).
+- **Segure o botão esquerdo e arraste**: a fileira segue o mouse, célula por célula, sem buracos na diagonal (até 8 células de você).
+- Cerca não deixa ninguém passar. O **portão** deixa você passar, mas os animais não. Coloque o portão em cima de uma cerca para trocar (a cerca volta para a mochila).
+- Um cercado fechado com você dentro: os lobos ficam do lado de fora a noite toda.
+- Para desmontar, segure o botão esquerdo nela, como numa árvore: volta para a mochila.
+
+![Cercado com portão e um lobo do lado de fora](screenshots/cerca.png)
+
+**Pesca**
+
+- Fabrique uma **vara de pesca** (3 madeira, 2 frutas) e aperte **5** para segurar.
+- Clique na água (até ~5 células, parado em terra ou na água rasa) para lançar. A boia fica balançando.
+- Depois de 4 a 10 segundos o peixe morde: a boia afunda e aparece **"Peixe! Clique!"**. Clique rápido para fisgar; se demorar, ele escapa.
+- Clicar antes da mordida recolhe a linha. Andar longe da boia também.
+
+| Água | Peixe | Quantos |
+|---|---|---|
+| lago | lambari | 1 |
+| mar perto da praia | robalo | 1 a 2 |
+| mar fundo | atum | 3 |
+
+- Peixe cru enche 8 de fome; **assado** na fogueira, 40.
+
+![Pescando](screenshots/pesca.png)
+
 **Sobrevivência**
 
 - **Fome:** quando enche (comendo), fica **cheia por 4 minutos** antes de começar a cair. Comer de novo com ela cheia renova esse tempo. Depois cai de cheia a vazia em uns 24 minutos. Sem comida, a vida cai.
@@ -133,6 +167,9 @@ Os animais aparecem longe da vista, cada um no seu terreno, e somem quando ficam
 | Madeira | 1,5 kg |
 | Pedra | 2,0 kg |
 | Fruta | 0,1 kg |
+| Cerca | 1,0 kg |
+| Portão | 3,0 kg |
+| Peixe | 0,5 kg |
 
 - O limite começa em **30 kg** e aumenta com a skill Força (até 60 kg).
 - Acima do limite: **anda bem mais devagar**, não corre, e nadar cansa o dobro.
@@ -154,6 +191,7 @@ Cada skill vai de nível 0 a 10.
 | Lenhador | cortando árvores | corta 2x mais rápido |
 | Mineração | quebrando pedras | quebra 2x mais rápido |
 | Força | andando com mais de 60% do limite de peso | carrega até 60 kg |
+| Pesca | pegando peixes | o peixe morde na metade do tempo, mais tempo para fisgar e chance de um peixe a mais |
 
 ![Mochila e skills](screenshots/mochila.png)
 
