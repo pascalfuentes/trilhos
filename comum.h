@@ -195,7 +195,7 @@
 .equ G_SLEEP,    568         // dormindo na cabana (abrigo)
 .equ G_SLEEPDAY, 572         // dia em que deitou (acorda quando virar)
 .equ SLEEPSPEED, 60          // dormindo, cada quadro vale 60 (a noite passa em ~5 s)
-.equ G_INV,      576         // mochila: NITEMS contadores (u32), ate 32 itens
+// (576..703 livre: a mochila mudou para G_INV, 48 vagas)
 .equ G_WOOD,     (G_INV + 0)
 .equ G_STONE,    (G_INV + 4)
 .equ G_BERRY,    (G_INV + 8)
@@ -249,7 +249,13 @@
 .equ G_PTAB,     940         // painel P: 0 Pessoas, 1 Familias
 .equ G_PPAGE,    944         // painel P: pagina
 .equ G_NOLOTT,   948         // quando avisou que falta zona de Moradia
-.equ GSIZE,      960
+.equ G_NEARFURN, 952         // perto de uma fornalha (receitas de ferro)
+.equ G_FULL,     956         // tela cheia
+.equ G_INV,      960         // mochila: um contador (u32) por item, 48 vagas
+.equ G_IRONDUR,  1152        // usos que restam: machado, picareta, enxada de ferro
+.equ G_NLAMP,    1164        // lampioes
+.equ G_FURNT,    1168        // conta quadros ate olhar a fornalha de novo
+.equ GSIZE,      1184
 
 .equ W_SUN,      0
 .equ W_CLOUDY,   1
@@ -311,7 +317,20 @@
 .equ IT_SEED,    24          // sementes de trigo
 .equ IT_WHEAT,   25          // trigo
 .equ IT_BREAD,   26          // pao
-.equ NITEMS,     27
+.equ IT_ORE,     27          // minerio de ferro
+.equ IT_COAL,    28          // carvao
+.equ IT_IRON,    29          // barra de ferro
+.equ IT_FURNACE, 30          // fornalha (construcao)
+.equ IT_IAXE,    31          // machado de ferro
+.equ IT_IPICK,   32          // picareta de ferro
+.equ IT_IHOE,    33          // enxada de ferro
+.equ IT_SWORD,   34          // espada
+.equ IT_ARMOR,   35          // armadura de ferro
+.equ IT_LAMP,    36          // lampiao (construcao)
+.equ NITEMS,     37
+.equ MAXITEMS,   48          // vagas na mochila e em cada bau
+.equ CHESTSHIFT, 8           // cada bau: 48 contadores (256 bytes)
+.equ IRONDUR,    120         // usos de uma ferramenta de ferro
 // construcoes (vao para o mapa, nao se largam): fogueira, bau, abrigo,
 // cerca e portao -> tabela itembuild
 
@@ -330,7 +349,12 @@
 .equ O_YTREE,    44          // arvore jovem (variante = dias; nao se corta)
 .equ O_HUT,      45          // barraco de uma familia (bloco 2 x 2; variante = cor)
 .equ O_HOUSE,    46          // casa de uma familia
-.equ O_LAST,     46          // ultimo tipo de objeto (pilhas: 12 + item ate 35 e 40 + item - 24)
+.equ O_IRONV,    47          // veio de ferro (so com picareta)
+.equ O_COALV,    48          // veio de carvao
+.equ O_FURNACE,  49          // fornalha
+.equ O_LAMP,     50          // lampiao
+.equ O_PILE3,    51          // pilhas dos itens 27.. (51 + item - 27)
+.equ O_LAST,     60          // ultimo tipo de objeto
 .equ SPR_FENCE,  45
 .equ SPR_GATE,   49
 .equ SPR_BOBBER, 51
@@ -348,6 +372,19 @@
 .equ SPR_YTREE,  69          // arvore jovem
 .equ SPR_HUT,    70          // barraco (ocupa as vagas 70 e 71)
 .equ SPR_HOUSE,  72          // casa (vagas 72 a 74)
+.equ SPR_ORE,    75          // minerio
+.equ SPR_COAL,   76
+.equ SPR_IRON,   77          // barra de ferro
+.equ SPR_FURNACE, 78         // fornalha (vagas 78 e 79)
+.equ SPR_IAXE,   80
+.equ SPR_IPICK,  81
+.equ SPR_IHOE,   82
+.equ SPR_SWORD,  83
+.equ SPR_ARMOR,  84
+.equ SPR_LAMP,   85
+.equ SPR_IRONV,  86          // veios
+.equ SPR_COALV,  87
+.equ MAXLAMP,    64
 // pessoas
 .equ MAXPEOPLE,  64          // vagas (quem morreu fica, para a arvore genealogica)
 .equ PSIZE,      64
@@ -355,7 +392,8 @@
 .equ J_STONE,    2
 .equ J_FARM,     3
 .equ J_BUILD,    4           // obras: barracos, casas e cercas
-.equ NJOBS,      5
+.equ J_SMITH,    5           // ferreiro: barras de ferro e carvao na fornalha
+.equ NJOBS,      6
 .equ Z_FOREST,   1
 .equ Z_STONE,    2
 .equ Z_FARM,     3
@@ -380,7 +418,7 @@
 .equ MAXALIVE,   18          // no maximo vivos ao mesmo tempo
 .equ MAXARROW,   16
 .equ HB_X,       228         // barra "na mao" (7 quadrados) embaixo, ao lado da janela do personagem
-.equ NHOTBAR,    7
+.equ NHOTBAR,    8
 .equ HB_Y,       306
 
 .equ TOOLDUR,    40          // usos de um machado ou picareta
@@ -390,7 +428,7 @@
 .equ FIREMAX,    43200       // no maximo 12 min
 .equ MAXCHEST,   64          // cada bau: 32 contadores (128 bytes)
 .equ MAXSHELTER, 32
-.equ NRECIPES,   19
+.equ NRECIPES,   28
 
 // interface (coordenadas do espaco de texto 640 x 360)
 .equ BTN_Y,      16
@@ -417,7 +455,9 @@
 .equ CRF_Y,      32
 .equ CRF_W,      188
 .equ CRF_H,      272
-.equ CRF_GX,     (CRF_X + 16) // fabricar: grade de icones 4 x 4
+.equ CRF_GX,     (CRF_X + 9)  // fabricar: grade de icones 5 x 6 (30 x 30, passo 34)
+.equ CSLOT,      30
+.equ CSTEP,      34
 .equ CRF_GY,     (CRF_Y + 20)
 .equ CHS_SLOTX,  (CRF_X + 16) // bau: grade 4 x 5
 .equ CHS_SLOTY,  (CRF_Y + 20)

@@ -340,7 +340,11 @@ au_loop:
     strh    w9, [x20, #AN_CD]
     ldrb    w9, [x22, #AT_DMG]
     scvtf   s2, w9
-    ldr     s3, [x28, #G_HP]
+    ldr     w9, [x28, #(G_INV + 4 * IT_ARMOR)] // armadura: metade
+    cbz     w9, 1f
+    fmov    s3, #0.5
+    fmul    s2, s2, s3
+1:  ldr     s3, [x28, #G_HP]
     fsub    s3, s3, s2
     str     s3, [x28, #G_HP]
     LA      x9, killmsg
@@ -626,6 +630,12 @@ melee_attack:
     ldr     w9, [x28, #G_HAND]          // dano pelo que esta na mao
     LA      x10, handdmg
     ldrb    w1, [x10, x9]
+    cmp     w9, #(IT_AXE + 1)           // machado de ferro: 4
+    b.ne    1f
+    ldr     w10, [x28, #(G_INV + 4 * IT_IAXE)]
+    cbz     w10, 1f
+    mov     w1, #4
+1:
     mov     w0, w19
     bl      animal_hit
     LA      x0, p_hit
@@ -949,7 +959,8 @@ spawntab:
 // dano do golpe pelo que esta na mao (item + 1; 0 = maos vazias)
 handdmg:
     .byte 1, 1, 1, 1, 3, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
-    .byte 1, 1, 1, 1, 1, 1, 1, 1
+    .byte 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 6, 1, 1
+    .byte 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
 
     .p2align 2
 adirtab:

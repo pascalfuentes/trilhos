@@ -223,6 +223,18 @@ gr_loop:
     and     w1, w1, #63
     mov     w2, #O_ROCK
     mov     w3, #5                      // 5 pedras
+    cmp     w25, #E_HILL                // colinas e acima: veios
+    b.lt    gr_place
+    lsr     w9, w21, #24
+    cmp     w9, #34                     // ~13%: ferro
+    b.hs    1f
+    mov     w2, #O_IRONV
+    mov     w3, #4
+    b       gr_place
+1:  cmp     w9, #60                     // ~10%: carvao
+    b.hs    gr_place
+    mov     w2, #O_COALV
+    mov     w3, #5
     b       gr_place
 gr_bush:
     cmp     w25, #E_HILL
@@ -406,6 +418,7 @@ sr_found:
     bl      follow_camera
     LA      x0, m_start
     bl      set_msg
+    bl      iron_reset                  // lampioes, fornalha
     bl      people_reset                // 3 familias e o bau da vila
     ldp     d10, d11, [sp, #48]
     ldp     d8, d9, [sp, #32]
@@ -606,10 +619,19 @@ harvest:
     bl      popup
     b       6f
     // qual item: pilha largada, pedra, arbusto ou arvore
-0:  sub     w9, w20, #O_LOGS
+0:  mov     w9, #IT_ORE               // veios
+    cmp     w20, #O_IRONV
+    b.eq    1f
+    mov     w9, #IT_COAL
+    cmp     w20, #O_COALV
+    b.eq    1f
+    sub     w9, w20, #O_LOGS
     cmp     w20, #O_PILE2               // pilhas dos itens novos
     b.lo    48f
     sub     w9, w20, #(O_PILE2 - IT_SEED)
+    cmp     w20, #O_PILE3
+    b.lo    48f
+    sub     w9, w20, #(O_PILE3 - IT_ORE)
 48: cmp     w20, #O_LOGS
     b.hs    1f
     mov     w9, #1
@@ -636,8 +658,12 @@ harvest:
     bl      tool_use
     b       3f
 2:  cmp     w20, #O_ROCK
-    b.ne    3f
-    mov     w0, #SK_MINE
+    b.eq    21f
+    cmp     w20, #O_IRONV
+    b.lo    3f
+    cmp     w20, #O_COALV
+    b.hi    3f
+21: mov     w0, #SK_MINE
     FC      s0, F_XPMINE
     bl      skill_train
     mov     w0, #IT_PICK                // a picareta gasta
@@ -688,8 +714,14 @@ inv_add:
     b.ne    2f
     str     w12, [x28, #G_PICKDUR]
 2:  cmp     w0, #IT_HOE
-    b.ne    9f
+    b.ne    3f
     str     w12, [x28, #G_HOEDUR]
+3:  sub     w13, w0, #IT_IAXE           // de ferro: 120 usos
+    cmp     w13, #2
+    b.hi    9f
+    mov     w12, #IRONDUR
+    add     x11, x28, #G_IRONDUR
+    str     w12, [x11, x13, lsl #2]
 9:  ret
 
 // tool_use(w0 = IT_AXE ou IT_PICK): gasta 1 uso; quando acaba, quebra
@@ -703,7 +735,29 @@ tool_use:
     cmp     w9, w10
     b.ne    9f
     add     x9, x28, #G_INV
-    ldr     w10, [x9, x0, lsl #2]
+    LA      x12, irontool               // tem a de ferro? gasta ela
+    ldrb    w12, [x12, x0]
+    cbz     w12, 0f
+    ldr     w10, [x9, x12, lsl #2]
+    cbz     w10, 0f
+    mov     w0, w12
+    sub     w12, w12, #IT_IAXE
+    add     x11, x28, #G_IRONDUR
+    add     x11, x11, x12, lsl #2
+    LA      x13, m_ironbroke
+    ldr     w12, [x11]
+    subs    w12, w12, #1
+    b.gt    2f
+    sub     w10, w10, #1
+    str     w10, [x9, x0, lsl #2]
+    mov     w12, #IRONDUR
+    cmp     w10, #0
+    csel    w12, w12, wzr, ne
+    str     w12, [x11]
+    mov     x0, x13
+    bl      set_msg
+    b       9f
+0:  ldr     w10, [x9, x0, lsl #2]
     cbz     w10, 9f
     add     x11, x28, #G_AXEDUR
     LA      x13, m_axebroke
@@ -765,8 +819,13 @@ surv_update:
     cbz     w9, 198f                    // largou, guardou)? maos vazias
     sub     w9, w9, #1
     add     x10, x28, #G_INV
-    ldr     w10, [x10, x9, lsl #2]
-    cbnz    w10, 198f
+    ldr     w11, [x10, x9, lsl #2]
+    LA      x12, irontool
+    ldrb    w12, [x12, x9]
+    cbz     w12, 1971f
+    ldr     w12, [x10, x12, lsl #2]
+    add     w11, w11, w12
+1971: cbnz  w11, 198f
     str     wzr, [x28, #G_HAND]
 198: ldr    w9, [x28, #(G_INV + 4 * IT_TORCH)] // sem tochas: outra mao vazia
     cbnz    w9, 199f
@@ -1051,13 +1110,30 @@ su_after_move:
     cmp     w20, #O_BUSHE
     b.eq    su_nomine
     cmp     w20, #O_SAPLING             // muda, arvore jovem, casas: nao
-    b.hs    su_nomine
+    b.lo    1491f
+    cmp     w20, #O_HOUSE
+    b.ls    su_nomine
+    cmp     w20, #O_FURNACE             // fornalha e lampiao: nao
+    b.lo    1491f
+    cmp     w20, #O_LAMP
+    b.ls    su_nomine
+1491:
     cmp     w20, #O_CROP                // trigo verde nao sai: espere
     b.ne    14f
     ldrb    w10, [x9, #7]
     cmp     w10, #CROPRIPE
     b.lo    su_nomine
-14:
+14: cmp     w20, #O_IRONV               // veio: so com a picareta na mao
+    b.lo    1492f
+    cmp     w20, #O_COALV
+    b.hi    1492f
+    ldr     w9, [x28, #G_HAND]
+    cmp     w9, #(IT_PICK + 1)
+    b.eq    1492f
+    LA      x0, m_needpick
+    bl      set_msg
+    b       su_nomine
+1492:
     mov     w0, w19
     bl      obj_dist2
     FC      s1, F_REACH2
@@ -1084,8 +1160,12 @@ su_after_move:
     ldr     s1, [x28, #G_SKCHOP]
     b       122f
 121: cmp    w20, #O_ROCK
-    b.ne    122f
-    ldr     s1, [x28, #G_SKMINE]
+    b.eq    1211f
+    cmp     w20, #O_IRONV
+    b.lo    122f
+    cmp     w20, #O_COALV
+    b.hi    122f
+1211: ldr   s1, [x28, #G_SKMINE]
 122: FC     s2, F_SK5
     fmul    s1, s1, s2
     fmov    s2, #1.0
@@ -1100,9 +1180,20 @@ su_after_move:
     cmp     w9, #(IT_AXE + 1)
     b       124f
 123: cmp    w20, #O_ROCK
-    b.ne    125f
-    cmp     w9, #(IT_PICK + 1)
+    b.eq    1231f
+    cmp     w20, #O_IRONV
+    b.lo    125f
+    cmp     w20, #O_COALV
+    b.hi    125f
+1231: cmp   w9, #(IT_PICK + 1)
 124: b.ne   125f
+    lsr     w10, w10, #1
+    sub     w9, w9, #1                  // de ferro: metade de novo
+    LA      x11, irontool
+    ldrb    w9, [x11, x9]
+    add     x11, x28, #G_INV
+    ldr     w9, [x11, x9, lsl #2]
+    cbz     w9, 125f
     lsr     w10, w10, #1
 125: str    w10, [x28, #G_MINENEED]
     ldr     w9, [x28, #G_MINEPROG]
@@ -1258,6 +1349,7 @@ su_food:
     bl      animals_update
     bl      arrows_update
     bl      people_update               // a vila (pessoas.S)
+    bl      iron_update                 // perto de uma fornalha?
     bl      fence_drag                  // fileira de cercas seguindo o mouse
     bl      fish_update                 // boia, mordida
     bl      crop_update                 // a plantacao cresce
@@ -1662,7 +1754,12 @@ equip:
     b       popup
 1:  add     x9, x28, #G_INV
     ldr     w11, [x9, x0, lsl #2]
-    cbnz    w11, 2f
+    LA      x12, irontool
+    ldrb    w12, [x12, x0]
+    cbz     w12, 11f
+    ldr     w12, [x9, x12, lsl #2]
+    add     w11, w11, w12
+11: cbnz    w11, 2f
     LA      x9, nohave                  // "Voce nao tem um arco"
     ldr     x0, [x9, x0, lsl #3]
     b       set_msg
@@ -1715,7 +1812,12 @@ can_craft:
     mov     w0, #0
     ldrb    w10, [x9, #2]
     cbz     w10, 1f
+    cmp     w10, #2                     // 2: perto da fornalha
+    b.eq    0f
     ldr     w10, [x28, #G_NEARFIRE]
+    cbz     w10, 9f
+    b       1f
+0:  ldr     w10, [x28, #G_NEARFURN]
     cbz     w10, 9f
 1:  add     x11, x28, #G_INV
     mov     x12, #0
@@ -1742,9 +1844,17 @@ craft:
     stp     x21, x22, [sp, #32]
     LA      x19, recipes
     add     x19, x19, x0, lsl #4
-    ldrb    w9, [x19, #2]               // precisa de fogo?
+    ldrb    w9, [x19, #2]               // precisa de fogo (ou fornalha)?
     cbz     w9, 1f
-    ldr     w9, [x28, #G_NEARFIRE]
+    cmp     w9, #2
+    b.ne    0f
+    ldr     w9, [x28, #G_NEARFURN]
+    cbnz    w9, 1f
+    LA      x0, m_needfurn
+    bl      set_msg
+    mov     w0, #0
+    b       9f
+0:  ldr     w9, [x28, #G_NEARFIRE]
     cbnz    w9, 1f
     LA      x0, m_needfire
     bl      set_msg
@@ -1858,6 +1968,10 @@ cost_str:
     ldrb    w9, [x19, #2]
     cbz     w9, 4f
     LA      x1, s_plusfire
+    cmp     w9, #2
+    b.ne    41f
+    LA      x1, s_plusfurn
+41:
     bl      strcat_cur
 4:  ldp     x21, x22, [sp, #32]
     ldp     x19, x20, [sp, #16]
@@ -1961,7 +2075,7 @@ place_try:
 31: mov     w11, #1
     strb    w11, [x9, x10]
     LA      x11, chests
-    add     x11, x11, x10, lsl #7
+    add     x11, x11, x10, lsl #CHESTSHIFT
     stp     xzr, xzr, [x11]
     stp     xzr, xzr, [x11, #16]
     stp     xzr, xzr, [x11, #32]
@@ -1970,6 +2084,14 @@ place_try:
     stp     xzr, xzr, [x11, #80]
     stp     xzr, xzr, [x11, #96]
     stp     xzr, xzr, [x11, #112]
+    stp     xzr, xzr, [x11, #128]
+    stp     xzr, xzr, [x11, #144]
+    stp     xzr, xzr, [x11, #160]
+    stp     xzr, xzr, [x11, #176]
+    stp     xzr, xzr, [x11, #192]
+    stp     xzr, xzr, [x11, #208]
+    stp     xzr, xzr, [x11, #224]
+    stp     xzr, xzr, [x11, #240]
     mov     w0, w21
     mov     w1, w22
     mov     w2, w19
@@ -1978,7 +2100,28 @@ place_try:
     bl      add_obj
     LA      x21, m_chestok
     b       7f
-4:  mov     w0, w21                     // abrigo
+4:  cmp     w20, #IT_FURNACE            // fornalha e lampiao: 1 quadrado
+    b.eq    41f
+    cmp     w20, #IT_LAMP
+    b.ne    44f
+41: mov     w0, w21
+    mov     w1, w22
+    mov     w2, w19
+    mov     w3, #O_FURNACE
+    LA      x21, m_furnaceok
+    cmp     w20, #IT_LAMP
+    b.ne    42f
+    mov     w3, #O_LAMP
+    LA      x21, m_lampok
+42: mov     w4, #0
+    bl      add_obj
+    cmp     w20, #IT_LAMP
+    b.ne    7f
+    ldr     w0, [x28, #G_NOBJ]
+    sub     w0, w0, #1
+    bl      lamp_add
+    b       7f
+44: mov     w0, w21                     // abrigo
     mov     w1, w22
     mov     w2, w19
     mov     w3, #O_SHELTER
@@ -2125,7 +2268,7 @@ sleep_check:
 // chest_count(w0 = bau) -> w0 = itens dentro   folha
 chest_count:
     LA      x9, chests
-    add     x9, x9, x0, lsl #7
+    add     x9, x9, x0, lsl #CHESTSHIFT
     mov     w0, #0
     mov     x10, #0
 1:  ldr     w11, [x9, x10, lsl #2]
@@ -2144,7 +2287,7 @@ chest_move:
     cbz     w9, 9f
     sub     w9, w9, #1
     LA      x19, chests
-    add     x19, x19, x9, lsl #7
+    add     x19, x19, x9, lsl #CHESTSHIFT
     mov     w20, w0
     cbnz    w1, 1f
     add     x9, x28, #G_INV
@@ -2297,7 +2440,7 @@ surv_mouse:
     ldr     w9, [x28, #G_CHESTOPEN]
     sub     w9, w9, #1
     LA      x0, chests
-    add     x0, x0, x9, lsl #7
+    add     x0, x0, x9, lsl #CHESTSHIFT
     mov     w1, w21
     bl      slot_item
     tbnz    w0, #31, sm_ret
@@ -2625,6 +2768,7 @@ surv_draw:
 // add_light(w0 cx, w1 cy, w2 raio x, w3 intensidade): elipse de luz
 // no buffer de luz (o raio vertical e a metade, como no chao isometrico)
 // folha: usa x0-x15
+    .globl add_light
 add_light:
     cmp     w2, #2
     b.lt    9f
@@ -2726,6 +2870,9 @@ surv_light:
     bl      add_light
     add     w19, w19, #1
     b       3b
+    // lampioes
+4:  mov     w0, w21
+    bl      lamps_light
     // lanterna fraca do personagem (com tocha: bem mais forte)
 4:  ldr     s0, [x28, #G_PU]
     ldr     s1, [x28, #G_PV]
@@ -2974,12 +3121,18 @@ build_treegrid:
 // cast_vision(s0 = u, s1 = v, s2 = raio): 360 raios a partir do ponto.
 // Cada arvore no caminho tapa um pouco; o raio para quando fica opaco.
 // Marca a visao agora (vis) e a memoria (seen). folha: x0-x15, s0-s3, s16-s31
+    .globl cast_vision, cast_vision_n
 cast_vision:
+    FC      s3, F_COS1
+    FC      s4, F_SIN1
+    mov     w0, #360
+// cast_vision_n: igual, com w0 raios girando (s3 = cos, s4 = sin) do passo
+cast_vision_n:
     fmov    s16, s0
     fmov    s17, s1
     fmov    s18, s2
-    FC      s19, F_COS1
-    FC      s20, F_SIN1
+    fmov    s19, s3
+    fmov    s20, s4
     fmov    s21, #1.0                   // direcao do raio
     fmov    s22, wzr
     FC      s23, F_RAYSTEP
@@ -2995,7 +3148,7 @@ cast_vision:
     LA      x10, vis
     LA      x11, seen
     LA      x12, treecnt
-    mov     w13, #360
+    mov     w13, w0
 cv_ray:
     fmov    s28, wzr                    // distancia
     fmov    s29, #1.0                   // transparencia
@@ -3096,7 +3249,9 @@ update_vision:
     bl      cast_vision
     add     w19, w19, #1
     b       2b
-3:  ldp     x19, x20, [sp, #16]
+3:  bl      lamps_vision                // lampioes
+    bl      people_vision               // cada morador enxerga em volta
+    ldp     x19, x20, [sp, #16]
     ldp     x29, x30, [sp], #32
     ret
 
@@ -3876,6 +4031,30 @@ mouse_ui:
     asr     w1, w1, #1
     ret
 
+// cgrid_hit(w9 x, w10 y relativos, w4 colunas, w5 linhas) -> w1 =
+// icone de fabricar sob o mouse (-1)   folha
+cgrid_hit:
+    mov     w1, #-1
+    cmp     w9, #0
+    b.lt    9f
+    cmp     w10, #0
+    b.lt    9f
+    mov     w11, #CSTEP
+    udiv    w12, w9, w11
+    msub    w13, w12, w11, w9
+    cmp     w13, #CSLOT
+    b.hs    9f
+    cmp     w12, w4
+    b.hs    9f
+    udiv    w14, w10, w11
+    msub    w13, w14, w11, w10
+    cmp     w13, #CSLOT
+    b.hs    9f
+    cmp     w14, w5
+    b.hs    9f
+    madd    w1, w14, w4, w12
+9:  ret
+
 // ui_hit(w0 = x, w1 = y) -> w0: 0 mundo, 1 botao mochila, 2 botao
 // personagem, 5 botao fabricar, 3 janela da mochila (w1 = quadrado),
 // 4 janela do personagem, 6 janela de fabricar (w1 = receita),
@@ -3940,11 +4119,11 @@ ui_hit:
     b       9f
 4:  ldr     w9, [x28, #G_CRAFTOPEN]
     cbz     w9, 5f
-    sub     w9, w2, #CRF_GX             // fabricar: icones 4 x 5
+    sub     w9, w2, #CRF_GX             // fabricar: icones 5 x 6
     sub     w10, w3, #CRF_GY
-    mov     w4, #4
-    mov     w5, #5
-    bl      grid_hit
+    mov     w4, #5
+    mov     w5, #6
+    bl      cgrid_hit
     mov     w0, #6
     cmp     w1, #NRECIPES
     b.lt    9f
@@ -4055,6 +4234,9 @@ drop_item:
     add     w9, w19, #(O_PILE2 - IT_SEED)
     cmp     w19, #IT_SEED
     csel    w24, w9, w24, hs
+    add     w9, w19, #(O_PILE3 - IT_ORE)
+    cmp     w19, #IT_ORE
+    csel    w24, w9, w24, hs
     ldr     w9, [x28, #G_NOBJ]
     LA      x10, objs
     mov     w11, #0
@@ -4135,6 +4317,9 @@ pile_at:
     add     w24, w19, #O_LOGS
     add     w9, w19, #(O_PILE2 - IT_SEED)
     cmp     w19, #IT_SEED
+    csel    w24, w9, w24, hs
+    add     w9, w19, #(O_PILE3 - IT_ORE)
+    cmp     w19, #IT_ORE
     csel    w24, w9, w24, hs
     ldr     w9, [x28, #G_NOBJ]
     LA      x10, objs
@@ -4523,7 +4708,14 @@ draw_grid:
     ldr     w10, [x28, #G_HOEDUR]
     cmp     w9, #IT_HOE
     b.eq    4f
-    cmp     w9, #IT_TORCH
+    sub     w12, w9, #IT_IAXE           // de ferro
+    cmp     w12, #2
+    b.hi    3f
+    add     x10, x28, #G_IRONDUR
+    ldr     w10, [x10, x12, lsl #2]
+    mov     w11, #IRONDUR
+    b       4f
+3:  cmp     w9, #IT_TORCH
     b.ne    8f
     ldr     w10, [x28, #G_TORCHT]
     cbz     w10, 8f
@@ -4724,7 +4916,7 @@ draw_chest:
     ldr     w9, [x28, #G_CHESTOPEN]
     sub     w9, w9, #1
     LA      x19, chests
-    add     x19, x19, x9, lsl #7
+    add     x19, x19, x9, lsl #CHESTSHIFT
     bl      mouse_ui
     bl      ui_hit
     mov     w20, #-1
@@ -4770,13 +4962,14 @@ draw_craft:
     mov     w19, #0
 2:  cmp     w19, #NRECIPES
     b.ge    7f
-    and     w9, w19, #3
-    mov     w10, #SLOTSTEP
+    mov     w9, #5
+    udiv    w12, w19, w9
+    msub    w9, w12, w9, w19
+    mov     w10, #CSTEP
     mov     w11, #CRF_GX
     madd    w20, w9, w10, w11           // x
-    lsr     w9, w19, #2
     mov     w11, #CRF_GY
-    madd    w21, w9, w10, w11           // y
+    madd    w21, w12, w10, w11          // y
     mov     w0, w19
     bl      can_craft
     mov     w22, w0
@@ -4787,16 +4980,16 @@ draw_craft:
 3:  RGBA    28, 30, 38, 235
 4:  mov     w0, w20
     mov     w1, w21
-    mov     w2, #SLOT
-    mov     w3, #SLOT
+    mov     w2, #CSLOT
+    mov     w3, #CSLOT
     bl      fillrect
     RGBA    85, 90, 108, 255            // borda: verde se da para fazer
     cbz     w22, 41f
     RGBA    110, 190, 100, 255
 41: mov     w0, w20
     mov     w1, w21
-    mov     w2, #SLOT
-    mov     w3, #SLOT
+    mov     w2, #CSLOT
+    mov     w3, #CSLOT
     bl      ui_frame
     LA      x24, recipes
     add     x24, x24, x19, lsl #4
@@ -4807,7 +5000,7 @@ draw_craft:
     add     x0, x0, x9, lsl #7
     mov     w1, w21
     mov     w2, w20
-    mov     w3, #SLOT
+    mov     w3, #CSLOT
     bl      icon_fit
     ldrb    w1, [x24, #1]               // fabrica mais de 1: mostra quantos
     cmp     w1, #1
@@ -4815,23 +5008,23 @@ draw_craft:
     LA      x0, lbuf
     bl      numcat
     RGBA    255, 255, 255, 255
-    add     w0, w20, #(SLOT - 10)
-    add     w1, w21, #(SLOT - 10)
+    add     w0, w20, #(CSLOT - 10)
+    add     w1, w21, #(CSLOT - 10)
     LA      x2, lbuf
     bl      text
 5:  cbnz    w22, 6f                     // falta material: escurece
     RGBA    10, 10, 14, 150
     add     w0, w20, #1
     add     w1, w21, #1
-    mov     w2, #(SLOT - 2)
-    mov     w3, #(SLOT - 2)
+    mov     w2, #(CSLOT - 2)
+    mov     w3, #(CSLOT - 2)
     bl      fillrect
 6:  add     w19, w19, #1
     b       2b
     // ---- detalhes da receita sob o mouse ----
 7:  RGBA    85, 90, 108, 255
     mov     w0, #(CRF_X + 6)
-    mov     w1, #(CRF_Y + 222)
+    mov     w1, #(CRF_Y + 226)
     mov     w2, #(CRF_W - 12)
     mov     w3, #1
     bl      fillrect
@@ -4846,7 +5039,7 @@ draw_craft:
     LA      x2, itemnames
     add     x2, x2, x9, lsl #4
     mov     w0, #(CRF_X + 8)
-    mov     w1, #(CRF_Y + 225)
+    mov     w1, #(CRF_Y + 229)
     bl      text
     LA      x0, lbuf                    // custo
     mov     w1, w23
@@ -4855,24 +5048,24 @@ draw_craft:
     cbnz    w22, 71f
     RGBA    230, 110, 90, 255
 71: mov     w0, #(CRF_X + 8)
-    mov     w1, #(CRF_Y + 236)
+    mov     w1, #(CRF_Y + 239)
     LA      x2, lbuf
     bl      text
     RGBA    205, 205, 215, 255          // o que faz
     LA      x24, recdesc
     add     x24, x24, x23, lsl #6
     mov     w0, #(CRF_X + 8)
-    mov     w1, #(CRF_Y + 246)
+    mov     w1, #(CRF_Y + 249)
     mov     x2, x24
     bl      text
     mov     w0, #(CRF_X + 8)
-    mov     w1, #(CRF_Y + 256)
+    mov     w1, #(CRF_Y + 259)
     add     x2, x24, #32
     bl      text
     b       9f
 8:  RGBA    160, 160, 170, 255
     mov     w0, #(CRF_X + 8)
-    mov     w1, #(CRF_Y + 242)
+    mov     w1, #(CRF_Y + 245)
     LA      x2, s_crafthint
     bl      text
 9:  ldp     x23, x24, [sp, #48]
@@ -4904,7 +5097,13 @@ draw_hotbar:
     LA      x9, hotbar
     ldrb    w21, [x9, x19]              // item
     add     x9, x28, #G_INV
-    ldr     w22, [x9, x21, lsl #2]      // quantos tem
+    ldr     w22, [x9, x21, lsl #2]      // quantos tem (com a de ferro)
+    LA      x10, irontool
+    ldrb    w10, [x10, x21]
+    cbz     w10, 10f
+    ldr     w10, [x9, x10, lsl #2]
+    add     w22, w22, w10
+10:
     ldr     w24, [x28, #G_HAND]
     sub     w24, w24, #1
     cmp     w24, w21                    // 1 = na mao
@@ -4937,8 +5136,16 @@ draw_hotbar:
     mov     w2, #(SLOT - 2)
     mov     w3, #(SLOT - 2)
     bl      ui_frame
-42: LA      x9, itemicon
-    ldrb    w9, [x9, x21]
+42: mov     w9, w21                     // de ferro: o icone dela
+    LA      x10, irontool
+    ldrb    w10, [x10, x21]
+    cbz     w10, 421f
+    add     x11, x28, #G_INV
+    ldr     w11, [x11, x10, lsl #2]
+    cmp     w11, #0
+    csel    w9, w10, w9, ne
+421: LA     x10, itemicon
+    ldrb    w9, [x10, x9]
     LA      x0, sprites
     add     x0, x0, x9, lsl #7
     mov     w1, #HB_Y
@@ -5232,6 +5439,7 @@ nearest_obj:
     ret
 
 // mine_test(w0 = tipo a, w1 = tipo b): vai ate o objeto e coleta tudo
+    .globl mine_test
 mine_test:
     stp     x29, x30, [sp, #-48]!
     mov     x29, sp
@@ -5669,6 +5877,7 @@ ts_free:
 
 // ct_click(s0 = u, s1 = v): clique esquerdo nesse ponto do mapa (teste);
 // com uma construcao na mao, no quadrado livre mais perto
+    .globl ct_click
 ct_click:
     stp     x29, x30, [sp, #-16]!
     mov     x29, sp
@@ -5695,6 +5904,7 @@ ct_click:
     ret
 
 // ct_count(w0 = tipo) -> w0 = quantos objetos desse tipo existem
+    .globl ct_count
 ct_count:
     ldr     w9, [x28, #G_NOBJ]
     LA      x10, objs
@@ -5826,7 +6036,7 @@ surv_selftest_craft:
     ldr     w9, [x28, #G_CHESTOPEN]
     sub     w9, w9, #1
     LA      x10, chests
-    add     x10, x10, x9, lsl #7
+    add     x10, x10, x9, lsl #CHESTSHIFT
     ldr     w20, [x10]                  // madeira no bau
     str     wzr, [x28, #G_CHESTOPEN]
 1:  bl      surv_update
@@ -7057,6 +7267,7 @@ sw_ret:
 // =====================================================================
     .data
     .p2align 2
+    .globl fconsts
 fconsts:
     .float 64.0             // F_64
     .float 0.015625         // F_INV64
@@ -7145,6 +7356,7 @@ minetime:
     .byte 45, 45, 70, 25, 0, 0, 0, 0, 0, 0, 0, 0, 6, 6, 6, 6
     .byte 6, 6, 6, 6, 40, 40, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6
     .byte 6, 6, 6, 6, 20, 20, 15, 12, 6, 6, 6, 0, 0, 0, 0
+    .byte 90, 80, 0, 0, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6
 
 // sprite de cada tipo de objeto (as pilhas usam o icone do item)
     .globl objsprite
@@ -7153,16 +7365,21 @@ objsprite:
     .byte 16, 17, 18, 19, 20, 21, 21, 23, 24, 25, 26, 27, 28, 29, 48, 49
     .byte 42, 43, 44, SPR_HOE, 45, 49, SPR_WILD, SPR_CROP, SPR_SEED, SPR_WHEAT, SPR_BREAD
     .byte SPR_SAPLING, SPR_YTREE, SPR_HUT, SPR_HOUSE
+    .byte SPR_IRONV, SPR_COALV, SPR_FURNACE, SPR_LAMP
+    .byte SPR_ORE, SPR_COAL, SPR_IRON, SPR_FURNACE, SPR_IAXE, SPR_IPICK, SPR_IHOE, SPR_SWORD
+    .byte SPR_ARMOR, SPR_LAMP
 
 // peso de cada item (decimos de kg)
     .p2align 1
 itemweight:
     .hword 15, 20, 1, 20, 25, 5, 3, 10, 100, 120, 200, 15, 1, 5, 4, 10, 30, 20, 10, 30, 10, 5, 4
     .hword 15, 1, 3, 4
+    .hword 30, 10, 20, 250, 25, 30, 20, 25, 80, 40
 
 // construcoes (vao para o mapa e nao se largam)
 itembuild:
     .byte 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0
+    .byte 0, 0, 0, 1, 0, 0, 0, 0, 0, 1
 
 // texto que sobe ao coletar cada item
     .p2align 3
@@ -7171,17 +7388,20 @@ popitem:
     .quad p_wood, p_wood, p_wood, p_bow, p_arrow, p_meat, p_cmeat, p_hide
     .quad p_coat, p_lbag, p_wood, p_wood, p_rod, p_fish, p_cfish, p_hoe
     .quad p_seed, p_wheat, p_bread
+    .quad p_ore, p_coal, p_iron, p_wood, p_wood, p_wood, p_wood, p_wood, p_wood, p_wood
 
 // sprite de cada item (icone na mochila e na pilha)
 itemicon:
     .byte 12, 13, 14, 15, 16, 17, 18, 19, SPR_FIRE, 20, 21, 23, 24, 25, 26, 27, 28, 29, 48, 49, 42, 43, 44
     .byte SPR_HOE, SPR_SEED, SPR_WHEAT, SPR_BREAD
+    .byte SPR_ORE, SPR_COAL, SPR_IRON, SPR_FURNACE, SPR_IAXE, SPR_IPICK, SPR_IHOE, SPR_SWORD
+    .byte SPR_ARMOR, SPR_LAMP
 
-// barra "na mao": teclas 1-7
+// barra "na mao": teclas 1-8
 hotbar:
-    .byte IT_AXE, IT_PICK, IT_BOW, IT_TORCH, IT_ROD, IT_HOE, IT_SEED
+    .byte IT_AXE, IT_PICK, IT_BOW, IT_TORCH, IT_ROD, IT_HOE, IT_SEED, IT_SWORD
 hbkeys:
-    .asciz "1", "2", "3", "4", "5", "6", "7"
+    .asciz "1", "2", "3", "4", "5", "6", "7", "8"
 
 // comida: quanto enche (0 = nao se come) e a ordem do E
     .p2align 2
@@ -7189,18 +7409,29 @@ hbkeys:
 eatvalue:
     .float 0, 0, 15, 0, 0, 0, 50, 0, 0, 0, 0, 0, 0, 10, 60, 0, 0, 0, 0, 0, 0, 8, 40
     .float 0, 0, 0, 45
+    .float 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 eatorder:
     .byte IT_CMEAT, IT_BREAD, IT_COOKED, IT_CFISH, IT_BERRY, IT_MEAT, IT_FISH
     .p2align 3
 eatpop:
     .quad 0, 0, p_eat, 0, 0, 0, p_eatc, 0, 0, 0, 0, 0, 0, p_eatraw, p_eatm, 0, 0, 0, 0, 0, 0, p_eatfish, p_eatcf
     .quad 0, 0, 0, p_eatbread
+    .quad 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 handpop:
     .quad 0, 0, 0, p_haxe, p_hpick, 0, 0, 0, 0, 0, 0, p_hbow, 0, 0, 0, 0, 0, 0, 0, 0, p_hrod, 0, 0
     .quad p_hhoe, p_hseed, 0, 0
+    .quad 0, 0, 0, 0, 0, 0, 0, p_hsword, 0, 0
 nohave:
     .quad 0, 0, 0, m_noaxe, m_nopick, 0, 0, 0, 0, 0, 0, m_nobow, 0, 0, 0, 0, 0, 0, 0, 0, m_norod, 0, 0
     .quad m_nohoe, m_noseed, 0, 0
+    .quad 0, 0, 0, 0, 0, 0, 0, m_nosword, 0, 0
+
+// a ferramenta de ferro de cada uma (machado, picareta, enxada)
+    .globl irontool
+irontool:
+    .byte 0, 0, 0, IT_IAXE, IT_IPICK, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    .byte 0, 0, 0, 0, 0, 0, 0, IT_IHOE, 0, 0, 0, 0, 0, 0, 0, 0
+    .byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 
 // receitas (16 bytes): resultado, quantos, precisa de fogo, 0, e ate 4
 // pares (item, quantos)
@@ -7225,6 +7456,15 @@ recipes:
     .byte IT_CFISH, 1, 1, 0, IT_FISH, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
     .byte IT_HOE, 1, 0, 0, IT_WOOD, 2, IT_STONE, 1, 0, 0, 0, 0, 0, 0, 0, 0
     .byte IT_BREAD, 1, 1, 0, IT_WHEAT, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    .byte IT_FURNACE, 1, 0, 0, IT_STONE, 10, IT_WOOD, 4, 0, 0, 0, 0, 0, 0, 0, 0
+    .byte IT_IRON, 1, 2, 0, IT_ORE, 2, IT_COAL, 1, 0, 0, 0, 0, 0, 0, 0, 0
+    .byte IT_COAL, 1, 2, 0, IT_WOOD, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    .byte IT_IAXE, 1, 2, 0, IT_IRON, 3, IT_WOOD, 2, 0, 0, 0, 0, 0, 0, 0, 0
+    .byte IT_IPICK, 1, 2, 0, IT_IRON, 3, IT_WOOD, 2, 0, 0, 0, 0, 0, 0, 0, 0
+    .byte IT_IHOE, 1, 2, 0, IT_IRON, 2, IT_WOOD, 2, 0, 0, 0, 0, 0, 0, 0, 0
+    .byte IT_SWORD, 1, 2, 0, IT_IRON, 3, IT_WOOD, 1, 0, 0, 0, 0, 0, 0, 0, 0
+    .byte IT_ARMOR, 1, 2, 0, IT_IRON, 6, IT_HIDE, 2, 0, 0, 0, 0, 0, 0, 0, 0
+    .byte IT_LAMP, 1, 2, 0, IT_IRON, 1, IT_COAL, 1, IT_WOOD, 2, 0, 0, 0, 0, 0, 0
 
 // o que cada receita faz (2 linhas de 32 bytes)
     .p2align 5
@@ -7305,6 +7545,42 @@ recdesc:
     .p2align 5
     .asciz "Perto de uma fogueira."
     .p2align 5
+    .asciz "Derrete minerio. Perto"
+    .p2align 5
+    .asciz "dela: coisas de ferro."
+    .p2align 5
+    .asciz "2 minerio + 1 carvao."
+    .p2align 5
+    .asciz "Perto da fornalha."
+    .p2align 5
+    .asciz "Carvao de madeira."
+    .p2align 5
+    .asciz "Perto da fornalha."
+    .p2align 5
+    .asciz "4x mais rapido. Dura"
+    .p2align 5
+    .asciz "120 usos. [1]"
+    .p2align 5
+    .asciz "Veios e pedras 4x mais"
+    .p2align 5
+    .asciz "rapido. 120 usos. [2]"
+    .p2align 5
+    .asciz "Ara a terra. Dura 120"
+    .p2align 5
+    .asciz "usos. [6]"
+    .p2align 5
+    .asciz "Golpe forte (6) nos"
+    .p2align 5
+    .asciz "bichos. Na mao: [8]"
+    .p2align 5
+    .asciz "Na mochila: metade do"
+    .p2align 5
+    .asciz "dano das mordidas."
+    .p2align 5
+    .asciz "Luz a noite sem lenha."
+    .p2align 5
+    .asciz "Clique no mapa: monta."
+    .p2align 5
 
 // nomes curtos para o custo (16 bytes)
     .p2align 4
@@ -7362,6 +7638,26 @@ costnames:
     .asciz "trigo"
     .p2align 4
     .asciz "pao"
+    .p2align 4
+    .asciz "minerio"
+    .p2align 4
+    .asciz "carvao"
+    .p2align 4
+    .asciz "ferro"
+    .p2align 4
+    .asciz "fornalha"
+    .p2align 4
+    .asciz "machado"
+    .p2align 4
+    .asciz "picareta"
+    .p2align 4
+    .asciz "enxada"
+    .p2align 4
+    .asciz "espada"
+    .p2align 4
+    .asciz "armadura"
+    .p2align 4
+    .asciz "lampiao"
     .p2align 4
 
 // nomes (16 bytes cada)
@@ -7435,6 +7731,26 @@ skillnames:
     .asciz "Pesca"
     .p2align 4
     .asciz "Agricultura"
+    .p2align 4
+    .asciz "Minerio"
+    .p2align 4
+    .asciz "Carvao"
+    .p2align 4
+    .asciz "Ferro"
+    .p2align 4
+    .asciz "Fornalha"
+    .p2align 4
+    .asciz "Machado ferro"
+    .p2align 4
+    .asciz "Picareta ferro"
+    .p2align 4
+    .asciz "Enxada ferro"
+    .p2align 4
+    .asciz "Espada"
+    .p2align 4
+    .asciz "Armadura"
+    .p2align 4
+    .asciz "Lampiao"
     .p2align 4
 
 // cor da barra de cada skill (0x00RRGGBB)
@@ -7538,6 +7854,34 @@ objnames:
     .p2align 5
     .asciz "Casa (cabem 8)"
     .p2align 5
+    .asciz "Veio de ferro (picareta)"
+    .p2align 5
+    .asciz "Veio de carvao (picareta)"
+    .p2align 5
+    .asciz "Fornalha"
+    .p2align 5
+    .asciz "Lampiao"
+    .p2align 5
+    .asciz "Minerio largado"
+    .p2align 5
+    .asciz "Carvao largado"
+    .p2align 5
+    .asciz "Ferro largado"
+    .p2align 5
+    .asciz ""
+    .p2align 5
+    .asciz "Machado de ferro"
+    .p2align 5
+    .asciz "Picareta de ferro"
+    .p2align 5
+    .asciz "Enxada de ferro"
+    .p2align 5
+    .asciz "Espada largada"
+    .p2align 5
+    .asciz "Armadura largada"
+    .p2align 5
+    .asciz ""
+    .p2align 5
 
 m_start:        .asciz "Colete madeira e pedra. Faca uma fogueira (F) antes da noite!"
 m_dusk:         .asciz "Esta escurecendo... prepare uma fogueira (F)"
@@ -7582,7 +7926,7 @@ s_paren2:       .asciz ")"
 s_far:          .asciz " - longe"
 s_fire:         .asciz "Fogueira: "
 s_firehint:     .asciz " s (botao direito: +lenha)"
-s_hint:         .asciz "WASD/Shift andar  E comer  F fogo  Tab fabricar  I/C/P janelas  Z zonas"
+s_hint:         .asciz "WASD andar  E comer  F fogo  Tab fabricar  I/C/P janelas  Z zonas  F11 tela"
 s_dead1:        .asciz "FIM DE JOGO"
 s_dead2:        .asciz "Voce sobreviveu "
 s_dead3:        .asciz " noite(s)"
@@ -7598,6 +7942,17 @@ p_pickup:       .asciz "Desmontado"
 p_stored:       .asciz "Guardado"
 p_taken:        .asciz "Pegou"
 m_needfire:     .asciz "Precisa estar perto de uma fogueira acesa"
+m_needfurn:     .asciz "Precisa estar perto de uma fornalha"
+m_needpick:     .asciz "Veio de minerio: precisa da picareta na mao (2)"
+m_ironbroke:    .asciz "A ferramenta de ferro quebrou!"
+m_furnaceok:    .asciz "Fornalha pronta: ferro e carvao perto dela"
+m_lampok:       .asciz "Lampiao aceso"
+m_nosword:      .asciz "Voce nao tem uma espada (fabrique com ferro)"
+s_plusfurn:     .asciz " + fornalha"
+p_ore:          .asciz "+1 minerio de ferro"
+p_coal:         .asciz "+1 carvao"
+p_iron:         .asciz "+1 ferro"
+p_hsword:       .asciz "Espada na mao"
 m_place:        .asciz "Clique no mapa para colocar (botao direito cancela)"
 m_nopoint:      .asciz "Aponte para o chao"
 m_toomanychests: .asciz "Baus demais"
@@ -7771,7 +8126,7 @@ GBSS lightbuf, 921600
 GBSS lbuf,     128
 GBSS msgbuf,   64
 GBSS popbuf,   64
-GBSS chests,   8192                     // 64 baus x 32 contadores
+GBSS chests,   16384                    // 64 baus x 48 contadores (256 bytes)
 GBSS chestused, 64
 GBSS shelters, 128                      // 32 abrigos (objeto; -1 = vaga)
 GBSS vis,      262144                   // visao agora (0..255 por celula)

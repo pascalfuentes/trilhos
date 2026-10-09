@@ -278,7 +278,7 @@ ppl_camp:
     bl      ppl_newchest
     tbnz    w0, #31, 9f
     LA      x9, chests                  // comida para os primeiros dias
-    add     x9, x9, x1, lsl #7
+    add     x9, x9, x1, lsl #CHESTSHIFT
     mov     w10, #30
     str     w10, [x9, #(4 * IT_BERRY)]
     mov     w10, #12
@@ -315,7 +315,7 @@ ppl_newchest:
     strb    w11, [x9, x10]
     mov     w20, w10
     LA      x11, chests
-    add     x11, x11, x10, lsl #7
+    add     x11, x11, x10, lsl #CHESTSHIFT
     mov     w12, #8
 3:  stp     xzr, xzr, [x11], #16
     subs    w12, w12, #1
@@ -911,7 +911,9 @@ ppl_decide:
     cmp     w0, #40
     b.lo    80f
     // ---- trabalho da tarefa ----
-31: mov     w0, w21
+31: bl      tool_fetch                  // pega a ferramenta de ferro no bau
+    cbnz    w0, 90f
+    mov     w0, w21
     bl      ppl_findwork
     cbnz    w0, 90f
     ldrb    w22, [x19, #P_CCOUNT]       // nada para fazer: guarda o que tem
@@ -972,13 +974,23 @@ ppl_findwork:
     b       7f
 2:  cmp     w21, #J_STONE
     b.ne    3f
-    mov     w0, #O_ROCK
+    ldrb    w9, [x19, #P_CCOUNT]        // de maos vazias: veios primeiro
+    cbnz    w9, 21f
+    mov     w0, #O_IRONV
+    mov     w1, #O_COALV
+    mov     w2, #Z_STONE
+    mov     w3, #WK_MINE
+    PF      s0, 76
+    bl      ppl_findobj
+    tbz     w0, #31, 22f
+21: mov     w0, #O_ROCK
     mov     w1, #O_ROCK
     mov     w2, #Z_STONE
     mov     w3, #WK_MINE
     PF      s0, 76
     bl      ppl_findobj
     tbnz    w0, #31, 8f
+22:
     mov     w1, #WK_MINE
     bl      ppl_gowork_obj
     b       7f
@@ -987,8 +999,12 @@ ppl_findwork:
     bl      ppl_farmwork
     b       9f
 4:  cmp     w21, #J_BUILD
-    b.ne    8f
+    b.ne    5f
     bl      vila_buildwork              // obras (vila.S)
+    b       9f
+5:  cmp     w21, #J_SMITH
+    b.ne    8f
+    bl      smith_work                  // ferreiro (ferro.S)
     b       9f
 7:  mov     w0, #1
     b       9f
@@ -1331,7 +1347,7 @@ ppl_chestfind:
     cbz     w21, 3f
     ldrb    w11, [x9, #7]
     LA      x12, chests
-    add     x12, x12, x11, lsl #7
+    add     x12, x12, x11, lsl #CHESTSHIFT
     cmp     w21, #2
     b.ne    2f
     ldr     w13, [x12, #(4 * IT_SEED)]
@@ -1383,7 +1399,7 @@ ppl_chestptr:
     b.ne    8f
     ldrb    w10, [x9, #7]
     LA      x0, chests
-    add     x0, x0, x10, lsl #7
+    add     x0, x0, x10, lsl #CHESTSHIFT
     ret
 8:  mov     x0, #0
     ret
@@ -1436,6 +1452,7 @@ ppl_gochest:
     b       ppl_goobj
 
 // ppl_gowork_obj(w0 = objeto, w1 = tipo de trabalho)
+    .globl ppl_gowork_obj
 ppl_gowork_obj:
     str     w0, [x19, #P_TARGET]
     strb    w1, [x19, #P_WKIND]
@@ -1823,9 +1840,17 @@ ppl_arrive:
     bl      ppl_takeseeds
     b       8f
 31: cmp     w9, #NX_PAY                 // obras: paga no bau e vai ao terreno
-    b.ne    4f
+    b.ne    32f
     bl      vila_pay
     b       9f
+32: cmp     w9, #NX_SMITH               // ferreiro: material e fornalha
+    b.ne    33f
+    bl      smith_pay
+    b       9f
+33: cmp     w9, #NX_TOOL                // pega a ferramenta de ferro
+    b.ne    4f
+    bl      tool_take
+    b       8f
 4:  cmp     w9, #NX_SLEEP
     b.ne    5f
     ldr     w0, [x19, #P_TARGET]        // na cabana: some (dentro dela)
@@ -1872,8 +1897,12 @@ ppl_valid:
     mov     w22, w1
     tbnz    w21, #31, 8f
     cmp     w22, #WK_BUILD
-    b.ne    1f
+    b.ne    61f
     bl      vila_valid
+    b       9f
+61: cmp     w22, #WK_SMELT
+    b.ne    1f
+    bl      smith_valid
     b       9f
 1:  cmp     w22, #WK_PLANT
     b.eq    30f
@@ -1894,8 +1923,12 @@ ppl_valid:
 1:  cmp     w22, #WK_MINE
     b.ne    2f
     cmp     w10, #O_ROCK
-    b.ne    8f
-    cbz     w11, 8f
+    b.eq    11f
+    cmp     w10, #O_IRONV
+    b.lo    8f
+    cmp     w10, #O_COALV
+    b.hi    8f
+11: cbz     w11, 8f
     b       7f
 2:  cmp     w22, #WK_HARV
     b.ne    3f
@@ -1951,6 +1984,9 @@ ppl_startwork:
     mov     w11, #100
     mul     w9, w9, w11
     udiv    w9, w9, w10
+    mov     w21, w9
+    bl      tool_bonus                  // ferramenta de ferro: 2x
+    lsr     w9, w21, w0
     strh    w9, [x19, #P_TIMER]
     mov     w9, #ST_WORK
     strb    w9, [x19, #P_STATE]
@@ -1977,7 +2013,11 @@ ppl_workdone:
     mov     w1, w22
     bl      ppl_valid
     cbz     w0, 80f
-    cmp     w22, #WK_BUILD              // obra: mais um passo
+    cmp     w22, #WK_SMELT              // fornalha: barra (ou carvao) pronta
+    b.ne    69f
+    bl      smith_done
+    b       79f
+69: cmp     w22, #WK_BUILD              // obra: mais um passo
     b.ne    10f
     mov     w0, w21
     bl      vila_step
@@ -1996,6 +2036,13 @@ ppl_workdone:
     cmp     w22, #WK_CHOP
     b.eq    11f
     mov     w10, #(IT_STONE + 1)
+    ldrb    w11, [x23, #6]              // veio: minerio ou carvao
+    cmp     w11, #O_IRONV
+    mov     w12, #(IT_ORE + 1)
+    csel    w10, w12, w10, eq
+    cmp     w11, #O_COALV
+    mov     w12, #(IT_COAL + 1)
+    csel    w10, w12, w10, eq
 11: ldrb    w11, [x19, #P_CITEM]
     cmp     w11, w10
     b.eq    12f
@@ -2530,10 +2577,10 @@ person_desc:
     bl      numcat
     LA      x1, s_pct
     bl      strcat_cur
-    LA      x1, s_sleeping
-    ldrb    w9, [x19, #P_STATE]
-    cmp     w9, #ST_SLEEP
-    b.eq    2f
+    LA      x1, s_bar               // o que esta fazendo
+    bl      strcat_cur
+    bl      ppl_doing
+    bl      strcat_cur
     LA      x1, s_hungry
     ldr     s0, [x19, #P_FOOD]
     PF      s1, 112
@@ -2544,6 +2591,33 @@ person_desc:
 9:  ldp     x19, x20, [sp, #16]
     ldp     x29, x30, [sp], #32
     ret
+
+// ppl_doing -> x1 = o que a pessoa x19 esta fazendo agora ("cortando")
+// folha (nao mexe em x0)
+    .globl ppl_doing
+ppl_doing:
+    ldrb    w9, [x19, #P_STATE]
+    LA      x1, d_idle
+    cmp     w9, #ST_SLEEP
+    b.ne    1f
+    LA      x1, d_sleep
+    ret
+1:  cmp     w9, #ST_FLEE
+    b.ne    2f
+    LA      x1, d_flee
+    ret
+2:  cmp     w9, #ST_WORK
+    b.ne    3f
+    ldrb    w10, [x19, #P_WKIND]
+    LA      x11, d_work
+    ldr     x1, [x11, x10, lsl #3]
+    ret
+3:  cmp     w9, #ST_WALK
+    b.ne    9f
+    ldrb    w10, [x19, #P_NEXT]
+    LA      x11, d_walk
+    ldr     x1, [x11, x10, lsl #3]
+9:  ret
 
 // =====================================================================
 //  Comandos: teclas, cliques, zonas
@@ -2852,10 +2926,10 @@ people_ui_hit:
     ldr     w13, [x13]
     cmp     w12, w13
     b.hs    4f
-    cmp     w9, #154
+    cmp     w9, #150
     mov     w14, #0
     b.lo    3f
-    cmp     w9, #244
+    cmp     w9, #232
     mov     w14, #1
     b.lo    3f
     mov     w14, #2
@@ -2960,6 +3034,7 @@ people_ui_click:
     udiv    w11, w9, w10
     msub    w9, w11, w10, w9
     strb    w9, [x19, #P_JOB]
+    strb    wzr, [x19, #P_BFAM]
     ldrb    w10, [x19, #P_STATE]        // larga o que estava fazendo
     cmp     w10, #ST_SLEEP
     b.eq    6f
@@ -3027,7 +3102,7 @@ ppl_bar:
     RGBA    30, 30, 38, 255
     mov     w0, w19
     add     w1, w20, #1
-    mov     w2, #44
+    mov     w2, #20
     mov     w3, #6
     bl      fillrect
     ubfx    w0, w21, #16, #8
@@ -3035,7 +3110,7 @@ ppl_bar:
     and     w2, w21, #255
     mov     w3, #255
     bl      setcolor
-    mov     w9, #44
+    mov     w9, #20
     mul     w2, w22, w9
     mov     w9, #100
     udiv    w2, w2, w9
@@ -3085,23 +3160,27 @@ ppl_drawpanel:
     mov     w1, #(PP_Y + 17)
     LA      x2, s_hname
     bl      text
-    mov     w0, #(PP_X + 122)
+    mov     w0, #(PP_X + 114)
     mov     w1, #(PP_Y + 17)
     LA      x2, s_hage
     bl      text
-    mov     w0, #(PP_X + 160)
+    mov     w0, #(PP_X + 154)
     mov     w1, #(PP_Y + 17)
     LA      x2, s_hjob
     bl      text
-    mov     w0, #(PP_X + 250)
+    mov     w0, #(PP_X + 236)
+    mov     w1, #(PP_Y + 17)
+    LA      x2, s_hnow
+    bl      text
+    mov     w0, #(PP_X + 330)
     mov     w1, #(PP_Y + 17)
     LA      x2, s_hfe
     bl      text
-    mov     w0, #(PP_X + 304)
+    mov     w0, #(PP_X + 354)
     mov     w1, #(PP_Y + 17)
     LA      x2, s_hfood
     bl      text
-    mov     w0, #(PP_X + 358)
+    mov     w0, #(PP_X + 378)
     mov     w1, #(PP_Y + 17)
     LA      x2, s_hhp
     bl      text
@@ -3160,9 +3239,9 @@ ppl_drawpanel:
     LA      x2, pbuf
     bl      text
     RGBA    40, 46, 70, 255             // tarefa (parece um botao)
-    mov     w0, #(PP_X + 156)
+    mov     w0, #(PP_X + 150)
     sub     w1, w24, #2
-    mov     w2, #86
+    mov     w2, #80
     mov     w3, #12
     bl      fillrect
     ldrh    w9, [x19, #P_AGE]
@@ -3175,20 +3254,26 @@ ppl_drawpanel:
     LA      x2, jobnames
     ldrb    w9, [x19, #P_JOB]
     add     x2, x2, x9, lsl #4
-4:  mov     w0, #(PP_X + 160)
+4:  mov     w0, #(PP_X + 154)
     mov     w1, w24
     bl      text
-    mov     w0, #(PP_X + 250)           // fe, fome, vida
+    RGBA    170, 210, 240, 255          // o que esta fazendo agora
+    bl      ppl_doing
+    mov     x2, x1
+    mov     w0, #(PP_X + 236)
+    mov     w1, w24
+    bl      text
+    mov     w0, #(PP_X + 330)           // fe, fome, vida
     mov     w1, w24
     ldr     s0, [x19, #P_FAITH]
     MOVI32  w2, 0xFFD750
     bl      ppl_bar
-    mov     w0, #(PP_X + 304)
+    mov     w0, #(PP_X + 354)
     mov     w1, w24
     ldr     s0, [x19, #P_FOOD]
     MOVI32  w2, 0xEB9628
     bl      ppl_bar
-    mov     w0, #(PP_X + 358)
+    mov     w0, #(PP_X + 378)
     mov     w1, w24
     ldr     s0, [x19, #P_HP]
     MOVI32  w2, 0xD73C32
@@ -4158,13 +4243,13 @@ ring8:
 // tempo de cada tipo de trabalho (quadros, com fe 50)
     .p2align 1
 worktime:
-    .hword 0, 150, 210, 60, 40, 90, 90, 40, 150
+    .hword 0, 150, 210, 60, 40, 90, 90, 40, 150, 300
 
 // o que cada tarefa carrega e quanto cabe
 jobitem:
-    .byte 0, IT_WOOD, IT_STONE, IT_WHEAT, 0
+    .byte 0, IT_WOOD, IT_STONE, IT_WHEAT, 0, IT_IRON
 jobcap:
-    .byte 0, 4, 3, 6, 0
+    .byte 0, 4, 3, 6, 0, 1
 // cor da roupa de cada familia (variante dos sprites: vermelho, azul, laranja)
 famvar:
     .byte 0, 2, 3
@@ -4249,6 +4334,8 @@ jobnames:
     .p2align 4
     .asciz "Obras"
     .p2align 4
+    .asciz "Ferreiro"
+    .p2align 4
 zonenames:
     .asciz ""
     .p2align 4
@@ -4295,8 +4382,32 @@ s_hname:    .asciz "Nome"
 s_hage:     .asciz "Anos"
 s_hjob:     .asciz "Tarefa"
 s_hfe:      .asciz "Fe"
-s_hfood:    .asciz "Fome"
-s_hhp:      .asciz "Vida"
+s_hnow:     .asciz "Agora"
+s_bar:      .asciz " | "
+d_idle:     .asciz "parado"
+d_sleep:    .asciz "dormindo"
+d_flee:     .asciz "fugindo!"
+d_chop:     .asciz "cortando"
+d_mine:     .asciz "quebrando"
+d_harv:     .asciz "colhendo"
+d_plant:    .asciz "plantando"
+d_till:     .asciz "arando"
+d_sapl:     .asciz "pondo muda"
+d_fruit:    .asciz "pega fruta"
+d_build:    .asciz "construindo"
+d_smelt:    .asciz "na fornalha"
+d_walk0:    .asciz "passeando"
+d_walk1:    .asciz "a caminho"
+d_walk2:    .asciz "vai guardar"
+d_walk3:    .asciz "vai comer"
+d_walk4:    .asciz "vai ao bau"
+d_walk5:    .asciz "vai dormir"
+d_walk6:    .asciz "ordem"
+    .p2align 3
+d_work:     .quad d_idle, d_chop, d_mine, d_harv, d_plant, d_till, d_sapl, d_fruit, d_build, d_smelt
+d_walk:     .quad d_walk0, d_walk1, d_walk2, d_walk3, d_walk4, d_walk5, d_walk6, d_walk4, d_walk4, d_walk4
+s_hfood:    .asciz "Fo"
+s_hhp:      .asciz "Vi"
 s_pfoot:    .asciz "clique na tarefa"
 s_tfoot:    .asciz "cinza: ja se foi"
 s_htree:    .asciz "Arvore genealogica (filho leva o sobrenome do pai)"

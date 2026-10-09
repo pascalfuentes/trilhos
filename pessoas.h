@@ -46,7 +46,8 @@
 .equ P_THINK,  54               // u16: espera para pensar de novo
 .equ P_SKIP,   56               // alvo que nao conseguiu alcancar (pula)
 .equ P_DET,    60               // u16: quadros desviando
-.equ P_BPROJ,  62               // obras: qual (B_*)
+.equ P_BPROJ,  62               // obras: qual (B_*); ferreiro: 1 barra, 2 carvao
+.equ P_TOOL,   63               // ferramenta de ferro que carrega (item + 1)
 
 // parentesco (8 bytes por pessoa, vetor kin; fica depois que morre)
 .equ K_FATHER, 0                // pai (255 = nao se sabe)
@@ -89,6 +90,8 @@
 .equ NX_SLEEP,   5
 .equ NX_ORDER,   6
 .equ NX_PAY,     7              // obras: pega o material no bau
+.equ NX_SMITH,   8              // ferreiro: pega minerio e carvao (ou madeira)
+.equ NX_TOOL,    9              // pega a ferramenta de ferro no bau
 
 .equ WK_CHOP,    1
 .equ WK_MINE,    2
@@ -98,6 +101,7 @@
 .equ WK_SAPLING, 6
 .equ WK_FORAGE,  7
 .equ WK_BUILD,   8
+.equ WK_SMELT,   9              // na fornalha
 
 .equ CAUSE_FOME,  1
 .equ CAUSE_FRIO,  2

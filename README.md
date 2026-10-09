@@ -23,6 +23,7 @@ Você é uma espécie de profeta que não envelhece, e chega com **3 famílias**
 | 4 | põe ou tira a tocha da outra mão |
 | 5 | põe na mão a vara de pesca |
 | 6 / 7 | põe na mão a enxada / as sementes |
+| 8 | põe na mão a espada |
 | segurar o botão esquerdo com a enxada | ara a grama sob o mouse (passe por várias células) |
 | segurar o botão esquerdo com sementes | planta na terra arada sob o mouse |
 | arrastar com cercas na mão | prévia da fileira na grade (horizontal, vertical ou diagonal); soltar coloca |
@@ -41,6 +42,7 @@ Você é uma espécie de profeta que não envelhece, e chega com **3 famílias**
 | Z | pintar zonas: 1 Floresta, 2 Pedra, 3 Plantação, 4 Moradia, 0 apaga; arraste no mapa (Z ou ESC sai) |
 | clique numa pessoa | seleciona (setinha e nome em cima) |
 | botão direito no mapa (com alguém selecionado) | a pessoa vai até lá |
+| F11 | tela cheia (liga/desliga); a janela também pode ser redimensionada |
 | G | liga/desliga a grade no chão |
 | N | curvas de nível |
 | ESC | sai das zonas, fecha janelas, tira a seleção ou volta ao menu |
@@ -81,6 +83,15 @@ Como no Minecraft e no Factorio, uma grade de ícones mostra tudo o que dá para
 | Peixe assado | 1 peixe, perto de uma fogueira | enche 40 de fome (cru: só 8) |
 | Enxada | 2 madeira, 1 pedra | na mão: ara a terra para plantar; dura 40 usos |
 | Pão | 3 trigo, perto de uma fogueira | enche 45 de fome |
+| Fornalha | 10 pedra, 4 madeira | perto dela (3 células) aparecem as receitas de ferro (construção) |
+| Barra de ferro | 2 minério, 1 carvão, perto da fornalha | o material do ferro |
+| Carvão | 3 madeira, perto da fornalha | carvão de madeira (o mineral sai dos veios) |
+| Machado de ferro | 3 ferro, 2 madeira | o machado (1) fica **4x** mais rápido que sem; dura 120 árvores; golpe 4 |
+| Picareta de ferro | 3 ferro, 2 madeira | pedras e veios 4x mais rápido; dura 120 |
+| Enxada de ferro | 2 ferro, 2 madeira | dura 120 usos |
+| Espada | 3 ferro, 1 madeira | na mão (8): golpe 6 nos bichos |
+| Armadura de ferro | 6 ferro, 2 couro | na mochila: metade do dano das mordidas |
+| Lampião | 1 ferro, 1 carvão, 2 madeira | luz a noite inteira (7 células) e visão em volta, sem lenha (construção) |
 
 - O desgaste das ferramentas e o tempo da tocha acesa aparecem como uma barrinha embaixo do ícone na mochila. Quando o machado ou a picareta quebra, o próximo (se você tiver) entra novo.
 - **Grade:** toda construção fica presa num quadrado da grade (o abrigo ocupa 2 x 2) e só vai num quadrado **livre**: sem nada em cima (árvore, pedra, arbusto, trigo, pilha, baú, fogueira), sem cerca, sem terra arada e fora da água. A grade aparece no chão sozinha quando você está com uma construção, a enxada ou as sementes na mão (mais forte até onde você alcança) e pode ficar sempre ligada com a tecla **G**. O quadrado sob o mouse fica verde (dá), vermelho (não dá) ou laranja (a enxada desfaz a terra).
@@ -159,6 +170,14 @@ Os animais aparecem longe da vista, cada um no seu terreno, e somem quando ficam
 
 ![Pescando](screenshots/pesca.png)
 
+**Ferro**
+
+- Nas **colinas, rocha e neve** algumas pedras são **veios**: de **ferro** (pontos laranja, 4 minérios) ou de **carvão** (pontos pretos, 5 carvões). Só quebram com a **picareta na mão** (2).
+- Monte uma **fornalha** e fique perto dela: **2 minério + 1 carvão = 1 barra de ferro**; sem carvão mineral, **3 madeira = 1 carvão**.
+- Com ferro: ferramentas de ferro (as de pedra continuam valendo; a de ferro é usada primeiro e gasta antes), espada, armadura e lampião (veja as receitas).
+
+![Fornalha e lampião à noite](screenshots/ferro.png)
+
 **Plantação** (como no Minecraft)
 
 - No campo aberto nasce **trigo selvagem** (dourado). Segure o botão esquerdo nele: dá 1 trigo e 1 ou 2 **sementes**.
@@ -195,14 +214,17 @@ Os animais aparecem longe da vista, cada um no seu terreno, e somem quando ficam
 | Tarefa | O que faz na zona |
 |---|---|
 | Floresta | corta as árvores **adultas** (4 madeiras por viagem) e planta uma **muda** no lugar de cada uma que cai; sem árvore adulta, planta mudas no chão vazio (um quadrado sim, outro não). A madeira não acaba |
-| Pedra | quebra as pedras (3 por viagem) |
+| Pedra | quebra as pedras da zona (3 por viagem) e, de mãos vazias, os **veios** de ferro e carvão primeiro |
 | Plantar | colhe o trigo maduro e replanta, planta na terra arada vazia (pega sementes no baú) e ara o resto |
 | Obras | constrói para as famílias: barraco, casa e cerca (veja abaixo) |
+| Ferreiro | na fornalha mais perto: pega 2 minério + 1 carvão no baú e faz uma barra de ferro; sem minério, faz carvão de madeira (até ter 10 no baú) |
 
 - **Árvores crescem por ano:** muda → **jovem** com 1 ano (12 dias) → **adulta** com 2 anos, que dá madeira. Jovem não se corta. No inverno não crescem.
 
 - **Caminhos:** onde se anda muito (pessoas e você) o mato vira **terra batida**, e nela se anda 25-30% mais rápido. Caminho pouco usado volta a ser mato aos poucos.
-- Passe o mouse numa pessoa: nome, idade, tarefa, fé e se está com fome ou dormindo.
+- **Ferramentas de ferro da vila:** ponha machado, picareta ou enxada de ferro num baú: quem trabalha na Floresta, na Pedra ou na Plantação vai lá pegar a sua e trabalha **2x mais rápido**.
+- **Cada morador enxerga em volta** (7 células de dia, 3 de noite): o mapa vai se revelando por onde a vila anda, e você vê o que acontece longe de você.
+- No painel **P**, a coluna **Agora** mostra o que cada um está fazendo (cortando, quebrando, construindo, na fornalha, vai comer, dormindo...). Passe o mouse numa pessoa: nome, idade, tarefa, fé e o que está fazendo.
 - As pessoas da vila passam pelas cercas (abrem o portão); os bichos não.
 
 ![A vila trabalhando, com as zonas pintadas](screenshots/pessoas.png)
@@ -340,6 +362,7 @@ O **abrigo** protege do frio do clima e do granizo.
 | `pesca.S` | vara de pesca: lançar, boia, mordida, fisgar, tipo de peixe pela água |
 | `plantacao.S` | trigo selvagem, enxada, sementes, crescimento (água, clima, estação), colheita e bichos que comem a plantação |
 | `pessoas.S` | as pessoas: idade, fé, fome e sono, tarefas e zonas, painel, ordens, floresta e caminhos de terra batida |
+| `ferro.S` | fornalha, lampiões, ferreiro, ferramentas de ferro da vila e a visão dos moradores |
 | `vila.S` | casas e terrenos, obras (barraco, casa, cerca), casamentos, nascimentos, árvores que crescem por ano e a árvore genealógica |
 | `pessoas.h` | estruturas da pessoa, do parentesco e da casa |
 
@@ -367,12 +390,12 @@ sudo apt install libsdl3-dev   # ou compile o SDL3 a partir do código-fonte
 make run
 ```
 
-`./ermo --shot` roda sem interação: tira screenshots, mede o tempo de cada quadro e faz um teste automático (coleta duas árvores, uma pedra e um arbusto, monta uma fogueira, come e passa a noite; corre, anda carregado, larga e recolhe uma pilha de pedras, vê a skill cair sem treino, confere que a vida só sobe com a fome cheia; fabrica tudo, monta baú e abrigo, gasta o machado, acende a tocha à noite, passa a noite no abrigo e dorme das 22h às 06h; passa 10 s em cada um dos 8 climas (com foto); caça um cervo com o arco, enfrenta um lobo à noite com o machado e vê os animais aparecendo; faz um cercado e pesca; ara e planta 6 células perto da água, colhe o trigo maduro, confere que o verde não sai e que a enxada desfaz a terra (e perde a semente), faz pão, compara o crescimento com e sem água e no inverno, e solta um coelho perto do trigo sem cerca; monta a vila (3 barracos) com zonas de floresta, pedra, plantação e moradia e deixa trabalhar 3 horas (com foto pintando zonas e do painel), confere o baú, a terra arada, o trigo, as mudas, os caminhos e as obras (casa e cerca), manda todos dormir, passa 24 dias (as mudas viram jovens e depois adultas, casamentos e nascimentos), deixa as obras fazerem o barraco do casal novo (foto da vila e da árvore genealógica) e solta um lobo perto de uma pessoa; depois nada num lago e vai para o mar aberto até o tubarão atacar).
+`./ermo --shot` roda sem interação: tira screenshots, mede o tempo de cada quadro e faz um teste automático (coleta duas árvores, uma pedra e um arbusto, monta uma fogueira, come e passa a noite; corre, anda carregado, larga e recolhe uma pilha de pedras, vê a skill cair sem treino, confere que a vida só sobe com a fome cheia; fabrica tudo, monta baú e abrigo, gasta o machado, acende a tocha à noite, passa a noite no abrigo e dorme das 22h às 06h; passa 10 s em cada um dos 8 climas (com foto); caça um cervo com o arco, enfrenta um lobo à noite com o machado e vê os animais aparecendo; faz um cercado e pesca; ara e planta 6 células perto da água, colhe o trigo maduro, confere que o verde não sai e que a enxada desfaz a terra (e perde a semente), faz pão, compara o crescimento com e sem água e no inverno, e solta um coelho perto do trigo sem cerca; monta a vila (3 barracos) com zonas de floresta, pedra, plantação e moradia e deixa trabalhar 3 horas (com foto pintando zonas e do painel), confere o baú, a terra arada, o trigo, as mudas, os caminhos e as obras (casa e cerca), manda todos dormir, passa 24 dias (as mudas viram jovens e depois adultas, casamentos e nascimentos), deixa as obras fazerem o barraco do casal novo (foto da vila e da árvore genealógica) e solta um lobo perto de uma pessoa; tenta quebrar um veio sem picareta, minera ferro e carvão, monta a fornalha, faz 18 barras, carvão de madeira, ferramentas, espada, armadura e um lampião, compara o machado de pedra com o de ferro, deixa um lobo morder com armadura (foto de noite na fornalha) e põe um ferreiro, um veio e um machado de ferro na vila; depois nada num lago e vai para o mar aberto até o tubarão atacar).
 
 ## Próximos passos
 
 - [x] Fabricar: machado, picareta, tocha, baú, abrigo, cesto, frutas assadas
-- [ ] Minérios (ferro, carvão), fornalha e ferramentas melhores
+- [x] Minérios (ferro, carvão), fornalha, ferramentas de ferro, espada, armadura e lampião
 - [x] Animais e caça (arco, flechas, carne, couro)
 - [x] Pesca e plantação (trigo, enxada, sementes, pão)
 - [x] Pessoas: famílias, fé, idade, tarefas e zonas

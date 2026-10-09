@@ -55,7 +55,7 @@ F(main):
     LA      x0, s_wintitle
     mov     w1, #SCRW
     mov     w2, #SCRH
-    mov     x3, #0
+    mov     x3, #0x20                   // SDL_WINDOW_RESIZABLE
     bl      F(SDL_CreateWindow)
     cbz     x0, main_fail
     str     x0, [x28, #G_WIN]
@@ -68,6 +68,12 @@ F(main):
     ldr     x0, [x28, #G_REN]
     mov     w1, #1                      // SDL_BLENDMODE_BLEND
     bl      F(SDL_SetRenderDrawBlendMode)
+    ldr     x0, [x28, #G_REN]           // tela cheia / janela maior: a imagem
+    mov     w1, #SCRW                   // continua 1280 x 720, com faixas
+    mov     w2, #SCRH
+    mov     w3, #2                      // SDL_LOGICAL_PRESENTATION_LETTERBOX
+    mov     w4, #0
+    bl      F(SDL_SetRenderLogicalPresentation)
 
     ldr     x0, [x28, #G_REN]
     MOVI32  w1, 0x16362004              // SDL_PIXELFORMAT_ARGB8888
@@ -397,6 +403,15 @@ shot_mode:
     ldr     x0, [x28, #G_REN]
     bl      F(SDL_RenderPresent)
     str     wzr, [x28, #G_PEOPLEOPEN]
+    mov     w0, #0                      // ferro: voce (foto de noite na fornalha)
+    bl      iron_selftest
+    bl      draw_all
+    LA      x0, s_shot_iron
+    bl      save_bmp
+    ldr     x0, [x28, #G_REN]
+    bl      F(SDL_RenderPresent)
+    mov     w0, #1                      // ferro: a vila
+    bl      iron_selftest
     mov     w0, w19
     bl      set_zoom
     mov     w9, #1                      // o resto do teste sem a vila
@@ -1061,6 +1076,9 @@ he_loop:
     bl      F(SDL_PollEvent)
     tst     w0, #0xff
     b.eq    he_done
+    ldr     x0, [x28, #G_REN]           // mouse: para as coordenadas da imagem
+    mov     x1, x19
+    bl      F(SDL_ConvertEventToRenderCoordinates)
     ldr     w9, [x19]
     cmp     w9, #SDL_EVENT_QUIT
     b.eq    he_quit
@@ -1088,7 +1106,16 @@ he_key:
     ldrb    w9, [x19, #37]              // ignora repeticao
     cbnz    w9, he_loop
     ldr     w20, [x19, #24]             // scancode
-    ldr     w9, [x28, #G_STATE]
+    cmp     w20, #68                    // F11: tela cheia
+    b.ne    1f
+    ldr     w9, [x28, #G_FULL]
+    eor     w9, w9, #1
+    str     w9, [x28, #G_FULL]
+    ldr     x0, [x28, #G_WIN]
+    mov     w1, w9
+    bl      F(SDL_SetWindowFullscreen)
+    b       he_loop
+1:  ldr     w9, [x28, #G_STATE]
     cbnz    w9, he_key_game
     // --- tela de titulo ---
     cmp     w20, #41                    // ESC
@@ -2281,6 +2308,7 @@ palette:
     .word 0xFFCDEBF7, 0xFF6E7C86, 0xFF4A555D, 0xFFB07A48  // 32-35 espuma, tubarao, cervo
     .word 0xFF8C5A30, 0xFFF2F2F2, 0xFFE05030, 0xFF6A6A70  // 36-39 couro, branco, caranguejo, lobo
     .word 0xFFD8B040, 0xFFA8862A, 0xFF9CC04A, 0xFFC8904A  // 40-43 trigo, trigo escuro, broto, pao
+    .word 0xFFD07A3A, 0xFF8A4A2A, 0xFFA0503C, 0xFFFFF0A0  // 44-47 minerio, ferrugem, tijolo, luz
 
 roofc:
     .word 0xFFB5443A, 0xFF8C3029
@@ -2976,6 +3004,128 @@ sprites:
     .byte 0,6,6,6,6,6,6,6,1,1,1,1,6,6,6,6,6,6,6,0
     .byte 0,7,7,7,7,7,7,7,1,1,1,1,7,7,7,7,7,7,7,0
     .p2align 7
+// 75: minerio de ferro
+    .byte 6, 5, 3, 0
+    .byte 0,21,44,21,0,0
+    .byte 21,44,45,21,44,0
+    .byte 21,21,44,45,21,21
+    .byte 0,45,21,21,44,21
+    .byte 0,0,21,21,21,0
+    .p2align 7
+// 76: carvao
+    .byte 6, 5, 3, 0
+    .byte 0,18,18,39,0,0
+    .byte 18,39,18,18,18,0
+    .byte 18,18,18,39,18,18
+    .byte 0,18,39,18,18,18
+    .byte 0,0,18,18,18,0
+    .p2align 7
+// 77: barra de ferro
+    .byte 7, 4, 3, 0
+    .byte 0,0,12,12,12,12,0
+    .byte 0,12,12,12,12,13,0
+    .byte 12,13,13,13,13,14,0
+    .byte 14,14,14,14,14,0,0
+    .p2align 7
+// 78: fornalha (12 x 13; vagas 78 e 79)
+    .byte 12, 13, 6, 0
+    .byte 0,0,0,0,0,0,0,0,22,22,0,0
+    .byte 0,0,0,0,0,0,0,0,22,22,0,0
+    .byte 0,0,20,20,20,20,20,20,22,22,20,0
+    .byte 0,20,20,21,20,20,21,20,20,21,20,20
+    .byte 20,21,21,21,21,21,21,21,21,21,21,20
+    .byte 20,21,22,22,22,22,22,22,22,22,21,20
+    .byte 20,21,22,18,18,18,18,18,18,22,21,20
+    .byte 21,21,22,18,25,24,24,25,18,22,21,21
+    .byte 21,22,22,18,26,25,25,26,18,22,22,21
+    .byte 21,22,22,18,26,26,26,26,18,22,22,21
+    .byte 22,22,22,22,22,22,22,22,22,22,22,22
+    .byte 21,21,21,21,21,21,21,21,21,21,21,21
+    .byte 22,22,22,22,22,22,22,22,22,22,22,22
+    .p2align 7
+// 80: machado de ferro
+    .byte 7, 7, 3, 0
+    .byte 0,0,0,0,33,33,0
+    .byte 0,0,0,33,32,32,33
+    .byte 0,0,0,31,33,32,33
+    .byte 0,0,31,0,0,33,0
+    .byte 0,31,0,0,0,0,0
+    .byte 31,0,0,0,0,0,0
+    .byte 1,0,0,0,0,0,0
+    .p2align 7
+// 81: picareta de ferro
+    .byte 7, 6, 3, 0
+    .byte 0,33,33,33,33,33,0
+    .byte 33,32,0,31,0,32,33
+    .byte 33,0,0,31,0,0,33
+    .byte 0,0,0,31,0,0,0
+    .byte 0,0,0,31,0,0,0
+    .byte 0,0,0,1,0,0,0
+    .p2align 7
+// 82: enxada de ferro
+    .byte 7, 8, 3, 0
+    .byte 0,32,32,32,0,0,0
+    .byte 0,33,33,31,0,0,0
+    .byte 0,0,0,31,0,0,0
+    .byte 0,0,0,0,31,0,0
+    .byte 0,0,0,0,31,0,0
+    .byte 0,0,0,0,0,31,0
+    .byte 0,0,0,0,0,31,0
+    .byte 0,0,0,0,0,0,1
+    .p2align 7
+// 83: espada
+    .byte 7, 7, 3, 0
+    .byte 0,0,0,0,0,32,32
+    .byte 0,0,0,0,32,37,32
+    .byte 0,0,0,32,37,32,0
+    .byte 24,0,32,37,32,0,0
+    .byte 0,24,37,32,0,0,0
+    .byte 0,1,24,0,0,0,0
+    .byte 1,0,0,24,0,0,0
+    .p2align 7
+// 84: armadura de ferro
+    .byte 7, 7, 3, 0
+    .byte 33,33,0,0,0,33,33
+    .byte 33,32,33,33,33,32,33
+    .byte 0,33,32,32,32,33,0
+    .byte 0,33,32,33,32,33,0
+    .byte 0,33,32,32,32,33,0
+    .byte 0,33,33,33,33,33,0
+    .byte 0,34,0,0,0,34,0
+    .p2align 7
+// 85: lampiao
+    .byte 5, 12, 2, 0
+    .byte 0,34,34,34,0
+    .byte 34,24,24,24,34
+    .byte 34,24,47,24,34
+    .byte 34,24,24,24,34
+    .byte 0,34,34,34,0
+    .byte 0,0,34,0,0
+    .byte 0,0,34,0,0
+    .byte 0,0,34,0,0
+    .byte 0,0,34,0,0
+    .byte 0,0,34,0,0
+    .byte 0,0,34,0,0
+    .byte 0,34,34,34,0
+    .p2align 7
+// 86: veio de ferro
+    .byte 8, 6, 4, 0
+    .byte 0,0,20,20,20,0,0,0
+    .byte 0,20,44,21,21,21,0,0
+    .byte 20,20,21,21,44,22,22,0
+    .byte 20,44,21,21,22,22,44,22
+    .byte 21,21,21,44,22,22,22,22
+    .byte 0,22,22,22,22,22,22,0
+    .p2align 7
+// 87: veio de carvao
+    .byte 8, 6, 4, 0
+    .byte 0,0,20,20,20,0,0,0
+    .byte 0,20,18,21,21,21,0,0
+    .byte 20,20,21,21,18,22,22,0
+    .byte 20,18,18,21,22,22,18,22
+    .byte 21,21,21,18,22,18,22,22
+    .byte 0,22,22,22,22,22,22,0
+    .p2align 7
 
 m_gridon:       .asciz "Grade ligada (G desliga)"
 m_gridoff:      .asciz "Grade desligada"
@@ -2984,7 +3134,7 @@ s_title:        .asciz "ERMO"
 s_sub:          .asciz "um jogo de sobrevivencia escrito em assembly ARM64"
 s_world:        .asciz "Mundo #"
 s_enter:        .asciz "Pressione ENTER para jogar"
-s_title_help:   .asciz "R: gerar outro mundo     ESC: sair"
+s_title_help:   .asciz "R: gerar outro mundo     F11: tela cheia     ESC: sair"
 s_credit:       .asciz "feito por Andre + Claude"
 s_sep_paren:    .asciz "   -   ("
 s_comma:        .asciz ","
@@ -3016,6 +3166,7 @@ s_shot_people:  .asciz "shot_pessoas.bmp"
 s_shot_panel:   .asciz "shot_painel.bmp"
 s_shot_village: .asciz "shot_vila.bmp"
 s_shot_family:  .asciz "shot_familias.bmp"
+s_shot_iron:    .asciz "shot_ferro.bmp"
 s_shot_fish:    .asciz "shot_pesca.bmp"
 s_shot_hut:     .asciz "shot_abrigo.bmp"
 s_shot_sleep:   .asciz "shot_dormindo.bmp"

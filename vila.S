@@ -315,7 +315,7 @@ vila_chestwith:
     b.ne    2f
     ldrb    w15, [x14, #7]
     LA      x9, chests
-    add     x9, x9, x15, lsl #7
+    add     x9, x9, x15, lsl #CHESTSHIFT
     ldr     w15, [x9, #(4 * IT_WOOD)]
     cmp     w15, w12
     b.lo    2f
