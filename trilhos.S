@@ -2,14 +2,18 @@
 //  TRILHOS - um jogo de trens no estilo OpenTTD, escrito em assembly
 //  ARM64 (AArch64). Roda no macOS (Apple Silicon) e no Linux ARM64.
 //
-//  Toda a logica e todo o desenho (renderizacao isometrica por software)
-//  sao feitos aqui em assembly. A biblioteca SDL3 so e usada para abrir
-//  a janela, ler teclado/mouse e mostrar o framebuffer na tela.
+//  Terreno continuo (sem tiles): um mapa de altura 512x512 interpolado
+//  e desenhado coluna por coluna (tecnica "voxel space" com projecao
+//  isometrica), com y-buffer, z-buffer e iluminacao suave. Arvores,
+//  casas e predios ficam em posicoes livres e respeitam a profundidade.
 //
-//  Compilar:  make        (ou: clang trilhos.S -o trilhos -lSDL3)
+//  Toda a logica e todo o desenho estao aqui em assembly. A SDL3 so abre
+//  a janela, le teclado/mouse e mostra o framebuffer.
+//
+//  Compilar:  make        (ou: cc trilhos.S -o trilhos -lSDL3)
+//  Testar sem tela:  ./trilhos --shot  (salva screenshots e mede o tempo)
 // =====================================================================
 
-// ---- diferencas entre macOS (Mach-O) e Linux (ELF) ------------------
 #ifdef __APPLE__
 #define F(x) _##x
 #define BSS(name, size) .zerofill __DATA,__bss,name,size,4
@@ -18,7 +22,6 @@
 #define BSS(name, size) .section .bss ; .balign 16 ; name: .space size
 #endif
 
-// carrega o endereco de um simbolo num registrador
 .macro LA reg, sym
 #ifdef __APPLE__
     adrp    \reg, \sym@PAGE
@@ -29,60 +32,63 @@
 #endif
 .endm
 
-// carrega uma constante de 32 bits
 .macro MOVI32 reg, val
     movz    \reg, #((\val) & 0xFFFF)
     movk    \reg, #(((\val) >> 16) & 0xFFFF), lsl #16
 .endm
 
 // ---- constantes -----------------------------------------------------
-.equ MAPN,      128          // mapa 128 x 128 tiles
-.equ HSTEP,     4            // pixels por nivel de altura
+.equ MAPN,      512          // mapa de altura 512 x 512
+.equ SCRW,      1280
+.equ SCRH,      720
 .equ MAXTOWNS,  16
-.equ TOWNSZ,    48           // x(4) y(4) pop(4) nome(32) pad(4)
+.equ TOWNSZ,    64           // x y pop nome[32] R e
 .equ NSYL,      32
+.equ MAXOBJ,    200000
+.equ SEA,       104          // altura do nivel do mar (0..255)
 
-// terrenos
-.equ T_DEEP,    0
-.equ T_SHALLOW, 1
-.equ T_SAND,    2
-.equ T_GRASS,   3
-.equ T_FOREST,  4
-.equ T_HILL,    5
-.equ T_ROCK,    6
-.equ T_SNOW,    7
-.equ T_ROAD,    8
-.equ T_HOUSE,   9
-.equ T_TOWER,   10
+// faixas de elevacao (1/16 de pixel do mundo)
+.equ E_SAND,    30
+.equ E_GRASS,   724
+.equ E_HILL,    1056
+.equ E_ROCK,    1424
+
+// tipos de objeto
+.equ O_TREE,    0
+.equ O_PINE,    1
+.equ O_HOUSE,   2
+.equ O_TOWER,   3
 
 // estado global: x28 aponta sempre para G
 .equ G_REN,      0
 .equ G_WIN,      8
-.equ G_TEX0,     16
-.equ G_TEX,      40
-.equ G_KEYS,     48
-.equ G_CAMX,     56
-.equ G_CAMY,     60
-.equ G_ZOOM,     64
-.equ G_FBW,      68
-.equ G_FBH,      72
-.equ G_SEED,     76
-.equ G_RNG,      80
-.equ G_STATE,    84
-.equ G_RUNNING,  88
-.equ G_FRAME,    92
-.equ G_MX,       96
-.equ G_MY,       100
-.equ G_HOV,      104
-.equ G_GRID,     108
-.equ G_DAX,      112
-.equ G_DAY,      116
-.equ G_WHEEL,    120
-.equ G_NTOWNS,   124
-.equ G_SHOT,     128
-.equ G_WANTSHOT, 132
+.equ G_TEX,      16
+.equ G_KEYS,     24
+.equ G_CX,       32          // camera (1/16 px do mundo, zoom 1)
+.equ G_CY,       36
+.equ G_ZOOM,     40          // 0..3
+.equ G_Z256,     44          // escala * 256 (128, 256, 512, 1024)
+.equ G_SEED,     48
+.equ G_RNG,      52
+.equ G_STATE,    56
+.equ G_RUNNING,  60
+.equ G_FRAME,    64
+.equ G_MX,       68          // float
+.equ G_MY,       72          // float
+.equ G_HOVOK,    76
+.equ G_HOVU,     80          // 1/64 de celula
+.equ G_HOVV,     84
+.equ G_CONTOUR,  88
+.equ G_DAX,      92          // float
+.equ G_DAY,      96          // float
+.equ G_WHEEL,    100         // float
+.equ G_NTOWNS,   104
+.equ G_SHOT,     108
+.equ G_WANTSHOT, 112
+.equ G_NOBJ,     116
+.equ G_EMAXZ,    120         // altura maxima em pixels de tela
+.equ G_K,        124         // 1/16 px do mundo por pixel de tela
 
-// SDL3
 .equ SDL_INIT_VIDEO,        0x20
 .equ SDL_EVENT_QUIT,        0x100
 .equ SDL_EVENT_KEY_DOWN,    0x300
@@ -103,8 +109,8 @@ F(main):
     stp     x27, x28, [sp, #80]
 
     LA      x28, G
-    mov     w20, #0                     // codigo de saida
-    cmp     w0, #1                      // qualquer argumento = modo screenshot
+    mov     w20, #0
+    cmp     w0, #1
     cset    w9, gt
     str     w9, [x28, #G_SHOT]
 
@@ -114,13 +120,12 @@ F(main):
     b.eq    main_fail
 
     LA      x0, s_wintitle
-    mov     w1, #1280
-    mov     w2, #720
+    mov     w1, #SCRW
+    mov     w2, #SCRH
     mov     x3, #0
     bl      F(SDL_CreateWindow)
     cbz     x0, main_fail
     str     x0, [x28, #G_WIN]
-
     mov     x1, #0
     bl      F(SDL_CreateRenderer)
     cbz     x0, main_fail
@@ -131,30 +136,21 @@ F(main):
     mov     w1, #1                      // SDL_BLENDMODE_BLEND
     bl      F(SDL_SetRenderDrawBlendMode)
 
-    // 3 texturas, uma por nivel de zoom: 320x180, 640x360, 1280x720
-    mov     w19, #0
-1:  ldr     x0, [x28, #G_REN]
+    ldr     x0, [x28, #G_REN]
     MOVI32  w1, 0x16362004              // SDL_PIXELFORMAT_ARGB8888
     mov     w2, #1                      // SDL_TEXTUREACCESS_STREAMING
-    mov     w3, #320
-    lsl     w3, w3, w19
-    mov     w4, #180
-    lsl     w4, w4, w19
+    mov     w3, #SCRW
+    mov     w4, #SCRH
     bl      F(SDL_CreateTexture)
     cbz     x0, main_fail
-    add     x9, x28, #G_TEX0
-    str     x0, [x9, w19, uxtw #3]
-    mov     w1, #0                      // SDL_SCALEMODE_NEAREST (pixel art)
+    str     x0, [x28, #G_TEX]
+    mov     w1, #0
     bl      F(SDL_SetTextureScaleMode)
-    add     w19, w19, #1
-    cmp     w19, #3
-    b.lt    1b
 
     mov     x0, #0
     bl      F(SDL_GetKeyboardState)
     str     x0, [x28, #G_KEYS]
 
-    // semente aleatoria: relogio + contador de alta precisao
     bl      F(SDL_GetPerformanceCounter)
     mov     x19, x0
     mov     x0, #0
@@ -164,13 +160,22 @@ F(main):
     orr     w0, w0, #1
     str     w0, [x28, #G_RNG]
 
+    // tabela de ruido 256x256 (usada para texturizar o terreno)
+    mov     w19, #0
+7:  mov     w0, w19
+    mov     w1, #0
+    mov     w2, #1234
+    bl      hash3
+    LA      x9, noisetab
+    strb    w0, [x9, w19, uxtw]
+    add     w19, w19, #1
+    cmp     w19, #16, lsl #12
+    b.lo    7b
+
     mov     w9, #1
     str     w9, [x28, #G_RUNNING]
-    str     w9, [x28, #G_GRID]
-    mov     w9, #-1
-    str     w9, [x28, #G_HOV]
     str     wzr, [x28, #G_STATE]
-    mov     w0, #2
+    mov     w0, #0
     bl      set_zoom
     bl      new_world
 
@@ -195,15 +200,10 @@ main_loop:
     cbnz    w9, main_loop
 
 main_exit:
-    mov     w19, #0
-3:  add     x9, x28, #G_TEX0
-    ldr     x0, [x9, w19, uxtw #3]
+    ldr     x0, [x28, #G_TEX]
     cbz     x0, 4f
     bl      F(SDL_DestroyTexture)
-4:  add     w19, w19, #1
-    cmp     w19, #3
-    b.lt    3b
-    ldr     x0, [x28, #G_REN]
+4:  ldr     x0, [x28, #G_REN]
     cbz     x0, 5f
     bl      F(SDL_DestroyRenderer)
 5:  ldr     x0, [x28, #G_WIN]
@@ -235,7 +235,7 @@ main_fail:
     mov     w20, #1
     b       main_exit
 
-// ---- modo screenshot (usado para testar sem tela) -------------------
+// ---- modo screenshot / benchmark (para testar sem tela) -------------
 shot_mode:
     bl      update
     bl      draw_all
@@ -246,10 +246,10 @@ shot_mode:
 
     mov     w9, #1
     str     w9, [x28, #G_STATE]
-    mov     w9, #640
+    mov     w9, #700
     scvtf   s0, w9
     str     s0, [x28, #G_MX]
-    mov     w9, #360
+    mov     w9, #400
     scvtf   s0, w9
     str     s0, [x28, #G_MY]
     mov     w0, #1
@@ -261,7 +261,32 @@ shot_mode:
     ldr     x0, [x28, #G_REN]
     bl      F(SDL_RenderPresent)
 
-    mov     w0, #2
+    // tempo medio por quadro (30 quadros)
+    bl      F(SDL_GetTicksNS)
+    mov     x19, x0
+    mov     w21, #30
+6:  bl      draw_terrain
+    bl      draw_objects
+    subs    w21, w21, #1
+    b.ne    6b
+    bl      F(SDL_GetTicksNS)
+    sub     x0, x0, x19
+    mov     x9, #30000
+    udiv    x21, x0, x9                 // microssegundos por quadro
+    LA      x0, txt
+    LA      x1, s_bench
+    bl      strcat_cur
+    mov     w1, w21
+    bl      numcat
+    LA      x1, s_bench2
+    bl      strcat_cur
+    LA      x9, txt
+    sub     x2, x0, x9
+    mov     x1, x9
+    mov     w0, #1
+    bl      F(write)
+
+    mov     w0, #0
     bl      set_zoom
     bl      update
     bl      draw_all
@@ -270,11 +295,20 @@ shot_mode:
     ldr     x0, [x28, #G_REN]
     bl      F(SDL_RenderPresent)
 
-    mov     w0, #0
+    mov     w0, #3
     bl      set_zoom
     bl      update
     bl      draw_all
     LA      x0, s_shot_near
+    bl      save_bmp
+
+    mov     w9, #1
+    str     w9, [x28, #G_CONTOUR]
+    mov     w0, #2
+    bl      set_zoom
+    bl      update
+    bl      draw_all
+    LA      x0, s_shot_contour
     bl      save_bmp
     b       main_exit
 
@@ -282,36 +316,37 @@ shot_mode:
 //  Utilitarios
 // =====================================================================
 
-// set_zoom(w0 = 0..2): escolhe tamanho do framebuffer e textura
+// set_zoom(w0 = 0..3): 0 = longe (0.5x) ... 3 = perto (4x)
 set_zoom:
     str     w0, [x28, #G_ZOOM]
-    mov     w9, #320
+    mov     w9, #128
     lsl     w9, w9, w0
-    str     w9, [x28, #G_FBW]
-    mov     w9, #180
-    lsl     w9, w9, w0
-    str     w9, [x28, #G_FBH]
-    add     x9, x28, #G_TEX0
-    ldr     x9, [x9, w0, uxtw #3]
-    str     x9, [x28, #G_TEX]
+    str     w9, [x28, #G_Z256]
+    mov     w10, #2000
+    mul     w10, w10, w9
+    lsr     w10, w10, #12
+    str     w10, [x28, #G_EMAXZ]
+    mov     w10, #32
+    lsr     w10, w10, w0
+    str     w10, [x28, #G_K]
     ret
 
 zoom_in:
+    ldr     w0, [x28, #G_ZOOM]
+    cmp     w0, #3
+    b.ge    1f
+    add     w0, w0, #1
+    b       set_zoom
+1:  ret
+
+zoom_out:
     ldr     w0, [x28, #G_ZOOM]
     cbz     w0, 1f
     sub     w0, w0, #1
     b       set_zoom
 1:  ret
 
-zoom_out:
-    ldr     w0, [x28, #G_ZOOM]
-    cmp     w0, #2
-    b.ge    1f
-    add     w0, w0, #1
-    b       set_zoom
-1:  ret
-
-// rng() -> w0   (xorshift32; usa so w0)
+// rng() -> w0   (xorshift32)
 rng:
     ldr     w0, [x28, #G_RNG]
     eor     w0, w0, w0, lsl #13
@@ -320,7 +355,7 @@ rng:
     str     w0, [x28, #G_RNG]
     ret
 
-// rng_mod(w0 = n) -> w0 = aleatorio em [0, n)   (usa w0, w9, w10)
+// rng_mod(w0 = n) -> [0, n)   (usa w0, w9, w10)
 rng_mod:
     mov     w10, w0
     ldr     w0, [x28, #G_RNG]
@@ -358,7 +393,7 @@ mystrlen:
     sub     x0, x0, #1
     ret
 
-// strcat_cur(x0 = destino, x1 = origem) -> x0 = posicao do '\0'  (usa w9)
+// strcat_cur(x0 = destino, x1 = origem) -> x0 no '\0'  (usa w9)
 strcat_cur:
 1:  ldrb    w9, [x1], #1
     strb    w9, [x0], #1
@@ -366,7 +401,7 @@ strcat_cur:
     sub     x0, x0, #1
     ret
 
-// numcat(x0 = destino, w1 = numero) -> x0 = posicao do '\0'  (usa x9-x13)
+// numcat(x0 = destino, w1 = numero) -> x0 no '\0'  (usa x9-x13)
 numcat:
     sub     sp, sp, #16
     mov     w10, #10
@@ -386,7 +421,7 @@ numcat:
     add     sp, sp, #16
     ret
 
-// save_bmp(x0 = nome do arquivo): salva o que foi desenhado
+// save_bmp(x0 = nome)
 save_bmp:
     stp     x29, x30, [sp, #-32]!
     mov     x29, sp
@@ -405,11 +440,59 @@ save_bmp:
     ldp     x29, x30, [sp], #32
     ret
 
+// sample_elev(w0 = u, w1 = v em 1/64 de celula) -> w0 = elevacao
+// interpolacao bilinear   (usa x0-x7)
+sample_elev:
+    lsr     w2, w0, #6
+    lsr     w3, w1, #6
+    and     w4, w0, #63
+    lsl     w4, w4, #2
+    and     w5, w1, #63
+    lsl     w5, w5, #2
+    mov     w6, #510
+    cmp     w2, w6
+    csel    w2, w2, w6, lo
+    cmp     w3, w6
+    csel    w3, w3, w6, lo
+    add     w6, w2, w3, lsl #9
+    LA      x7, elev
+    add     x7, x7, w6, uxtw #1
+    ldrsh   w0, [x7]
+    ldrsh   w6, [x7, #2]
+    sub     w6, w6, w0
+    mul     w6, w6, w4
+    add     w0, w0, w6, asr #8
+    ldrsh   w2, [x7, #1024]
+    ldrsh   w6, [x7, #1026]
+    sub     w6, w6, w2
+    mul     w6, w6, w4
+    add     w2, w2, w6, asr #8
+    sub     w2, w2, w0
+    mul     w2, w2, w5
+    add     w0, w0, w2, asr #8
+    ret
+
+// add_obj(w0 = u, w1 = v, w2 = e, w3 = tipo, w4 = variante)  (usa x9, x10)
+add_obj:
+    ldr     w9, [x28, #G_NOBJ]
+    MOVI32  w10, MAXOBJ
+    cmp     w9, w10
+    b.hs    1f
+    LA      x10, objs
+    add     x10, x10, w9, uxtw #3
+    strh    w0, [x10]
+    strh    w1, [x10, #2]
+    strh    w2, [x10, #4]
+    strb    w3, [x10, #6]
+    strb    w4, [x10, #7]
+    add     w9, w9, #1
+    str     w9, [x28, #G_NOBJ]
+1:  ret
+
 // =====================================================================
 //  Geracao do mundo
 // =====================================================================
 
-// new_world: sorteia uma semente nova e gera o mapa
 new_world:
     stp     x29, x30, [sp, #-32]!
     mov     x29, sp
@@ -424,58 +507,66 @@ new_world:
     add     w0, w0, #1
     str     w0, [x28, #G_SEED]
     bl      generate_map
-    str     wzr, [x28, #G_CAMX]
-    mov     w9, #1024
-    str     w9, [x28, #G_CAMY]
+    str     wzr, [x28, #G_CX]
+    mov     w9, #16384                  // centro do mapa: 1024 px * 16
+    str     w9, [x28, #G_CY]
     ldr     x19, [sp, #16]
     ldp     x29, x30, [sp], #32
     ret
 
-// generate_map: tudo deriva de G_SEED (mesma semente = mesmo mundo)
 generate_map:
     stp     x29, x30, [sp, #-32]!
     mov     x29, sp
     str     x19, [sp, #16]
     ldr     w19, [x28, #G_SEED]
-
     mov     w0, w19
     mov     w1, #77
     mov     w2, #99
     bl      hash3
     orr     w0, w0, #1
     str     w0, [x28, #G_RNG]
+    str     wzr, [x28, #G_NOBJ]
+    str     wzr, [x28, #G_NTOWNS]
 
-    // relevo: ruido fractal com 5 oitavas (32, 16, 8, 4, 2 tiles)
+    // relevo: 6 oitavas (128, 64, 32, 16, 8, 4 celulas)
     LA      x0, accum
     mov     w1, w19
-    mov     w2, #5
-    mov     w3, #5
+    mov     w2, #6
+    mov     w3, #7
     bl      gen_noise
     LA      x0, accum
     LA      x1, hmap
     bl      normalize
     bl      edge_falloff
 
-    // umidade (decide onde nascem florestas)
+    // umidade
     LA      x0, accum
     MOVI32  w1, 0x5bd1e995
     eor     w1, w1, w19
-    mov     w2, #4
-    mov     w3, #4
+    mov     w2, #5
+    mov     w3, #6
     bl      gen_noise
     LA      x0, accum
     LA      x1, moist
     bl      normalize
 
-    bl      classify
-    bl      place_towns
+    bl      gen_elev
+    bl      gen_light
 
+    LA      x9, overlay                 // limpa ruas/areas urbanas
+    mov     w10, #16384
+1:  stp     xzr, xzr, [x9], #16
+    subs    w10, w10, #1
+    b.ne    1b
+
+    bl      place_towns
+    bl      gen_trees
     ldr     x19, [sp, #16]
     ldp     x29, x30, [sp], #32
     ret
 
 // gen_noise(x0 = acc[int32], w1 = sal, w2 = oitavas, w3 = shift inicial)
-// ruido de valor com interpolacao suave (smoothstep), somando oitavas
+// ruido de valor com interpolacao suave; shift <= 8
 gen_noise:
     stp     x29, x30, [sp, #-96]!
     mov     x29, sp
@@ -490,42 +581,42 @@ gen_noise:
     mov     w20, w1
 
     mov     x9, x19
-    mov     w10, #16384
-1:  str     wzr, [x9], #4
+    mov     w10, #65536
+1:  stp     xzr, xzr, [x9], #16
     subs    w10, w10, #1
     b.ne    1b
 
-    mov     w21, #0                     // k = oitava
+    mov     w21, #0
 gn_oct:
     ldr     w9, [sp, #88]
     cmp     w21, w9
     b.ge    gn_done
     ldr     w22, [sp, #92]
-    sub     w22, w22, w21               // s = shift (tamanho da celula = 1<<s)
+    sub     w22, w22, w21
     cmp     w22, #1
     b.lt    gn_done
     mov     w9, #1013
-    madd    w27, w21, w9, w20           // sal desta oitava
+    madd    w27, w21, w9, w20
 
-    mov     w23, #0                     // y
+    mov     w23, #0
 gn_y:
-    lsr     w26, w23, w22               // gy
+    lsr     w26, w23, w22
     mov     w9, #1
     lsl     w9, w9, w22
     sub     w9, w9, #1
     and     w10, w23, w9
     mov     w9, #8
     sub     w9, w9, w22
-    lsl     w10, w10, w9                // t em 0..255
+    lsl     w10, w10, w9
     mul     w11, w10, w10
     mov     w12, #768
     sub     w12, w12, w10, lsl #1
     mul     w11, w11, w12
-    lsr     w25, w11, #16               // ty suavizado
+    lsr     w25, w11, #16
 
-    mov     w24, #0                     // x
+    mov     w24, #0
 gn_x:
-    lsr     w15, w24, w22               // gx
+    lsr     w15, w24, w22
     mov     w9, #1
     lsl     w9, w9, w22
     sub     w9, w9, #1
@@ -537,41 +628,41 @@ gn_x:
     mov     w12, #768
     sub     w12, w12, w10, lsl #1
     mul     w11, w11, w12
-    lsr     w14, w11, #16               // tx suavizado
+    lsr     w14, w11, #16
 
     mov     w0, w15
     mov     w1, w26
     mov     w2, w27
     bl      hash3
-    and     w10, w0, #0xFFFF            // a
+    and     w10, w0, #0xFFFF
     add     w0, w15, #1
     mov     w1, w26
     bl      hash3
-    and     w11, w0, #0xFFFF            // b
+    and     w11, w0, #0xFFFF
     mov     w0, w15
     add     w1, w26, #1
     bl      hash3
-    and     w12, w0, #0xFFFF            // c
+    and     w12, w0, #0xFFFF
     add     w0, w15, #1
     add     w1, w26, #1
     bl      hash3
-    and     w13, w0, #0xFFFF            // d
+    and     w13, w0, #0xFFFF
 
     sub     w11, w11, w10
     mul     w11, w11, w14
     asr     w11, w11, #8
-    add     w10, w10, w11               // topo = lerp(a, b)
+    add     w10, w10, w11
     sub     w13, w13, w12
     mul     w13, w13, w14
     asr     w13, w13, #8
-    add     w12, w12, w13               // base = lerp(c, d)
+    add     w12, w12, w13
     sub     w12, w12, w10
     mul     w12, w12, w25
     asr     w12, w12, #8
-    add     w10, w10, w12               // v = lerp(topo, base)
-    asr     w10, w10, w21               // amplitude cai pela metade a cada oitava
+    add     w10, w10, w12
+    asr     w10, w10, w21
 
-    add     w11, w24, w23, lsl #7
+    add     w11, w24, w23, lsl #9
     ldr     w12, [x19, w11, uxtw #2]
     add     w12, w12, w10
     str     w12, [x19, w11, uxtw #2]
@@ -584,7 +675,6 @@ gn_x:
     b.lt    gn_y
     add     w21, w21, #1
     b       gn_oct
-
 gn_done:
     ldr     x27, [sp, #80]
     ldp     x25, x26, [sp, #64]
@@ -594,18 +684,19 @@ gn_done:
     ldp     x29, x30, [sp], #96
     ret
 
-// normalize(x0 = acc[int32], x1 = destino[u8]): estica para 0..255
+// normalize(x0 = acc[int32], x1 = destino[u8])
 normalize:
-    mov     w9, #0x7fffffff             // min
-    mov     w10, #0x80000000            // max
+    mov     w9, #0x7fffffff
+    mov     w10, #0x80000000
     mov     x12, #0
+    mov     x14, #262144
 1:  ldr     w11, [x0, x12, lsl #2]
     cmp     w11, w9
     csel    w9, w11, w9, lt
     cmp     w11, w10
     csel    w10, w11, w10, gt
     add     x12, x12, #1
-    cmp     x12, #16384
+    cmp     x12, x14
     b.lo    1b
     sub     w10, w10, w9
     cbnz    w10, 2f
@@ -618,17 +709,18 @@ normalize:
     udiv    w11, w11, w10
     strb    w11, [x1, x12]
     add     x12, x12, #1
-    cmp     x12, #16384
+    cmp     x12, x14
     b.lo    3b
     ret
 
-// edge_falloff: rebaixa o terreno perto das bordas (vira mar)
+// edge_falloff: perto das bordas o terreno afunda no mar
 edge_falloff:
     LA      x0, hmap
     mov     w1, #0
-1:  and     w2, w1, #127
-    lsr     w3, w1, #7
-    mov     w4, #127
+    mov     w10, #262144
+1:  and     w2, w1, #511
+    lsr     w3, w1, #9
+    mov     w4, #511
     sub     w5, w4, w2
     sub     w6, w4, w3
     cmp     w2, w3
@@ -637,120 +729,134 @@ edge_falloff:
     csel    w7, w7, w5, lt
     cmp     w7, w6
     csel    w7, w7, w6, lt
-    cmp     w7, #20
+    cmp     w7, #80
     b.ge    2f
     ldrb    w8, [x0, w1, uxtw]
     mul     w8, w8, w7
-    mov     w9, #20
+    mov     w9, #80
     udiv    w8, w8, w9
     strb    w8, [x0, w1, uxtw]
 2:  add     w1, w1, #1
-    cmp     w1, #4, lsl #12
+    cmp     w1, w10
     b.lo    1b
     ret
 
-// classify: altura + umidade -> tipo de terreno e nivel
-classify:
-    stp     x29, x30, [sp, #-32]!
-    mov     x29, sp
-    stp     x19, x20, [sp, #16]
-    ldr     w20, [x28, #G_SEED]
-    add     w20, w20, #7
-    mov     w19, #0
-cl_loop:
-    and     w0, w19, #127
-    lsr     w1, w19, #7
-    mov     w2, w20
-    bl      hash3
-    and     w0, w0, #15
-    LA      x10, jit
-    strb    w0, [x10, w19, uxtw]
-    LA      x10, townid
-    strb    wzr, [x10, w19, uxtw]
-    LA      x10, hmap
-    ldrb    w11, [x10, w19, uxtw]       // h
-    LA      x10, moist
-    ldrb    w12, [x10, w19, uxtw]       // umidade
-    mov     w13, #T_DEEP
-    mov     w14, #0                     // nivel
-    cmp     w11, #90
-    b.lo    5f
-    mov     w13, #T_SHALLOW
-    cmp     w11, #104
-    b.lo    5f
-    sub     w15, w11, #104              // d = altura acima do mar
-    lsr     w14, w15, #4                // nivel = d/16 + d*d/4096 + 1
-    mul     w15, w15, w15               // (planicies suaves, montanhas ingremes)
-    add     w14, w14, w15, lsr #12
-    add     w14, w14, #1
-    mov     w13, #T_SAND
-    cmp     w11, #112
-    b.lo    5f
-    cmp     w11, #175
-    b.hs    2f
-    mov     w13, #T_GRASS
-    cmp     w12, #150
-    b.lo    5f
-    mov     w13, #T_FOREST
-    b       5f
-2:  cmp     w11, #200
-    b.hs    3f
-    mov     w13, #T_HILL
-    cmp     w12, #140
-    b.lo    5f
-    mov     w13, #T_FOREST
-    b       5f
-3:  mov     w13, #T_ROCK
-    cmp     w11, #225
-    b.lo    5f
-    mov     w13, #T_SNOW
-5:  LA      x10, terr
-    strb    w13, [x10, w19, uxtw]
-    LA      x10, level
-    strb    w14, [x10, w19, uxtw]
-    add     w19, w19, #1
-    cmp     w19, #4, lsl #12
-    b.lo    cl_loop
-    ldp     x19, x20, [sp, #16]
-    ldp     x29, x30, [sp], #32
+// gen_elev: altura (0..255) -> elevacao em 1/16 px
+//   terra: 8d + d*d/32 (planicies suaves, montanhas ingremes)
+//   agua:  24d (negativo = profundidade)
+gen_elev:
+    LA      x0, hmap
+    LA      x1, elev
+    mov     w2, #0
+    mov     w10, #262144
+1:  ldrb    w3, [x0, w2, uxtw]
+    subs    w3, w3, #SEA
+    b.lt    2f
+    mul     w4, w3, w3
+    lsr     w4, w4, #5
+    add     w4, w4, w3, lsl #3
+    b       3f
+2:  mov     w4, #24
+    mul     w4, w3, w4
+3:  strh    w4, [x1, w2, uxtw #1]
+    add     w2, w2, #1
+    cmp     w2, w10
+    b.lo    1b
     ret
 
-// place_towns: espalha ate 12 cidades em campos abertos
+// gen_light: luz vinda de cima/esquerda, pela inclinacao do terreno
+gen_light:
+    LA      x0, elev
+    LA      x1, light
+    mov     w2, #0
+    mov     w10, #262144
+1:  mov     w8, #128
+    and     w3, w2, #511
+    lsr     w4, w2, #9
+    cmp     w3, #2                      // usa vizinhos a 2 celulas: luz suave
+    b.lo    5f
+    cmp     w4, #2
+    b.lo    5f
+    cmp     w3, #509
+    b.hi    5f
+    cmp     w4, #509
+    b.hi    5f
+    add     x5, x0, w2, uxtw #1
+    ldrsh   w6, [x5]
+    tbnz    w6, #31, 5f                 // agua: luz neutra
+    ldrsh   w6, [x5, #4]                // e(u+2)
+    ldrsh   w7, [x5, #-4]               // e(u-2)
+    cmp     w6, #0
+    csel    w6, w6, wzr, gt
+    cmp     w7, #0
+    csel    w7, w7, wzr, gt
+    sub     w6, w6, w7
+    add     w6, w6, w6, lsl #1          // * 3/8
+    add     w8, w8, w6, asr #3
+    mov     x7, #2048
+    ldrsh   w6, [x5, x7]                // e(v+2)
+    sub     x7, x5, #2048
+    ldrsh   w7, [x7]                    // e(v-2)
+    cmp     w6, #0
+    csel    w6, w6, wzr, gt
+    cmp     w7, #0
+    csel    w7, w7, wzr, gt
+    sub     w6, w6, w7
+    add     w6, w6, w6, lsl #1          // * 3/16
+    add     w8, w8, w6, asr #4
+    mov     w9, #45
+    cmp     w8, w9
+    csel    w8, w9, w8, lt
+    mov     w9, #235
+    cmp     w8, w9
+    csel    w8, w9, w8, gt
+5:  strb    w8, [x1, w2, uxtw]
+    add     w2, w2, #1
+    cmp     w2, w10
+    b.lo    1b
+    ret
+
+// place_towns: ate 12 cidades em lugares planos e secos
 place_towns:
-    stp     x29, x30, [sp, #-96]!
+    stp     x29, x30, [sp, #-64]!
     mov     x29, sp
     stp     x19, x20, [sp, #16]
     stp     x21, x22, [sp, #32]
     stp     x23, x24, [sp, #48]
-    stp     x25, x26, [sp, #64]
-    str     x27, [sp, #80]
-    mov     w19, #0                     // cidades criadas
-    mov     w20, #0                     // tentativas
+    mov     w19, #0
+    mov     w20, #0
 pt_try:
     cmp     w19, #12
     b.ge    pt_done
     add     w20, w20, #1
-    cmp     w20, #800
+    mov     w9, #2000
+    cmp     w20, w9
     b.gt    pt_done
-    mov     w0, #112
+    mov     w0, #432
     bl      rng_mod
-    add     w21, w0, #8                 // cx
-    mov     w0, #112
+    add     w21, w0, #40
+    mov     w0, #432
     bl      rng_mod
-    add     w22, w0, #8                 // cy
-    add     w9, w21, w22, lsl #7
-    LA      x10, terr
-    ldrb    w11, [x10, w9, uxtw]
-    cmp     w11, #T_GRASS
-    b.ne    pt_try
-
-    // longe o bastante das outras?
-    LA      x23, towns
+    add     w22, w0, #40
+    add     w23, w21, w22, lsl #9
+    LA      x9, elev
+    ldrsh   w10, [x9, w23, uxtw #1]
+    cmp     w10, #80
+    b.lt    pt_try
+    mov     w11, #600
+    cmp     w10, w11
+    b.gt    pt_try
+    LA      x9, light
+    ldrb    w10, [x9, w23, uxtw]
+    cmp     w10, #110
+    b.lo    pt_try
+    cmp     w10, #146
+    b.hi    pt_try
+    LA      x24, towns
     mov     w12, #0
 1:  cmp     w12, w19
     b.ge    2f
-    mov     w9, #TOWNSZ
-    umaddl  x13, w12, w9, x23
+    add     x13, x24, x12, lsl #6
     ldr     w14, [x13]
     sub     w14, w14, w21
     cmp     w14, #0
@@ -760,82 +866,308 @@ pt_try:
     cmp     w15, #0
     cneg    w15, w15, lt
     add     w14, w14, w15
-    cmp     w14, #22
+    cmp     w14, #75
     b.lt    pt_try
     add     w12, w12, #1
     b       1b
-
-2:  mov     w9, #TOWNSZ
-    umaddl  x23, w19, w9, x23           // registro da cidade
-    str     w21, [x23]
-    str     w22, [x23, #4]
+2:  add     x24, x24, x19, lsl #6
+    str     w21, [x24]
+    str     w22, [x24, #4]
     mov     w0, #2800
     bl      rng_mod
-    add     w27, w0, #250               // populacao
-    str     w27, [x23, #8]
-    add     x0, x23, #12
+    add     w0, w0, #250
+    str     w0, [x24, #8]
+    add     x0, x24, #12
     bl      gen_name
-    mov     w9, #1100
-    udiv    w24, w27, w9
-    add     w24, w24, #2                // raio 2..4
-
-    neg     w25, w24                    // dy
-3:  neg     w26, w24                    // dx
-4:  add     w9, w21, w26
-    add     w10, w22, w25
-    add     w11, w9, w10, lsl #7        // j
-    LA      x12, terr
-    ldrb    w13, [x12, w11, uxtw]
-    cmp     w13, #T_SAND
-    b.lo    6f
-    cmp     w13, #T_HILL
-    b.hi    6f
-    cbz     w26, 5f                     // ruas em cruz no centro
-    cbz     w25, 5f
-    cmp     w26, #0
-    cneg    w14, w26, lt
-    cmp     w25, #0
-    cneg    w15, w25, lt
-    add     w14, w14, w15               // distancia ao centro
-    mov     w0, #100
-    bl      rng_mod
-    mov     w9, #12
-    mul     w9, w14, w9
-    mov     w10, #95
-    sub     w10, w10, w9
-    cmp     w0, w10
-    b.ge    6f
-    mov     w13, #T_HOUSE
-    cmp     w14, #2
-    b.gt    7f
-    mov     w9, #1400
-    cmp     w27, w9
-    b.le    7f
-    mov     w13, #T_TOWER               // centro de cidade grande: predios
-    b       7f
-5:  mov     w13, #T_ROAD
-7:  LA      x12, terr
-    strb    w13, [x12, w11, uxtw]
-    LA      x12, townid
-    add     w9, w19, #1
-    strb    w9, [x12, w11, uxtw]
-6:  add     w26, w26, #1
-    cmp     w26, w24
-    b.le    4b
-    add     w25, w25, #1
-    cmp     w25, w24
-    b.le    3b
+    ldr     w9, [x24, #8]
+    mov     w10, #250
+    udiv    w9, w9, w10
+    add     w9, w9, #6
+    str     w9, [x24, #44]              // raio em celulas
+    LA      x9, elev
+    ldrsh   w10, [x9, w23, uxtw #1]
+    str     w10, [x24, #48]
+    mov     x0, x24
+    bl      build_town
     add     w19, w19, #1
     b       pt_try
-
 pt_done:
     str     w19, [x28, #G_NTOWNS]
+    ldp     x23, x24, [sp, #48]
+    ldp     x21, x22, [sp, #32]
+    ldp     x19, x20, [sp, #16]
+    ldp     x29, x30, [sp], #64
+    ret
+
+// build_town(x0 = registro): area urbana, ruas sinuosas e casas
+build_town:
+    stp     x29, x30, [sp, #-112]!
+    mov     x29, sp
+    stp     x19, x20, [sp, #16]
+    stp     x21, x22, [sp, #32]
+    stp     x23, x24, [sp, #48]
+    stp     x25, x26, [sp, #64]
+    str     x27, [sp, #80]
+    mov     x19, x0
+    ldr     w20, [x19]
+    ldr     w21, [x19, #4]
+    ldr     w22, [x19, #44]
+
+    // disco da area urbana (overlay = 2): sem florestas aqui
+    neg     w23, w22
+1:  neg     w24, w22
+2:  mul     w9, w23, w23
+    madd    w9, w24, w24, w9
+    mul     w10, w22, w22
+    cmp     w9, w10
+    b.gt    3f
+    add     w11, w20, w24
+    add     w12, w21, w23
+    add     w13, w11, w12, lsl #9
+    LA      x14, elev
+    ldrsh   w15, [x14, w13, uxtw #1]
+    tbnz    w15, #31, 3f
+    LA      x14, overlay
+    mov     w15, #2
+    strb    w15, [x14, w13, uxtw]
+3:  add     w24, w24, #1
+    cmp     w24, w22
+    b.le    2b
+    add     w23, w23, #1
+    cmp     w23, w22
+    b.le    1b
+
+    mov     w0, #3
+    bl      rng_mod
+    add     w23, w0, #3                 // numero de ruas
+bt_street:
+    cbz     w23, bt_done
+    mov     w0, #16
+    bl      rng_mod
+    mov     w24, w0                     // direcao (16 direcoes)
+    lsl     w25, w20, #6
+    add     w25, w25, #32               // pu
+    lsl     w26, w21, #6
+    add     w26, w26, #32               // pv
+    mov     w27, #0                     // passo (meia celula)
+bt_step:
+    lsl     w9, w22, #1
+    cmp     w27, w9
+    b.ge    bt_next
+    LA      x9, dirtab
+    add     x9, x9, w24, uxtw #2
+    ldrsh   w10, [x9]
+    ldrsh   w11, [x9, #2]
+    add     w25, w25, w10, asr #1
+    add     w26, w26, w11, asr #1
+    asr     w12, w25, #6
+    asr     w13, w26, #6
+    cmp     w12, #510
+    b.hs    bt_next
+    cmp     w13, #510
+    b.hs    bt_next
+    add     w14, w12, w13, lsl #9
+    LA      x9, elev
+    ldrsh   w15, [x9, w14, uxtw #1]
+    tbnz    w15, #31, bt_next           // chegou na agua
+    LA      x9, overlay
+    mov     w15, #1
+    strb    w15, [x9, w14, uxtw]        // rua
+
+    cmp     w27, #2
+    b.lt    bt_wobble
+    mov     w0, #100
+    bl      rng_mod
+    cmp     w0, #65
+    b.ge    bt_wobble
+    // casa ao lado da rua (1.5 celula para um dos lados)
+    mov     w0, #2
+    bl      rng_mod
+    mov     w9, #4
+    mov     w10, #12
+    cmp     w0, #0
+    csel    w9, w9, w10, eq
+    add     w9, w24, w9
+    and     w9, w9, #15
+    LA      x10, dirtab
+    add     x10, x10, w9, uxtw #2
+    ldrsh   w11, [x10]
+    ldrsh   w12, [x10, #2]
+    add     w11, w11, w11, asr #1
+    add     w12, w12, w12, asr #1
+    add     w0, w25, w11
+    add     w1, w26, w12
+    str     w0, [sp, #88]
+    str     w1, [sp, #92]
+    asr     w9, w0, #6
+    asr     w10, w1, #6
+    cmp     w9, #510
+    b.hs    bt_wobble
+    cmp     w10, #510
+    b.hs    bt_wobble
+    add     w9, w9, w10, lsl #9
+    LA      x10, overlay
+    ldrb    w11, [x10, w9, uxtw]
+    cmp     w11, #1
+    b.eq    bt_wobble
+    LA      x10, elev
+    ldrsh   w11, [x10, w9, uxtw #1]
+    cmp     w11, #E_SAND
+    b.lt    bt_wobble
+    // tipo: predio perto do centro de cidade grande
+    mov     w9, #O_HOUSE
+    ldr     w10, [x19, #8]
+    mov     w11, #1400
+    cmp     w10, w11
+    b.le    4f
+    cmp     w27, w22
+    b.ge    4f
+    mov     w9, #O_TOWER
+4:  str     w9, [sp, #96]
+    bl      rng
+    str     w0, [sp, #100]
+    ldr     w0, [sp, #88]
+    ldr     w1, [sp, #92]
+    bl      sample_elev
+    mov     w2, w0
+    ldr     w0, [sp, #88]
+    ldr     w1, [sp, #92]
+    ldr     w3, [sp, #96]
+    ldr     w4, [sp, #100]
+    bl      add_obj
+bt_wobble:
+    mov     w0, #100                    // a rua faz curvas
+    bl      rng_mod
+    cmp     w0, #14
+    b.ge    6f
+    cmp     w0, #7
+    b.ge    5f
+    sub     w24, w24, #1
+    b       6f
+5:  add     w24, w24, #1
+6:  and     w24, w24, #15
+    add     w27, w27, #1
+    b       bt_step
+bt_next:
+    sub     w23, w23, #1
+    b       bt_street
+bt_done:
     ldr     x27, [sp, #80]
     ldp     x25, x26, [sp, #64]
     ldp     x23, x24, [sp, #48]
     ldp     x21, x22, [sp, #32]
     ldp     x19, x20, [sp, #16]
-    ldp     x29, x30, [sp], #96
+    ldp     x29, x30, [sp], #112
+    ret
+
+// gen_trees: florestas onde e umido, arvores soltas no campo
+gen_trees:
+    stp     x29, x30, [sp, #-80]!
+    mov     x29, sp
+    stp     x19, x20, [sp, #16]
+    stp     x21, x22, [sp, #32]
+    stp     x23, x24, [sp, #48]
+    str     x25, [sp, #64]
+    ldr     w20, [x28, #G_SEED]
+    add     w20, w20, #31
+    mov     w19, #513
+gt_loop:
+    and     w22, w19, #511
+    lsr     w23, w19, #9
+    cmp     w23, #510
+    b.ge    gt_done
+    cbz     w22, gt_next
+    cmp     w22, #510
+    b.ge    gt_next
+    LA      x9, elev
+    ldrsh   w25, [x9, w19, uxtw #1]
+    cmp     w25, #E_SAND
+    b.lt    gt_next
+    mov     w9, #1240
+    cmp     w25, w9
+    b.ge    gt_next
+    LA      x9, overlay
+    ldrb    w9, [x9, w19, uxtw]
+    cbnz    w9, gt_next
+    LA      x9, moist
+    ldrb    w24, [x9, w19, uxtw]
+    mov     w0, w22
+    mov     w1, w23
+    mov     w2, w20
+    bl      hash3
+    mov     w21, w0
+    mov     w9, #150
+    cmp     w25, #E_GRASS
+    b.lt    1f
+    mov     w9, #140
+1:  cmp     w24, w9
+    b.ge    gt_forest
+    and     w9, w21, #127               // arvore solta (1 em 128)
+    cbnz    w9, gt_next
+    b       gt_one
+gt_forest:
+    and     w9, w21, #3
+    cbz     w9, gt_next                 // 75% das celulas da floresta
+    add     w9, w9, #170
+    cmp     w24, w9
+    b.lo    gt_one
+    // floresta densa: segunda arvore
+    mov     w0, w22
+    mov     w1, w23
+    lsr     w2, w21, #2
+    and     w2, w2, #63
+    lsr     w3, w21, #26
+    lsr     w4, w21, #30
+    and     w4, w4, #1
+    bl      plant_tree
+gt_one:
+    mov     w0, w22
+    mov     w1, w23
+    lsr     w2, w21, #8
+    and     w2, w2, #63
+    lsr     w3, w21, #14
+    and     w3, w3, #63
+    lsr     w4, w21, #20
+    and     w4, w4, #3
+    cmp     w4, #0
+    cset    w4, eq
+    bl      plant_tree
+gt_next:
+    add     w19, w19, #1
+    b       gt_loop
+gt_done:
+    ldr     x25, [sp, #64]
+    ldp     x23, x24, [sp, #48]
+    ldp     x21, x22, [sp, #32]
+    ldp     x19, x20, [sp, #16]
+    ldp     x29, x30, [sp], #80
+    ret
+
+// plant_tree(w0 = cu, w1 = cv, w2 = ou, w3 = ov, w4 = pinheiro?)
+plant_tree:
+    stp     x29, x30, [sp, #-48]!
+    mov     x29, sp
+    stp     x19, x20, [sp, #16]
+    str     x21, [sp, #32]
+    lsl     w19, w0, #6
+    add     w19, w19, w2
+    lsl     w20, w1, #6
+    add     w20, w20, w3
+    mov     w21, w4
+    mov     w0, w19
+    mov     w1, w20
+    bl      sample_elev
+    mov     w2, w0
+    cmp     w2, #E_GRASS
+    cset    w3, ge                      // nas colinas: pinheiros
+    orr     w3, w3, w21
+    mov     w0, w19
+    mov     w1, w20
+    mov     w4, #0
+    bl      add_obj
+    ldr     x21, [sp, #32]
+    ldp     x19, x20, [sp, #16]
+    ldp     x29, x30, [sp], #48
     ret
 
 // gen_name(x0 = destino): [prefixo] + 2-3 silabas + [sufixo]
@@ -852,7 +1184,7 @@ gen_name:
     mov     x0, x19
     bl      strcat_cur
     mov     x19, x0
-    mov     x20, x0                     // inicio do nome (vira maiuscula)
+    mov     x20, x0
     mov     w0, #2
     bl      rng_mod
     add     w21, w0, #2
@@ -880,13 +1212,13 @@ gen_name:
     ret
 
 // =====================================================================
-//  Entrada (teclado e mouse)
+//  Entrada
 // =====================================================================
 handle_events:
     stp     x29, x30, [sp, #-160]!
     mov     x29, sp
     stp     x19, x20, [sp, #16]
-    add     x19, sp, #32                // SDL_Event (128 bytes)
+    add     x19, sp, #32
 he_loop:
     mov     x0, x19
     bl      F(SDL_PollEvent)
@@ -910,21 +1242,20 @@ he_quit:
     b       he_loop
 
 he_key:
-    ldrb    w9, [x19, #37]              // repeat
+    ldrb    w9, [x19, #37]
     cbnz    w9, he_loop
-    ldr     w20, [x19, #24]             // scancode
+    ldr     w20, [x19, #24]
     ldr     w9, [x28, #G_STATE]
     cbnz    w9, he_key_game
-    // --- tela de titulo ---
-    cmp     w20, #41                    // ESC
+    cmp     w20, #41
     b.eq    he_quit
-    cmp     w20, #40                    // ENTER
+    cmp     w20, #40
     b.eq    he_enter
-    cmp     w20, #88                    // ENTER do teclado numerico
+    cmp     w20, #88
     b.eq    he_enter
-    cmp     w20, #44                    // ESPACO
+    cmp     w20, #44
     b.eq    he_enter
-    cmp     w20, #21                    // R
+    cmp     w20, #21
     b.ne    he_loop
     bl      new_world
     b       he_loop
@@ -933,41 +1264,41 @@ he_enter:
     str     w9, [x28, #G_STATE]
     mov     w0, #1
     bl      set_zoom
-    str     wzr, [x28, #G_CAMX]
-    mov     w9, #1024
-    str     w9, [x28, #G_CAMY]
+    str     wzr, [x28, #G_CX]
+    mov     w9, #16384
+    str     w9, [x28, #G_CY]
     b       he_loop
 
 he_key_game:
-    cmp     w20, #41                    // ESC -> volta ao titulo
+    cmp     w20, #41
     b.ne    1f
     str     wzr, [x28, #G_STATE]
-    mov     w0, #2
+    mov     w0, #0
     bl      set_zoom
     b       he_loop
-1:  cmp     w20, #21                    // R -> novo mundo
+1:  cmp     w20, #21
     b.ne    2f
     bl      new_world
     b       he_loop
-2:  cmp     w20, #10                    // G -> grade
+2:  cmp     w20, #10                    // G: curvas de nivel
     b.ne    3f
-    ldr     w9, [x28, #G_GRID]
+    ldr     w9, [x28, #G_CONTOUR]
     eor     w9, w9, #1
-    str     w9, [x28, #G_GRID]
+    str     w9, [x28, #G_CONTOUR]
     b       he_loop
-3:  cmp     w20, #46                    // =/+
+3:  cmp     w20, #46
     b.eq    4f
     cmp     w20, #87
     b.ne    5f
 4:  bl      zoom_in
     b       he_loop
-5:  cmp     w20, #45                    // -
+5:  cmp     w20, #45
     b.eq    6f
     cmp     w20, #86
     b.ne    7f
 6:  bl      zoom_out
     b       he_loop
-7:  cmp     w20, #69                    // F12 -> screenshot
+7:  cmp     w20, #69
     b.ne    he_loop
     mov     w9, #1
     str     w9, [x28, #G_WANTSHOT]
@@ -980,15 +1311,11 @@ he_motion:
     str     s0, [x28, #G_MY]
     ldr     w9, [x28, #G_STATE]
     cbz     w9, he_loop
-    ldr     w9, [x19, #24]              // botoes apertados
+    ldr     w9, [x19, #24]
     cbz     w9, he_loop
-    // arrastar: move a camera (com acumulador de fracao)
-    ldr     w9, [x28, #G_FBW]
+    ldr     w9, [x28, #G_K]
     scvtf   s1, w9
-    mov     w10, #1280
-    scvtf   s2, w10
-    fdiv    s1, s1, s2
-    ldr     s0, [x19, #36]              // xrel
+    ldr     s0, [x19, #36]
     fmul    s0, s0, s1
     ldr     s3, [x28, #G_DAX]
     fadd    s3, s3, s0
@@ -996,10 +1323,10 @@ he_motion:
     scvtf   s4, w11
     fsub    s3, s3, s4
     str     s3, [x28, #G_DAX]
-    ldr     w12, [x28, #G_CAMX]
+    ldr     w12, [x28, #G_CX]
     sub     w12, w12, w11
-    str     w12, [x28, #G_CAMX]
-    ldr     s0, [x19, #40]              // yrel
+    str     w12, [x28, #G_CX]
+    ldr     s0, [x19, #40]
     fmul    s0, s0, s1
     ldr     s3, [x28, #G_DAY]
     fadd    s3, s3, s0
@@ -1007,14 +1334,14 @@ he_motion:
     scvtf   s4, w11
     fsub    s3, s3, s4
     str     s3, [x28, #G_DAY]
-    ldr     w12, [x28, #G_CAMY]
+    ldr     w12, [x28, #G_CY]
     sub     w12, w12, w11
-    str     w12, [x28, #G_CAMY]
+    str     w12, [x28, #G_CY]
     b       he_loop
 
 he_wheel:
-    ldr     s0, [x19, #28]              // y
-    ldr     w9, [x19, #32]              // direction
+    ldr     s0, [x19, #28]
+    ldr     w9, [x19, #32]
     cmp     w9, #1
     b.ne    1f
     fneg    s0, s0
@@ -1043,7 +1370,7 @@ he_done:
     ret
 
 // =====================================================================
-//  Atualizacao (camera, tile sob o mouse)
+//  Atualizacao
 // =====================================================================
 update:
     stp     x29, x30, [sp, #-32]!
@@ -1051,8 +1378,7 @@ update:
     stp     x19, x20, [sp, #16]
     ldr     w9, [x28, #G_STATE]
     cbnz    w9, up_game
-
-    // titulo: camera passeia devagar pelo mapa
+    // titulo: a camera passeia
     ldr     w9, [x28, #G_FRAME]
     mov     w10, #2400
     udiv    w11, w9, w10
@@ -1063,600 +1389,548 @@ update:
     b       2f
 1:  mov     w10, #1800
     sub     w9, w10, w9
-2:  str     w9, [x28, #G_CAMX]
-    mov     w9, #1024
-    str     w9, [x28, #G_CAMY]
+2:  lsl     w9, w9, #4
+    str     w9, [x28, #G_CX]
+    mov     w9, #16384
+    str     w9, [x28, #G_CY]
     b       up_done
-
 up_game:
     ldr     x19, [x28, #G_KEYS]
-    ldr     w20, [x28, #G_FBW]
-    mov     w9, #160
-    udiv    w20, w20, w9                // velocidade
-    ldr     w10, [x28, #G_CAMX]
-    ldr     w11, [x28, #G_CAMY]
-    ldrb    w9, [x19, #26]              // W
-    ldrb    w12, [x19, #82]             // seta cima
+    ldr     w20, [x28, #G_K]
+    lsl     w20, w20, #3                // 8 px de tela por quadro
+    ldr     w10, [x28, #G_CX]
+    ldr     w11, [x28, #G_CY]
+    ldrb    w9, [x19, #26]
+    ldrb    w12, [x19, #82]
     orr     w9, w9, w12
     cbz     w9, 3f
     sub     w11, w11, w20
-3:  ldrb    w9, [x19, #22]              // S
-    ldrb    w12, [x19, #81]             // seta baixo
+3:  ldrb    w9, [x19, #22]
+    ldrb    w12, [x19, #81]
     orr     w9, w9, w12
     cbz     w9, 4f
     add     w11, w11, w20
-4:  ldrb    w9, [x19, #4]               // A
-    ldrb    w12, [x19, #80]             // seta esquerda
+4:  ldrb    w9, [x19, #4]
+    ldrb    w12, [x19, #80]
     orr     w9, w9, w12
     cbz     w9, 5f
     sub     w10, w10, w20
-5:  ldrb    w9, [x19, #7]               // D
-    ldrb    w12, [x19, #79]             // seta direita
+5:  ldrb    w9, [x19, #7]
+    ldrb    w12, [x19, #79]
     orr     w9, w9, w12
     cbz     w9, 6f
     add     w10, w10, w20
-6:  mov     w9, #-2048
+6:  mov     w9, #-32768
     cmp     w10, w9
     csel    w10, w9, w10, lt
-    mov     w9, #2048
+    mov     w9, #32768
     cmp     w10, w9
     csel    w10, w9, w10, gt
     cmp     w11, #0
     csel    w11, wzr, w11, lt
     cmp     w11, w9
     csel    w11, w9, w11, gt
-    str     w10, [x28, #G_CAMX]
-    str     w11, [x28, #G_CAMY]
-    bl      calc_hover
+    str     w10, [x28, #G_CX]
+    str     w11, [x28, #G_CY]
 up_done:
     ldp     x19, x20, [sp, #16]
     ldp     x29, x30, [sp], #32
     ret
 
-// calc_hover: converte o mouse (tela) para o tile isometrico
+// calc_hover: usa o z-buffer para achar o ponto do mundo sob o mouse
 calc_hover:
-    ldr     w9, [x28, #G_FBW]
-    ldr     w10, [x28, #G_FBH]
+    str     wzr, [x28, #G_HOVOK]
     ldr     s0, [x28, #G_MX]
-    scvtf   s1, w9
-    fmul    s0, s0, s1
-    mov     w11, #1280
-    scvtf   s1, w11
-    fdiv    s0, s0, s1
     fcvtzs  w0, s0
     ldr     s0, [x28, #G_MY]
-    scvtf   s1, w10
-    fmul    s0, s0, s1
-    mov     w11, #720
-    scvtf   s1, w11
-    fdiv    s0, s0, s1
     fcvtzs  w1, s0
-    sub     w0, w0, w9, lsr #1
-    ldr     w11, [x28, #G_CAMX]
-    add     w0, w0, w11                 // wx
-    sub     w1, w1, w10, lsr #1
-    ldr     w11, [x28, #G_CAMY]
-    add     w1, w1, w11                 // wy
-    mov     w2, #0                      // altura estimada
-    mov     w3, #4                      // iteracoes
-    LA      x12, level
-    mov     w4, #-1
-1:  add     w5, w1, w2
-    lsl     w6, w5, #1
-    add     w7, w0, w6
-    sub     w7, w7, #16
-    asr     w7, w7, #5                  // tx
-    sub     w8, w6, w0
-    sub     w8, w8, #16
-    asr     w8, w8, #5                  // ty
-    cmp     w7, #MAPN
-    b.hs    8f
-    cmp     w8, #MAPN
-    b.hs    8f
-    add     w4, w7, w8, lsl #7
-    ldrb    w2, [x12, w4, uxtw]
-    lsl     w2, w2, #2
-    subs    w3, w3, #1
-    b.ne    1b
-    b       9f
-8:  mov     w4, #-1
-9:  str     w4, [x28, #G_HOV]
-    ret
-
-// =====================================================================
-//  Renderizacao por software (isometrica, estilo OpenTTD)
-//  Durante o desenho: x27 = framebuffer, w26 = largura, w25 = altura
-// =====================================================================
-
-// hline(w0 = x0, w1 = x1 (exclusivo), w2 = y, w3 = cor)  usa x9, x10
-hline:
-    tbnz    w2, #31, 9f
-    cmp     w2, w25
-    b.ge    9f
-    cmp     w0, #0
-    csel    w0, wzr, w0, lt
-    cmp     w1, w26
-    csel    w1, w26, w1, gt
-    cmp     w0, w1
-    b.ge    9f
-    madd    w9, w2, w26, w0
-    add     x9, x27, w9, uxtw #2
-    sub     w10, w1, w0
-1:  str     w3, [x9], #4
-    subs    w10, w10, #1
-    b.ne    1b
+    cmp     w0, #SCRW
+    b.hs    9f
+    cmp     w1, #SCRH
+    b.hs    9f
+    mov     w2, #SCRW
+    madd    w2, w1, w2, w0
+    LA      x3, zb
+    ldrh    w2, [x3, w2, uxtw #1]       // profundidade = (u+v) em 1/64
+    ldr     w3, [x28, #G_K]
+    sub     w4, w0, #640
+    mul     w4, w4, w3
+    ldr     w5, [x28, #G_CX]
+    add     w4, w4, w5                  // (u-v) em 1/64
+    add     w5, w2, w4
+    asr     w5, w5, #1                  // u
+    sub     w6, w2, w4
+    asr     w6, w6, #1                  // v
+    MOVI32  w7, 32640                   // 510 * 64
+    cmp     w5, w7
+    b.hs    9f
+    cmp     w6, w7
+    b.hs    9f
+    str     w5, [x28, #G_HOVU]
+    str     w6, [x28, #G_HOVV]
+    mov     w7, #1
+    str     w7, [x28, #G_HOVOK]
 9:  ret
 
-// vline(w0 = x, w1 = y0, w2 = comprimento, w3 = cor)  usa x9-x11
-vline:
-    tbnz    w0, #31, 9f
-    cmp     w0, w26
-    b.ge    9f
-    add     w2, w1, w2
-    cmp     w1, #0
-    csel    w1, wzr, w1, lt
-    cmp     w2, w25
-    csel    w2, w25, w2, gt
-    cmp     w1, w2
-    b.ge    9f
-    madd    w9, w1, w26, w0
-    add     x9, x27, w9, uxtw #2
-    sub     w10, w2, w1
-    lsl     w11, w26, #2
-1:  str     w3, [x9]
-    add     x9, x9, x11
-    subs    w10, w10, #1
-    b.ne    1b
-9:  ret
-
-// plot(w0 = x, w1 = y, w3 = cor)
-plot:
-    mov     w2, w1
-    add     w1, w0, #1
-    b       hline
-
-// draw_map: limpa o framebuffer e desenha todos os tiles visiveis
-draw_map:
-    stp     x29, x30, [sp, #-96]!
+// =====================================================================
+//  Renderizacao do terreno (voxel space isometrico)
+//
+//  Para cada coluna da tela andamos no mundo de frente para tras.
+//  Cada amostra projeta sua altura; se ficar acima de tudo o que ja foi
+//  desenhado naquela coluna (y-buffer), pintamos o trecho e guardamos a
+//  profundidade (z-buffer) para os objetos e para o mouse.
+// =====================================================================
+draw_terrain:
+    stp     x29, x30, [sp, #-112]!
     mov     x29, sp
     stp     x19, x20, [sp, #16]
     stp     x21, x22, [sp, #32]
     stp     x23, x24, [sp, #48]
     stp     x25, x26, [sp, #64]
     str     x27, [sp, #80]
-
-    LA      x27, fb
-    ldr     w26, [x28, #G_FBW]
-    ldr     w25, [x28, #G_FBH]
-
-    mul     w9, w26, w25
-    lsr     w9, w9, #1
-    MOVI32  w10, 0xFF0E1621             // fundo
-    orr     x10, x10, x10, lsl #32
-    mov     x11, x27
-1:  str     x10, [x11], #8
-    subs    w9, w9, #1
-    b.ne    1b
-
-    ldr     w9, [x28, #G_CAMX]
-    lsr     w23, w26, #1
-    sub     w23, w23, w9                // offx
-    ldr     w9, [x28, #G_CAMY]
-    lsr     w24, w25, #1
-    sub     w24, w24, w9                // offy
-
-    mov     w19, #0                     // ty
-dm_ty:
-    mov     w20, #0                     // tx
-dm_tx:
-    add     w21, w20, w19, lsl #7       // i
-    LA      x9, level
-    ldrb    w22, [x9, w21, uxtw]
-    lsl     w22, w22, #2                // E = nivel * HSTEP
-    sub     w1, w20, w19
-    lsl     w1, w1, #4
-    add     w1, w1, w23                 // sx
-    add     w2, w20, w19
-    lsl     w2, w2, #3
-    sub     w2, w2, w22
-    add     w2, w2, w24                 // sy (vertice de cima)
-    cmn     w1, #16
-    b.lt    dm_skip
-    add     w9, w26, #16
-    cmp     w1, w9
-    b.gt    dm_skip
-    cmp     w2, w25
-    b.gt    dm_skip
-    add     w9, w2, w22
-    add     w9, w9, #30
-    cmp     w9, #0
-    b.lt    dm_skip
-    mov     w0, w21
-    mov     w3, w22
-    bl      draw_tile
-dm_skip:
-    add     w20, w20, #1
-    cmp     w20, #MAPN
-    b.lt    dm_tx
-    add     w19, w19, #1
-    cmp     w19, #MAPN
-    b.lt    dm_ty
-
-    // contorno branco no tile sob o mouse (por cima de tudo)
-    ldr     w9, [x28, #G_STATE]
-    cbz     w9, dm_end
-    ldr     w19, [x28, #G_HOV]
-    tbnz    w19, #31, dm_end
-    and     w20, w19, #127              // tx
-    lsr     w21, w19, #7                // ty
-    LA      x9, level
-    ldrb    w22, [x9, w19, uxtw]
-    lsl     w22, w22, #2
-    sub     w9, w20, w21
-    lsl     w9, w9, #4
-    add     w10, w20, w21
-    lsl     w10, w10, #3
-    add     w20, w9, w23                // sx
-    sub     w10, w10, w22
-    add     w21, w10, w24               // sy
-    mov     w22, #0
-1:  cmp     w22, #8
-    b.ge    2f
-    lsl     w14, w22, #1
-    add     w14, w14, #2
-    b       3f
-2:  mov     w14, #32
-    sub     w14, w14, w22, lsl #1
-3:  sub     w0, w20, w14
-    add     w1, w21, w22
-    mov     w3, #-1
-    bl      plot
-    add     w0, w20, w14
-    sub     w0, w0, #1
-    add     w1, w21, w22
-    bl      plot
-    add     w22, w22, #1
-    cmp     w22, #16
-    b.lt    1b
-dm_end:
+    ldr     w9, [x28, #G_K]
+    str     w9, [sp, #88]
+    ldr     w20, [x28, #G_Z256]
+    ldr     w27, [x28, #G_EMAXZ]
+    add     w10, w27, #360
+    mul     w10, w10, w9
+    ldr     w11, [x28, #G_CY]
+    add     w10, w10, w11
+    str     w10, [sp, #92]              // Y do mundo na linha de partida
+    neg     w27, w27
+    sub     w27, w27, #2                // yb final
+    ldr     w9, [x28, #G_CONTOUR]
+    str     w9, [sp, #104]
+    mov     w26, #0                     // sx
+dt_col:
+    ldr     w9, [sp, #88]
+    sub     w10, w26, #640
+    mul     w10, w10, w9
+    ldr     w11, [x28, #G_CX]
+    add     w10, w10, w11               // X (1/16 px) = u - v (1/64 cel)
+    ldr     w11, [sp, #92]
+    lsl     w12, w11, #10
+    lsl     w13, w10, #9
+    add     w21, w12, w13               // u (16.16)
+    sub     w22, w12, w13               // v (16.16)
+    lsl     w23, w9, #10                // passo
+    ldr     w24, [x28, #G_EMAXZ]
+    add     w24, w24, #SCRH             // yb
+    mov     w25, #SCRH                  // y-buffer
+    str     wzr, [sp, #100]
+dt_row:
+    asr     w9, w21, #16
+    asr     w10, w22, #16
+    cmp     w9, #511
+    b.hs    dt_ocean
+    cmp     w10, #511
+    b.hs    dt_ocean
+    ubfx    w11, w21, #8, #8
+    ubfx    w12, w22, #8, #8
+    add     w13, w9, w10, lsl #9
+    LA      x14, elev
+    add     x14, x14, w13, uxtw #1
+    ldrsh   w0, [x14]
+    ldrsh   w1, [x14, #2]
+    ldrsh   w2, [x14, #1024]
+    ldrsh   w3, [x14, #1026]
+    sub     w1, w1, w0
+    mul     w1, w1, w11
+    add     w0, w0, w1, asr #8
+    sub     w3, w3, w2
+    mul     w3, w3, w11
+    add     w2, w2, w3, asr #8
+    sub     w2, w2, w0
+    mul     w2, w2, w12
+    add     w15, w0, w2, asr #8         // elevacao interpolada
+    b       dt_proj
+dt_ocean:
+    mov     w15, #-2000                 // fora do mapa: oceano
+dt_proj:
+    cmp     w15, #0
+    csel    w0, w15, wzr, gt            // agua fica no nivel do mar
+    mul     w0, w0, w20
+    asr     w0, w0, #12
+    sub     w0, w24, w0                 // y na tela
+    ldr     w1, [sp, #100]
+    str     w15, [sp, #100]
+    cmp     w0, w25
+    b.ge    dt_next
+    str     w0, [sp, #96]
+    mov     w3, #0
+    ldr     w2, [sp, #104]
+    cbz     w2, 1f
+    asr     w1, w1, #8
+    asr     w2, w15, #8
+    cmp     w1, w2
+    cset    w3, ne
+1:  mov     w0, w21
+    mov     w1, w22
+    mov     w2, w15
+    bl      terrain_color
+    ldr     w1, [sp, #96]
+    cmp     w1, #0
+    csel    w1, wzr, w1, lt
+    add     w2, w21, w22
+    asr     w2, w2, #10
+    cmp     w2, #0
+    csel    w2, wzr, w2, lt
+    mov     w3, #65535
+    cmp     w2, w3
+    csel    w2, w3, w2, gt
+    mov     w4, #SCRW
+    madd    w5, w1, w4, w26
+    LA      x6, fb
+    LA      x7, zb
+    sub     w8, w25, w1
+2:  str     w0, [x6, w5, uxtw #2]
+    strh    w2, [x7, w5, uxtw #1]
+    add     w5, w5, w4
+    subs    w8, w8, #1
+    b.ne    2b
+    mov     w25, w1
+    cbz     w25, dt_coldone
+dt_next:
+    sub     w21, w21, w23
+    sub     w22, w22, w23
+    sub     w24, w24, #1
+    cmp     w24, w27
+    b.gt    dt_row
+dt_coldone:
+    add     w26, w26, #1
+    cmp     w26, #SCRW
+    b.lt    dt_col
     ldr     x27, [sp, #80]
     ldp     x25, x26, [sp, #64]
     ldp     x23, x24, [sp, #48]
     ldp     x21, x22, [sp, #32]
     ldp     x19, x20, [sp, #16]
-    ldp     x29, x30, [sp], #96
+    ldp     x29, x30, [sp], #112
     ret
 
-// draw_tile(w0 = i, w1 = sx, w2 = sy, w3 = E)
-// bloco isometrico: losango 32x16 no topo + duas faces laterais
-draw_tile:
+// terrain_color(w0 = u, w1 = v (16.16), w2 = elevacao, w3 = curva?)
+// -> w0 = cor ARGB   (usa x0-x15)
+terrain_color:
+    stp     x29, x30, [sp, #-16]!
+    mov     x29, sp
+    mov     w10, w0
+    mov     w11, w1
+    mov     w12, w2
+    mov     w13, w3
+    cmp     w12, #0
+    b.lt    tc_water
+    // ruido fino (tabela 256x256) deixa as transicoes de cor naturais
+    ubfx    w0, w10, #13, #8
+    ubfx    w1, w11, #13, #8
+    add     w0, w0, w1, lsl #8
+    LA      x9, noisetab
+    ldrb    w0, [x9, w0, uxtw]
+    lsl     w7, w0, #4                  // bits 8..11 = ruido da umidade
+    and     w0, w0, #31
+    sub     w0, w0, #16
+    add     w14, w12, w0
+    asr     w1, w10, #16
+    asr     w2, w11, #16
+    add     w15, w1, w2, lsl #9         // celula
+    LA      x9, overlay
+    ldrb    w9, [x9, w15, uxtw]
+    cmp     w9, #1
+    b.ne    1f
+    MOVI32  w0, 0xFF8C8A84              // rua
+    b       tc_light
+1:  LA      x9, moist                   // umidade interpolada + ruido
+    add     x9, x9, w15, uxtw
+    ldrb    w3, [x9]
+    ldrb    w4, [x9, #1]
+    ldrb    w5, [x9, #512]
+    ldrb    w6, [x9, #513]
+    ubfx    w1, w10, #8, #8
+    ubfx    w2, w11, #8, #8
+    sub     w4, w4, w3
+    mul     w4, w4, w1
+    add     w3, w3, w4, asr #8
+    sub     w6, w6, w5
+    mul     w6, w6, w1
+    add     w5, w5, w6, asr #8
+    sub     w5, w5, w3
+    mul     w5, w5, w2
+    add     w3, w3, w5, asr #8
+    ubfx    w9, w7, #8, #4
+    add     w9, w9, w3
+    sub     w9, w9, #8
+    cmp     w14, #E_SAND
+    b.ge    2f
+    MOVI32  w0, 0xFFDCC88A              // praia
+    b       tc_light
+2:  cmp     w14, #E_GRASS
+    b.ge    3f
+    cmp     w9, #150
+    b.ge    tc_forest
+    cmp     w9, #95
+    b.ge    21f
+    MOVI32  w0, 0xFF8DAE4E              // campo seco
+    b       tc_light
+21: MOVI32  w0, 0xFF62A83E              // campo
+    b       tc_light
+3:  cmp     w14, #E_HILL
+    b.ge    4f
+    cmp     w9, #140
+    b.ge    tc_forest
+    MOVI32  w0, 0xFF7E9A4A              // colinas
+    b       tc_light
+4:  mov     w9, #E_ROCK
+    cmp     w14, w9
+    b.ge    5f
+    MOVI32  w0, 0xFF8E877E              // rocha
+    b       tc_light
+5:  MOVI32  w0, 0xFFEEF2F6              // neve
+    b       tc_light
+tc_forest:
+    MOVI32  w0, 0xFF3F7A2E              // chao de floresta
+tc_light:
+    ubfx    w1, w10, #8, #8
+    ubfx    w2, w11, #8, #8
+    LA      x9, light
+    add     x9, x9, w15, uxtw
+    ldrb    w3, [x9]
+    ldrb    w4, [x9, #1]
+    ldrb    w5, [x9, #512]
+    ldrb    w6, [x9, #513]
+    sub     w4, w4, w3
+    mul     w4, w4, w1
+    add     w3, w3, w4, asr #8
+    sub     w6, w6, w5
+    mul     w6, w6, w1
+    add     w5, w5, w6, asr #8
+    sub     w5, w5, w3
+    mul     w5, w5, w2
+    add     w3, w3, w5, asr #8          // luz interpolada (128 = normal)
+    cbz     w13, 6f
+    sub     w3, w3, w3, lsr #2          // curva de nivel: 25% mais escuro
+6:  mov     w7, #255
+    ubfx    w4, w0, #16, #8
+    mul     w4, w4, w3
+    lsr     w4, w4, #7
+    cmp     w4, w7
+    csel    w4, w4, w7, lo
+    ubfx    w5, w0, #8, #8
+    mul     w5, w5, w3
+    lsr     w5, w5, #7
+    cmp     w5, w7
+    csel    w5, w5, w7, lo
+    and     w6, w0, #255
+    mul     w6, w6, w3
+    lsr     w6, w6, #7
+    cmp     w6, w7
+    csel    w6, w6, w7, lo
+    orr     w0, w6, w5, lsl #8
+    orr     w0, w0, w4, lsl #16
+    orr     w0, w0, #0xFF000000
+    ldp     x29, x30, [sp], #16
+    ret
+
+tc_water:
+    neg     w12, w12                    // profundidade
+    cmp     w12, #20
+    b.ge    1f
+    MOVI32  w5, 0xFF8CC3E4              // espuma na beira
+    b       3f
+1:  lsr     w14, w12, #2
+    mov     w9, #256
+    cmp     w14, w9
+    csel    w14, w14, w9, lo
+    mov     w1, #-40                    // raso (3D86C6) -> fundo (15386A)
+    mul     w1, w1, w14
+    mov     w2, #0x3D
+    add     w2, w2, w1, asr #8
+    mov     w1, #-78
+    mul     w1, w1, w14
+    mov     w3, #0x86
+    add     w3, w3, w1, asr #8
+    mov     w1, #-92
+    mul     w1, w1, w14
+    mov     w4, #0xC6
+    add     w4, w4, w1, asr #8
+    orr     w5, w4, w3, lsl #8
+    orr     w5, w5, w2, lsl #16
+    orr     w5, w5, #0xFF000000
+3:  ubfx    w0, w10, #15, #8            // brilhos que piscam na agua
+    asr     w1, w11, #15
+    ldr     w2, [x28, #G_FRAME]
+    lsr     w2, w2, #3
+    mov     w3, #7
+    madd    w1, w2, w3, w1
+    and     w1, w1, #255
+    add     w0, w0, w1, lsl #8
+    LA      x9, noisetab
+    ldrb    w0, [x9, w0, uxtw]
+    cbnz    w0, 4f
+    MOVI32  w0, 0x00202020
+    add     w5, w5, w0
+4:  mov     w0, w5
+    ldp     x29, x30, [sp], #16
+    ret
+
+// =====================================================================
+//  Objetos (sprites com teste de profundidade)
+// =====================================================================
+draw_objects:
     stp     x29, x30, [sp, #-80]!
     mov     x29, sp
     stp     x19, x20, [sp, #16]
     stp     x21, x22, [sp, #32]
     stp     x23, x24, [sp, #48]
-    mov     w19, w0
-    mov     w20, w1
-    mov     w21, w2
-    mov     w22, w3
-    LA      x9, terr
-    ldrb    w23, [x9, w19, uxtw]        // tipo de terreno
-    LA      x9, ctab
-    add     x24, x9, x23, lsl #4        // cores: topo, esquerda, direita
-
-    // cor do topo com uma leve variacao por tile (agua "brilha")
-    LA      x9, jit
-    ldrb    w10, [x9, w19, uxtw]
-    cmp     w23, #T_SHALLOW
-    b.hi    1f
-    ldr     w11, [x28, #G_FRAME]
-    add     w10, w10, w11, lsr #4
-    and     w10, w10, #15
-1:  ldr     w9, [x24]
-    MOVI32  w11, 0x00080808
-    sub     w9, w9, w11
-    MOVI32  w11, 0x00010101
-    madd    w9, w10, w11, w9
-    str     w9, [sp, #64]
-
-    // faces laterais
-    add     w15, w22, #6
-    mov     w14, #0
-2:  sub     w0, w20, #16
-    add     w0, w0, w14
-    add     w1, w21, #9
-    add     w1, w1, w14, lsr #1
-    mov     w2, w15
-    ldr     w3, [x24, #4]
-    bl      vline
-    add     w14, w14, #1
-    cmp     w14, #16
-    b.lt    2b
-    mov     w14, #0
-3:  add     w0, w20, w14
-    add     w1, w21, #16
-    sub     w1, w1, w14, lsr #1
-    mov     w2, w15
-    ldr     w3, [x24, #8]
-    bl      vline
-    add     w14, w14, #1
-    cmp     w14, #16
-    b.lt    3b
-
-    // topo (losango)
-    mov     w14, #0
-4:  cmp     w14, #8
-    b.ge    41f
-    lsl     w9, w14, #1
-    add     w9, w9, #2
-    b       42f
-41: mov     w9, #32
-    sub     w9, w9, w14, lsl #1
-42: str     w9, [sp, #68]
-    sub     w0, w20, w9
-    add     w1, w20, w9
-    add     w2, w21, w14
-    ldr     w3, [sp, #64]
-    bl      hline
-    cmp     w14, #8
-    b.ge    45f
-    ldr     w9, [x28, #G_GRID]
-    cbz     w9, 45f
-    ldr     w3, [sp, #64]               // grade: borda 25% mais escura
-    lsr     w9, w3, #2
-    and     w9, w9, #0x3F3F3F3F
-    sub     w3, w3, w9
-    orr     w3, w3, #0xFF000000
-    ldr     w9, [sp, #68]
-    sub     w0, w20, w9
-    add     w1, w21, w14
-    bl      plot
-    ldr     w9, [sp, #68]
-    add     w0, w20, w9
-    sub     w0, w0, #1
-    add     w1, w21, w14
-    bl      plot
-45: add     w14, w14, #1
-    cmp     w14, #16
-    b.lt    4b
-
-    // enfeites
-    cmp     w23, #T_FOREST
-    b.eq    dt_trees
-    cmp     w23, #T_HOUSE
-    b.eq    dt_house
-    cmp     w23, #T_TOWER
-    b.eq    dt_tower
-    b       dt_done
-
-dt_trees:
-    mov     w22, #0
-5:  mov     w0, w19
-    mov     w1, w22
-    mov     w2, #0x777
-    bl      hash3
-    lsr     w10, w0, #4
-    and     w10, w10, #1
-    mov     w11, #3
-    madd    w10, w22, w11, w10
-    add     w10, w10, #4                // dy
-    and     w9, w0, #15
-    sub     w9, w9, #8                  // dx
-    add     w0, w20, w9
-    add     w1, w21, w10
-    bl      draw_tree
-    add     w22, w22, #1
-    cmp     w22, #3
-    b.lt    5b
-    b       dt_done
-
-dt_house:
-    mov     w0, w19
-    mov     w1, #5
-    mov     w2, #0x333
-    bl      hash3
-    mov     w2, w0
-    mov     w0, w20
-    mov     w1, w21
-    bl      draw_house
-    b       dt_done
-
-dt_tower:
-    mov     w0, w19
-    mov     w1, #9
-    mov     w2, #0x555
-    bl      hash3
-    mov     w2, w0
-    mov     w0, w20
-    mov     w1, w21
-    bl      draw_tower
-
-dt_done:
+    str     x25, [sp, #64]
+    ldr     w19, [x28, #G_NOBJ]
+    LA      x20, objs
+    ldr     w21, [x28, #G_Z256]
+    ldr     w22, [x28, #G_CX]
+    ldr     w23, [x28, #G_CY]
+    lsr     w24, w21, #8
+    mov     w9, #1
+    cmp     w24, #1
+    csel    w24, w24, w9, ge            // escala dos sprites
+    mov     w25, #0
+do_loop:
+    cmp     w25, w19
+    b.ge    do_done
+    add     x9, x20, w25, uxtw #3
+    ldrh    w10, [x9]
+    ldrh    w11, [x9, #2]
+    ldrsh   w12, [x9, #4]
+    ldrb    w13, [x9, #6]
+    ldrb    w14, [x9, #7]
+    sub     w0, w10, w11
+    sub     w0, w0, w22
+    mul     w0, w0, w21
+    asr     w0, w0, #12
+    add     w1, w0, #640                // x na tela
+    add     w0, w10, w11
+    lsr     w0, w0, #1
+    sub     w0, w0, w12
+    sub     w0, w0, w23
+    mul     w0, w0, w21
+    asr     w0, w0, #12
+    add     w2, w0, #360                // y na tela (base)
+    cmn     w1, #64
+    b.lt    do_skip
+    mov     w9, #1344
+    cmp     w1, w9
+    b.gt    do_skip
+    cmp     w2, #0
+    b.lt    do_skip
+    mov     w9, #800
+    cmp     w2, w9
+    b.gt    do_skip
+    add     w4, w10, w11                // profundidade
+    LA      x0, sprites
+    add     x0, x0, x13, lsl #7
+    mov     w3, w24
+    mov     w5, w14
+    bl      blit
+do_skip:
+    add     w25, w25, #1
+    b       do_loop
+do_done:
+    ldr     x25, [sp, #64]
     ldp     x23, x24, [sp, #48]
     ldp     x21, x22, [sp, #32]
     ldp     x19, x20, [sp, #16]
     ldp     x29, x30, [sp], #80
     ret
 
-// draw_tree(w0 = x da base, w1 = y da base)
-draw_tree:
-    stp     x29, x30, [sp, #-48]!
-    mov     x29, sp
-    stp     x19, x20, [sp, #16]
-    stp     x21, x22, [sp, #32]
-    mov     w19, w0
-    mov     w20, w1
-    sub     w1, w20, #2
-    mov     w2, #3
-    MOVI32  w3, 0xFF5B3A1E              // tronco
-    bl      vline
-    mov     w21, #0
-1:  LA      x9, tree_w
-    ldrb    w22, [x9, x21]
-    lsr     w22, w22, #1
-    sub     w0, w19, w22
-    add     w1, w19, w22
-    add     w1, w1, #1
-    sub     w2, w20, #9
-    add     w2, w2, w21
-    MOVI32  w3, 0xFF2E6B2E              // copa
-    bl      hline
-    sub     w0, w19, w22
-    sub     w1, w20, #9
-    add     w1, w1, w21
-    MOVI32  w3, 0xFF4E9A45              // luz do lado esquerdo
-    bl      plot
-    add     w21, w21, #1
-    cmp     w21, #7
-    b.lt    1b
-    ldp     x21, x22, [sp, #32]
-    ldp     x19, x20, [sp, #16]
-    ldp     x29, x30, [sp], #48
-    ret
-
-// draw_house(w0 = sx, w1 = sy, w2 = hash)
-draw_house:
-    stp     x29, x30, [sp, #-48]!
-    mov     x29, sp
-    stp     x19, x20, [sp, #16]
-    stp     x21, x22, [sp, #32]
-    mov     w19, w0
-    mov     w20, w1
-    mov     w21, w2
-    mov     w22, #4                     // paredes
-1:  sub     w0, w19, #6
-    mov     w1, w19
-    add     w2, w20, w22
-    MOVI32  w3, 0xFFE8DDC6
-    bl      hline
-    mov     w0, w19
-    add     w1, w19, #6
-    add     w2, w20, w22
-    MOVI32  w3, 0xFFBFAF92
-    bl      hline
-    add     w22, w22, #1
-    cmp     w22, #12
-    b.lt    1b
-    and     w9, w21, #3                 // cor do telhado
-    LA      x10, roofc
-    add     x21, x10, x9, lsl #3
-    mov     w22, #0
-2:  add     w9, w22, #2
-    sub     w0, w19, w9
-    mov     w1, w19
-    sub     w2, w20, #2
-    add     w2, w2, w22
-    ldr     w3, [x21]
-    bl      hline
-    add     w9, w22, #2
-    mov     w0, w19
-    add     w1, w19, w9
-    sub     w2, w20, #2
-    add     w2, w2, w22
-    ldr     w3, [x21, #4]
-    bl      hline
-    add     w22, w22, #1
-    cmp     w22, #6
-    b.lt    2b
-    mov     w22, #9                     // porta
-3:  sub     w0, w19, #4
-    sub     w1, w19, #2
-    add     w2, w20, w22
-    MOVI32  w3, 0xFF4A3524
-    bl      hline
-    add     w22, w22, #1
-    cmp     w22, #12
-    b.lt    3b
-    add     w0, w19, #2                 // janela
-    add     w1, w19, #4
-    add     w2, w20, #7
-    MOVI32  w3, 0xFF9FC4E0
-    bl      hline
-    ldp     x21, x22, [sp, #32]
-    ldp     x19, x20, [sp, #16]
-    ldp     x29, x30, [sp], #48
-    ret
-
-// draw_tower(w0 = sx, w1 = sy, w2 = hash): predio com janelas acesas
-draw_tower:
-    stp     x29, x30, [sp, #-48]!
-    mov     x29, sp
-    stp     x19, x20, [sp, #16]
-    stp     x21, x22, [sp, #32]
-    mov     w19, w0
-    mov     w20, w1
-    mov     w21, w2
-    mov     w22, #-10
-1:  sub     w0, w19, #6
-    mov     w1, w19
-    add     w2, w20, w22
-    MOVI32  w3, 0xFFA9B6C6
-    bl      hline
-    mov     w0, w19
-    add     w1, w19, #6
-    add     w2, w20, w22
-    MOVI32  w3, 0xFF7D8999
-    bl      hline
-    add     w22, w22, #1
-    cmp     w22, #12
-    b.lt    1b
-    sub     w0, w19, #6
-    add     w1, w19, #6
-    sub     w2, w20, #11
-    MOVI32  w3, 0xFF4F5866
-    bl      hline
-    mov     w22, #0
-2:  lsr     w9, w21, w22
-    tst     w9, #1
-    MOVI32  w3, 0xFF3C4656
-    MOVI32  w10, 0xFFFFE38A
-    csel    w3, w10, w3, ne
-    sub     w0, w19, #4
-    add     w1, w22, w22, lsl #1
-    add     w1, w1, w20
-    sub     w1, w1, #8
-    bl      plot
-    sub     w0, w19, #2
-    add     w1, w22, w22, lsl #1
-    add     w1, w1, w20
-    sub     w1, w1, #8
-    bl      plot
-    add     w9, w22, #8
-    lsr     w9, w21, w9
-    tst     w9, #1
-    MOVI32  w3, 0xFF2E3746
-    MOVI32  w10, 0xFFE8C870
-    csel    w3, w10, w3, ne
-    add     w0, w19, #2
-    add     w1, w22, w22, lsl #1
-    add     w1, w1, w20
-    sub     w1, w1, #8
-    bl      plot
-    add     w0, w19, #4
-    add     w1, w22, w22, lsl #1
-    add     w1, w1, w20
-    sub     w1, w1, #8
-    bl      plot
-    add     w22, w22, #1
-    cmp     w22, #7
-    b.lt    2b
-    ldp     x21, x22, [sp, #32]
-    ldp     x19, x20, [sp, #16]
-    ldp     x29, x30, [sp], #48
+// blit(x0 = sprite, w1 = x, w2 = y base, w3 = escala, w4 = profundidade,
+//      w5 = variante)   folha; usa x0-x17
+blit:
+    sub     sp, sp, #16
+    ldrb    w6, [x0]                    // largura
+    ldrb    w7, [x0, #1]                // altura
+    str     w7, [sp]
+    ldrb    w8, [x0, #2]                // ancora x
+    add     x0, x0, #4
+    mul     w9, w8, w3
+    sub     w1, w1, w9
+    lsr     w9, w3, #1
+    sub     w1, w1, w9                  // esquerda
+    mul     w9, w7, w3
+    sub     w2, w2, w9                  // topo
+    LA      x16, fb
+    LA      x17, zb
+    mov     w10, #0
+b_row:
+    mov     w11, #0
+b_col:
+    ldrb    w12, [x0], #1
+    cbz     w12, b_next
+    cmp     w12, #8
+    b.lo    1f
+    cmp     w12, #9
+    b.hi    2f
+    and     w13, w5, #3                 // telhado: cor da variante
+    LA      x14, roofc
+    add     x14, x14, w13, uxtw #3
+    sub     w15, w12, #8
+    ldr     w8, [x14, w15, uxtw #2]
+    b       3f
+2:  cmp     w12, #15
+    b.ne    1f
+    and     w13, w10, #7                // janela acesa ou apagada
+    lsr     w13, w5, w13
+    tst     w13, #1
+    MOVI32  w8, 0xFF3C4656
+    MOVI32  w13, 0xFFFFE38A
+    csel    w8, w13, w8, ne
+    b       3f
+1:  LA      x14, palette
+    ldr     w8, [x14, w12, uxtw #2]
+3:  madd    w13, w10, w3, w2            // y do bloco
+    mov     w14, #0
+4:  add     w15, w13, w14
+    cmp     w15, #SCRH
+    b.hs    7f
+    mov     w9, #0
+5:  madd    w12, w11, w3, w1
+    add     w12, w12, w9
+    cmp     w12, #SCRW
+    b.hs    6f
+    add     w12, w12, w15, lsl #10
+    add     w12, w12, w15, lsl #8       // y*1280 + x
+    ldrh    w7, [x17, w12, uxtw #1]
+    sub     w7, w7, w4
+    cmp     w7, #16
+    b.gt    6f                          // terreno na frente
+    str     w8, [x16, w12, uxtw #2]
+    strh    w4, [x17, w12, uxtw #1]
+6:  add     w9, w9, #1
+    cmp     w9, w3
+    b.lt    5b
+7:  add     w14, w14, #1
+    cmp     w14, w3
+    b.lt    4b
+b_next:
+    add     w11, w11, #1
+    cmp     w11, w6
+    b.lt    b_col
+    add     w10, w10, #1
+    ldr     w7, [sp]
+    cmp     w10, w7
+    b.lt    b_row
+    add     sp, sp, #16
     ret
 
 // =====================================================================
-//  Composicao final + interface (texto via SDL_RenderDebugText)
+//  Composicao final + interface
 // =====================================================================
 draw_all:
     stp     x29, x30, [sp, #-16]!
     mov     x29, sp
-    bl      draw_map
+    bl      draw_terrain
+    bl      draw_objects
+    bl      calc_hover
     ldr     x0, [x28, #G_TEX]
     mov     x1, #0
     LA      x2, fb
-    ldr     w3, [x28, #G_FBW]
-    lsl     w3, w3, #2
+    mov     w3, #(SCRW * 4)
     bl      F(SDL_UpdateTexture)
     mov     w0, #0
     mov     w1, #0
@@ -1680,7 +1954,6 @@ draw_all:
     ldp     x29, x30, [sp], #16
     ret
 
-// setcolor(w0 = r, w1 = g, w2 = b, w3 = a)
 setcolor:
     mov     w4, w3
     mov     w3, w2
@@ -1689,14 +1962,12 @@ setcolor:
     ldr     x0, [x28, #G_REN]
     b       F(SDL_SetRenderDrawColor)
 
-// setscale(w0 = escala inteira)
 setscale:
     scvtf   s0, w0
     fmov    s1, s0
     ldr     x0, [x28, #G_REN]
     b       F(SDL_SetRenderScale)
 
-// fillrect(w0 = x, w1 = y, w2 = w, w3 = h)
 fillrect:
     stp     x29, x30, [sp, #-32]!
     mov     x29, sp
@@ -1714,7 +1985,6 @@ fillrect:
     ldp     x29, x30, [sp], #32
     ret
 
-// text(w0 = x, w1 = y, x2 = texto)
 text:
     scvtf   s0, w0
     scvtf   s1, w1
@@ -1722,7 +1992,6 @@ text:
     ldr     x0, [x28, #G_REN]
     b       F(SDL_RenderDebugText)
 
-// text_center(w0 = largura da area, w1 = y, x2 = texto, w3 = deslocamento)
 text_center:
     stp     x29, x30, [sp, #-48]!
     mov     x29, sp
@@ -1746,25 +2015,23 @@ text_center:
     ldp     x29, x30, [sp], #48
     ret
 
-// tela de titulo
 draw_title:
     stp     x29, x30, [sp, #-16]!
     mov     x29, sp
     mov     w0, #2
-    bl      setscale                    // espaco 640x360
+    bl      setscale
     mov     w0, #0
     mov     w1, #0
     mov     w2, #10
-    mov     w3, #120
+    mov     w3, #110
     bl      setcolor
     mov     w0, #0
     mov     w1, #0
     mov     w2, #640
     mov     w3, #360
     bl      fillrect
-
     mov     w0, #8
-    bl      setscale                    // espaco 160x90 (letras grandes)
+    bl      setscale
     mov     w0, #30
     mov     w1, #20
     mov     w2, #10
@@ -1785,7 +2052,6 @@ draw_title:
     LA      x2, s_title
     mov     w3, #0
     bl      text_center
-
     mov     w0, #2
     bl      setscale
     mov     w0, #220
@@ -1798,7 +2064,6 @@ draw_title:
     LA      x2, s_sub
     mov     w3, #0
     bl      text_center
-
     LA      x0, txt
     LA      x1, s_world
     bl      strcat_cur
@@ -1814,9 +2079,8 @@ draw_title:
     LA      x2, txt
     mov     w3, #0
     bl      text_center
-
     ldr     w9, [x28, #G_FRAME]
-    tbnz    w9, #5, 1f                  // pisca
+    tbnz    w9, #5, 1f
     mov     w0, #255
     mov     w1, #255
     mov     w2, #255
@@ -1850,7 +2114,6 @@ draw_title:
     ldp     x29, x30, [sp], #16
     ret
 
-// interface do jogo
 draw_ui:
     stp     x29, x30, [sp, #-16]!
     mov     x29, sp
@@ -1899,45 +2162,115 @@ draw_ui:
     ldp     x29, x30, [sp], #16
     ret
 
-// build_status: monta a linha de cima em txt
+// build_status: linha de cima com informacoes do ponto sob o mouse
 build_status:
-    stp     x29, x30, [sp, #-32]!
+    stp     x29, x30, [sp, #-64]!
     mov     x29, sp
     stp     x19, x20, [sp, #16]
+    stp     x21, x22, [sp, #32]
+    stp     x23, x24, [sp, #48]
     LA      x0, txt
     LA      x1, s_world
     bl      strcat_cur
     ldr     w1, [x28, #G_SEED]
     bl      numcat
-    ldr     w19, [x28, #G_HOV]
-    tbnz    w19, #31, bs_done
+    mov     x19, x0
+    ldr     w9, [x28, #G_HOVOK]
+    cbz     w9, bs_done
+    ldr     w20, [x28, #G_HOVU]
+    ldr     w21, [x28, #G_HOVV]
+    mov     w0, w20
+    mov     w1, w21
+    bl      sample_elev
+    mov     w22, w0                     // elevacao
+    lsr     w9, w20, #6
+    lsr     w10, w21, #6
+    add     w23, w9, w10, lsl #9        // celula
+    mov     x0, x19
     LA      x1, s_sep_paren
     bl      strcat_cur
-    and     w1, w19, #127
+    lsr     w1, w20, #6
     bl      numcat
     LA      x1, s_comma
     bl      strcat_cur
-    lsr     w1, w19, #7
+    lsr     w1, w21, #6
     bl      numcat
     LA      x1, s_paren_sp
     bl      strcat_cur
-    LA      x9, terr
-    ldrb    w9, [x9, w19, uxtw]
+    mov     x19, x0
+    // nome do terreno
+    mov     w24, #0
+    cmp     w22, #0
+    b.ge    1f
+    cmn     w22, #240
+    b.lt    5f
+    mov     w24, #1
+    b       5f
+1:  LA      x9, overlay
+    ldrb    w9, [x9, w23, uxtw]
+    mov     w24, #8
+    cmp     w9, #1
+    b.eq    5f
+    LA      x9, moist
+    ldrb    w9, [x9, w23, uxtw]
+    mov     w24, #2
+    cmp     w22, #E_SAND
+    b.lt    5f
+    mov     w24, #3
+    cmp     w22, #E_GRASS
+    b.ge    2f
+    cmp     w9, #150
+    b.lo    5f
+    mov     w24, #4
+    b       5f
+2:  mov     w24, #5
+    cmp     w22, #E_HILL
+    b.ge    3f
+    cmp     w9, #140
+    b.lo    5f
+    mov     w24, #4
+    b       5f
+3:  mov     w24, #6
+    mov     w9, #E_ROCK
+    cmp     w22, w9
+    b.lt    5f
+    mov     w24, #7
+5:  mov     x0, x19
     LA      x1, tnames
-    add     x1, x1, x9, lsl #4
+    add     x1, x1, w24, uxtw #4
     bl      strcat_cur
+    cmp     w22, #0
+    b.le    6f
     LA      x1, s_alt
     bl      strcat_cur
-    LA      x9, level
-    ldrb    w1, [x9, w19, uxtw]
+    mov     w9, #5
+    mul     w1, w22, w9
+    lsr     w1, w1, #3                  // metros
     bl      numcat
-    LA      x9, townid
-    ldrb    w20, [x9, w19, uxtw]
-    cbz     w20, bs_done
-    sub     w20, w20, #1
+    LA      x1, s_m
+    bl      strcat_cur
+6:  mov     x19, x0
+    // dentro de alguma cidade?
+    ldr     w23, [x28, #G_NTOWNS]
+    mov     w24, #0
+7:  cmp     w24, w23
+    b.ge    bs_done
     LA      x9, towns
-    mov     w10, #TOWNSZ
-    umaddl  x20, w20, w10, x9
+    add     x9, x9, x24, lsl #6
+    ldr     w10, [x9]
+    ldr     w11, [x9, #4]
+    lsr     w12, w20, #6
+    lsr     w13, w21, #6
+    sub     w10, w12, w10
+    sub     w11, w13, w11
+    mul     w10, w10, w10
+    madd    w10, w11, w11, w10
+    ldr     w11, [x9, #44]
+    mul     w11, w11, w11
+    cmp     w10, w11
+    b.gt    8f
+    mov     x20, x9
+    mov     x0, x19
     LA      x1, s_sep
     bl      strcat_cur
     add     x1, x20, #12
@@ -1948,12 +2281,17 @@ build_status:
     bl      numcat
     LA      x1, s_hab
     bl      strcat_cur
+    b       bs_done
+8:  add     w24, w24, #1
+    b       7b
 bs_done:
+    ldp     x23, x24, [sp, #48]
+    ldp     x21, x22, [sp, #32]
     ldp     x19, x20, [sp, #16]
-    ldp     x29, x30, [sp], #32
+    ldp     x29, x30, [sp], #64
     ret
 
-// draw_town_labels: placa com o nome em cima de cada cidade
+// placas com o nome das cidades
 draw_town_labels:
     stp     x29, x30, [sp, #-80]!
     mov     x29, sp
@@ -1962,41 +2300,37 @@ draw_town_labels:
     stp     x23, x24, [sp, #48]
     stp     x25, x26, [sp, #64]
     ldr     w24, [x28, #G_NTOWNS]
-    ldr     w25, [x28, #G_FBW]
-    ldr     w26, [x28, #G_FBH]
+    ldr     w25, [x28, #G_Z256]
     mov     w19, #0
 1:  cmp     w19, w24
     b.ge    9f
     LA      x9, towns
-    mov     w10, #TOWNSZ
-    umaddl  x20, w19, w10, x9
-    ldr     w9, [x20]                   // tx
-    ldr     w10, [x20, #4]              // ty
-    add     w11, w9, w10, lsl #7
-    LA      x12, level
-    ldrb    w11, [x12, w11, uxtw]
-    lsl     w11, w11, #2                // E
+    add     x20, x9, x19, lsl #6
+    ldr     w9, [x20]
+    ldr     w10, [x20, #4]
+    ldr     w11, [x20, #48]
     sub     w12, w9, w10
-    lsl     w12, w12, #4
-    add     w12, w12, w25, lsr #1
-    ldr     w13, [x28, #G_CAMX]
-    sub     w21, w12, w13               // sx no framebuffer
+    lsl     w12, w12, #6                // X = (u-v)*64
+    ldr     w13, [x28, #G_CX]
+    sub     w12, w12, w13
+    mul     w12, w12, w25
+    asr     w12, w12, #12
+    add     w21, w12, #640
     add     w12, w9, w10
-    lsl     w12, w12, #3
-    sub     w12, w12, w11
-    add     w12, w12, w26, lsr #1
-    ldr     w13, [x28, #G_CAMY]
-    sub     w22, w12, w13               // sy no framebuffer
-    mov     w9, #640
-    mul     w21, w21, w9
-    sdiv    w21, w21, w25               // -> espaco de texto 640x360
-    mov     w9, #360
-    mul     w22, w22, w9
-    sdiv    w22, w22, w26
-    sub     w22, w22, #16
+    lsl     w12, w12, #5
+    add     w12, w12, #32
+    sub     w12, w12, w11               // Y = (u+v)*32 - e
+    ldr     w13, [x28, #G_CY]
+    sub     w12, w12, w13
+    mul     w12, w12, w25
+    asr     w12, w12, #12
+    add     w22, w12, #360
+    asr     w21, w21, #1                // espaco de texto 640x360
+    asr     w22, w22, #1
+    sub     w22, w22, #22
     add     x0, x20, #12
     bl      mystrlen
-    lsl     w23, w0, #3                 // largura do texto
+    lsl     w23, w0, #3
     mov     w0, #0
     mov     w1, #0
     mov     w2, #0
@@ -2031,37 +2365,91 @@ draw_town_labels:
 // =====================================================================
     .data
     .p2align 4
-G:  .space 144
+G:  .space 128
 
-// cores por terreno: topo, face esquerda, face direita, (livre)  ARGB
-    .p2align 4
-ctab:
-    .word 0xFF1F4F8F, 0xFF173B6B, 0xFF122F56, 0    // mar profundo
-    .word 0xFF3274B5, 0xFF173B6B, 0xFF122F56, 0    // agua rasa
-    .word 0xFFE0CC8A, 0xFFB59C5E, 0xFF957F4A, 0    // praia
-    .word 0xFF62A83E, 0xFF8B6B42, 0xFF6E5233, 0    // campo
-    .word 0xFF4C8C34, 0xFF8B6B42, 0xFF6E5233, 0    // floresta
-    .word 0xFF7E9A4A, 0xFF8B6B42, 0xFF6E5233, 0    // colinas
-    .word 0xFF8E877E, 0xFF6F6961, 0xFF55504A, 0    // rocha
-    .word 0xFFEEF2F6, 0xFF6F6961, 0xFF55504A, 0    // neve
-    .word 0xFF8A8A88, 0xFF8B6B42, 0xFF6E5233, 0    // rua
-    .word 0xFF6FA548, 0xFF8B6B42, 0xFF6E5233, 0    // casas
-    .word 0xFF9A9A96, 0xFF8B6B42, 0xFF6E5233, 0    // predios
+// 16 direcoes (cos, sin) * 64
+    .p2align 2
+dirtab:
+    .hword 64, 0,    59, 24,   45, 45,   24, 59
+    .hword 0, 64,   -24, 59,  -45, 45,  -59, 24
+    .hword -64, 0,  -59, -24, -45, -45, -24, -59
+    .hword 0, -64,   24, -59,  45, -45,  59, -24
 
-// telhados: claro, escuro
+// paleta dos sprites (indice 0 = transparente; 8, 9 e 15 sao especiais)
+    .p2align 2
+palette:
+    .word 0, 0xFF5B3A1E, 0xFF2E6B2E, 0xFF4E9A45
+    .word 0xFF1F5530, 0xFF2F7440, 0xFFE8DDC6, 0xFFBFAF92
+    .word 0, 0, 0xFF4A3524, 0xFF9FC4E0
+    .word 0xFFA9B6C6, 0xFF7D8999, 0xFF4F5866, 0
+
 roofc:
     .word 0xFFB5443A, 0xFF8C3029
     .word 0xFF8A5A3A, 0xFF6A4228
     .word 0xFF5C6E86, 0xFF45546A
     .word 0xFFC8693A, 0xFF9C4E2A
 
-tree_w:
-    .byte 1, 3, 3, 5, 5, 7, 5, 0
+// sprites: largura, altura, ancora, 0, pixels (128 bytes por sprite)
+    .p2align 7
+sprites:
+// 0: arvore
+    .byte 7, 8, 3, 0
+    .byte 0,0,3,3,2,0,0
+    .byte 0,3,3,2,2,2,0
+    .byte 3,3,2,2,2,2,2
+    .byte 3,2,2,2,2,2,2
+    .byte 0,3,2,2,2,2,0
+    .byte 0,0,2,2,2,0,0
+    .byte 0,0,0,1,0,0,0
+    .byte 0,0,0,1,0,0,0
+    .p2align 7
+// 1: pinheiro
+    .byte 5, 9, 2, 0
+    .byte 0,0,5,0,0
+    .byte 0,0,5,4,0
+    .byte 0,5,5,4,0
+    .byte 0,5,4,4,0
+    .byte 5,5,4,4,4
+    .byte 0,5,4,4,0
+    .byte 5,5,4,4,4
+    .byte 0,0,1,0,0
+    .byte 0,0,1,0,0
+    .p2align 7
+// 2: casa
+    .byte 9, 10, 4, 0
+    .byte 0,0,0,0,8,9,0,0,0
+    .byte 0,0,0,8,8,9,9,0,0
+    .byte 0,0,8,8,8,9,9,9,0
+    .byte 0,8,8,8,8,9,9,9,9
+    .byte 8,8,8,8,8,9,9,9,9
+    .byte 0,6,6,6,6,7,7,7,0
+    .byte 0,6,11,6,6,7,11,7,0
+    .byte 0,6,6,6,6,7,7,7,0
+    .byte 0,6,10,6,6,7,7,7,0
+    .byte 0,6,10,6,6,7,7,7,0
+    .p2align 7
+// 3: predio
+    .byte 7, 14, 3, 0
+    .byte 14,14,14,14,14,14,14
+    .byte 12,12,12,13,13,13,13
+    .byte 12,15,12,13,15,13,13
+    .byte 12,12,12,13,13,13,13
+    .byte 12,15,12,13,15,13,13
+    .byte 12,12,12,13,13,13,13
+    .byte 12,15,12,13,15,13,13
+    .byte 12,12,12,13,13,13,13
+    .byte 12,15,12,13,15,13,13
+    .byte 12,12,12,13,13,13,13
+    .byte 12,15,12,13,15,13,13
+    .byte 12,12,12,13,13,13,13
+    .byte 12,15,12,13,15,13,13
+    .byte 12,12,10,13,13,13,13
+    .p2align 7
 
 // nomes de terreno (16 bytes cada)
     .p2align 4
 tnames:
-    .asciz "Mar profundo"
+    .asciz "Mar"
     .p2align 4
     .asciz "Agua rasa"
     .p2align 4
@@ -2073,18 +2461,13 @@ tnames:
     .p2align 4
     .asciz "Colinas"
     .p2align 4
-    .asciz "Rocha"
+    .asciz "Montanha"
     .p2align 4
     .asciz "Neve"
     .p2align 4
     .asciz "Rua"
     .p2align 4
-    .asciz "Casas"
-    .p2align 4
-    .asciz "Predios"
-    .p2align 4
 
-// prefixos e sufixos de cidade (8 bytes cada)
 prefixes:
     .asciz "Vila "
     .p2align 3
@@ -2120,7 +2503,6 @@ suffixes:
     .asciz " Velha"
     .p2align 3
 
-// silabas (4 bytes cada)
 syls:
     .asciz "ba"
     .p2align 2
@@ -2187,36 +2569,42 @@ syls:
     .asciz "nho"
     .p2align 2
 
-s_wintitle:   .asciz "Trilhos - jogo de trens em Assembly ARM64"
-s_title:      .asciz "TRILHOS"
-s_sub:        .asciz "um jogo de trens escrito em assembly ARM64"
-s_world:      .asciz "Mundo #"
-s_enter:      .asciz "Pressione ENTER para entrar neste mundo"
-s_title_help: .asciz "R: gerar outro mundo     ESC: sair"
-s_credit:     .asciz "feito por Andre + Claude"
-s_help:       .asciz "WASD/setas/arrastar: mover   roda/+/-: zoom   G: grade   R: novo   ESC: menu"
-s_sep_paren:  .asciz "   -   ("
-s_comma:      .asciz ","
-s_paren_sp:   .asciz ")  "
-s_alt:        .asciz ", altura "
-s_sep:        .asciz "   -   "
-s_dash:       .asciz " - "
-s_hab:        .asciz " hab."
-s_nl:         .asciz "\n"
-s_shot_f12:   .asciz "trilhos.bmp"
-s_shot_title: .asciz "shot_titulo.bmp"
-s_shot_game:  .asciz "shot_jogo.bmp"
-s_shot_far:   .asciz "shot_longe.bmp"
-s_shot_near:  .asciz "shot_perto.bmp"
+s_wintitle:     .asciz "Trilhos - jogo de trens em Assembly ARM64"
+s_title:        .asciz "TRILHOS"
+s_sub:          .asciz "um jogo de trens escrito em assembly ARM64"
+s_world:        .asciz "Mundo #"
+s_enter:        .asciz "Pressione ENTER para entrar neste mundo"
+s_title_help:   .asciz "R: gerar outro mundo     ESC: sair"
+s_credit:       .asciz "feito por Andre + Claude"
+s_help:         .asciz "WASD/arrastar: mover  roda/+/-: zoom  G: curvas de nivel  R: novo  ESC: menu"
+s_sep_paren:    .asciz "   -   ("
+s_comma:        .asciz ","
+s_paren_sp:     .asciz ")  "
+s_alt:          .asciz ", "
+s_m:            .asciz " m"
+s_sep:          .asciz "   -   "
+s_dash:         .asciz ", "
+s_hab:          .asciz " hab."
+s_nl:           .asciz "\n"
+s_bench:        .asciz "tempo por quadro: "
+s_bench2:       .asciz " us\n"
+s_shot_f12:     .asciz "trilhos.bmp"
+s_shot_title:   .asciz "shot_titulo.bmp"
+s_shot_game:    .asciz "shot_jogo.bmp"
+s_shot_far:     .asciz "shot_longe.bmp"
+s_shot_near:    .asciz "shot_perto.bmp"
+s_shot_contour: .asciz "shot_curvas.bmp"
 
 // ---- memoria zerada (bss) -------------------------------------------
-BSS(hmap,   16384)
-BSS(moist,  16384)
-BSS(level,  16384)
-BSS(terr,   16384)
-BSS(jit,    16384)
-BSS(townid, 16384)
-BSS(accum,  65536)
-BSS(towns,  768)
-BSS(txt,    256)
-BSS(fb,     3686400)
+BSS(hmap,    262144)
+BSS(moist,   262144)
+BSS(light,   262144)
+BSS(overlay, 262144)
+BSS(elev,    524288)
+BSS(accum,   1048576)
+BSS(objs,    1600000)
+BSS(towns,   1024)
+BSS(txt,     256)
+BSS(noisetab, 65536)
+BSS(zb,      1843200)
+BSS(fb,      3686400)
