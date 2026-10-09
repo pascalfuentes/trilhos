@@ -756,6 +756,7 @@ surv_update:
     // ---- movimento (WASD / setas, na direcao da tela) ----
     // teclas -> w22: bit 0 W, 1 S, 2 A, 3 D, 4 Shift (o teste soma as suas)
 4:  bl      weather_update              // estacao e clima
+    bl      sleep_check                 // dormindo: hora de acordar?
     ldr     x19, [x28, #G_KEYS]
     ldr     w22, [x28, #G_TESTKEYS]
     ldrb    w9, [x19, #26]              // W ou seta para cima
@@ -783,7 +784,10 @@ surv_update:
     orr     w9, w9, w10
     cbz     w9, 45f
     orr     w22, w22, #16
-45: fmov    s8, wzr                     // du
+45: ldr     w9, [x28, #G_SLEEP]         // dormindo: nao anda
+    cbz     w9, 451f
+    mov     w22, #0
+451: fmov   s8, wzr                     // du
     fmov    s9, wzr                     // dv
     fmov    s0, #1.0
     tbz     w22, #0, 5f                 // W: sobe na tela = -u -v
@@ -1166,6 +1170,8 @@ su_food:
     str     wzr, [x28, #G_TORCHLIT]
     ldr     w9, [x28, #G_OFFHAND]       // tocha na outra mao?
     cbz     w9, 229f
+    ldr     w9, [x28, #G_SLEEP]         // dormindo: a tocha fica apagada
+    cbnz    w9, 229f
     ldr     w9, [x28, #G_NIGHTK]
     cmp     w9, #96
     b.lt    229f
@@ -1385,7 +1391,10 @@ su_food:
 
 su_cam:
     bl      follow_camera
+    ldr     w9, [x28, #G_SLEEP]         // dormindo: tela escura, sem visao
+    cbnz    w9, 1f
     bl      update_vision
+1:
     ldp     d10, d11, [sp, #64]
     ldp     d8, d9, [sp, #48]
     ldp     x21, x22, [sp, #32]
@@ -1405,6 +1414,13 @@ surv_key:
     mov     x29, sp
     ldr     w9, [x28, #G_DEAD]
     cbnz    w9, 9f
+    ldr     w9, [x28, #G_SLEEP]         // dormindo: qualquer tecla acorda
+    cbz     w9, 0f
+    str     wzr, [x28, #G_SLEEP]
+    LA      x0, m_wokeup
+    bl      set_msg
+    b       9f
+0:
     cmp     w0, #8                      // E
     b.ne    1f
     bl      eat_best
@@ -1911,7 +1927,7 @@ in_shelter:
     b.ne    2f
     mov     w0, w20
     bl      obj_dist2
-    fmov    s1, #2.25                   // 1.5 celula
+    fmov    s1, #4.0                    // 2 celulas (a cabana e grande)
     fcmp    s0, s1
     b.gt    2f
     mov     w0, #1
@@ -1923,6 +1939,75 @@ in_shelter:
 9:  ldp     x19, x20, [sp, #16]
     ldp     x29, x30, [sp], #32
     ret
+
+// try_sleep(w0 = abrigo): deita na cabana (so a partir das 18h) e dorme
+// ate amanhecer; a noite passa depressa (veja update em trilhos.S)
+try_sleep:
+    stp     x29, x30, [sp, #-32]!
+    mov     x29, sp
+    str     x19, [sp, #16]
+    mov     w19, w0
+    bl      obj_dist2
+    fmov    s1, #16.0                   // ate 4 celulas
+    fcmp    s0, s1
+    b.le    1f
+    LA      x0, m_far
+    bl      set_msg
+    b       9f
+1:  ldr     w9, [x28, #G_TIME]
+    mov     w10, #T_DUSK
+    cmp     w9, w10
+    b.ge    2f
+    LA      x0, m_notnight
+    bl      set_msg
+    b       9f
+2:  LA      x9, objs                    // entra: fica no meio da cabana
+    add     x9, x9, x19, lsl #3
+    ldrh    w10, [x9]
+    scvtf   s0, w10
+    ldrh    w10, [x9, #2]
+    scvtf   s1, w10
+    FC      s2, F_INV64
+    fmul    s0, s0, s2
+    fmul    s1, s1, s2
+    str     s0, [x28, #G_PU]
+    str     s1, [x28, #G_PV]
+    ldr     w9, [x28, #G_DAY]
+    str     w9, [x28, #G_SLEEPDAY]
+    mov     w9, #1
+    str     w9, [x28, #G_SLEEP]
+    str     wzr, [x28, #G_LMB]
+    str     wzr, [x28, #G_PLACE]
+    str     wzr, [x28, #G_INVOPEN]
+    str     wzr, [x28, #G_CRAFTOPEN]
+    str     wzr, [x28, #G_CHESTOPEN]
+    str     wzr, [x28, #G_CHAROPEN]
+9:  ldr     x19, [sp, #16]
+    ldp     x29, x30, [sp], #32
+    ret
+
+// sleep_check: acorda quando o dia vira (06:00); antes, so se a agua
+// subir ou se ficar fraco (fome, frio)
+sleep_check:
+    ldr     w9, [x28, #G_SLEEP]
+    cbz     w9, 9f
+    ldr     w10, [x28, #G_DAY]
+    ldr     w11, [x28, #G_SLEEPDAY]
+    LA      x0, m_morning
+    cmp     w10, w11
+    b.ne    1f
+    LA      x0, m_wetwake
+    ldr     w9, [x28, #G_WATER]
+    cmp     w9, #2
+    b.ge    1f
+    LA      x0, m_weakwake
+    ldr     s0, [x28, #G_HP]
+    FC      s1, F_25
+    fcmp    s0, s1
+    b.lt    1f
+9:  ret
+1:  str     wzr, [x28, #G_SLEEP]
+    b       set_msg
 
 // chest_count(w0 = bau) -> w0 = itens dentro   folha
 chest_count:
@@ -1976,6 +2061,8 @@ surv_mouse:
     stp     x19, x20, [sp, #16]
     stp     x21, x22, [sp, #32]
     ldr     w9, [x28, #G_DEAD]
+    cbnz    w9, sm_ret
+    ldr     w9, [x28, #G_SLEEP]
     cbnz    w9, sm_ret
     mov     w19, w0
     mov     w20, w1
@@ -2133,7 +2220,12 @@ surv_mouse:
     LA      x9, objs
     add     x9, x9, x21, lsl #3
     ldrb    w10, [x9, #6]
-    cmp     w10, #O_CHEST
+    cmp     w10, #O_SHELTER             // direito no abrigo: dorme
+    b.ne    80f
+    mov     w0, w21
+    bl      try_sleep
+    b       sm_ret
+80: cmp     w10, #O_CHEST
     b.ne    81f
     mov     w0, w21
     bl      obj_dist2
@@ -2230,6 +2322,8 @@ surv_draw:
 2:  mov     w0, w21
     bl      animals_draw
     bl      arrows_draw
+    ldr     w9, [x28, #G_SLEEP]         // dormindo: esta dentro da cabana
+    cbnz    w9, 50f
     // personagem
     ldr     s0, [x28, #G_PU]
     ldr     s1, [x28, #G_PV]
@@ -2865,6 +2959,10 @@ update_vision:
 //  Interface (espaco de texto 640x360, escala 2)
 // =====================================================================
 
+// surv_clock(x0 = cursor): "   -   Dia 2   03:20   Primavera, Sol"
+surv_clock:
+    b       surv_status
+
 // surv_status(x0 = cursor em txt): acrescenta dia e hora
     .globl surv_status
 surv_status:
@@ -3339,7 +3437,7 @@ ui_hint:
 
     // ---- mensagem ----
     ldr     w9, [x28, #G_MSGT]
-    cbz     w9, ui_dead
+    cbz     w9, ui_sleep
     ldr     x0, [x28, #G_MSG]
     bl      mystrlen
     lsl     w19, w0, #3
@@ -3367,6 +3465,41 @@ ui_hint:
     mov     w3, #0
     bl      text_center
 
+    // ---- dormindo: tela escura, Zzz e o relogio ----
+ui_sleep:
+    ldr     w9, [x28, #G_SLEEP]
+    cbz     w9, ui_dead
+    RGBA    5, 6, 16, 225
+    mov     w0, #0
+    mov     w1, #0
+    mov     w2, #640
+    mov     w3, #360
+    bl      fillrect
+    mov     w0, #4
+    bl      setscale
+    RGBA    170, 190, 255, 255
+    mov     w0, #320
+    mov     w1, #60
+    LA      x2, s_sleep1
+    mov     w3, #0
+    bl      text_center
+    mov     w0, #2
+    bl      setscale
+    LA      x0, txt                     // "Dia 2   03:20"
+    bl      surv_clock
+    RGBA    235, 235, 245, 255
+    mov     w0, #640
+    mov     w1, #170
+    LA      x2, txt
+    add     x2, x2, #7                  // sem o "   -   " do comeco
+    mov     w3, #0
+    bl      text_center
+    RGBA    150, 150, 170, 255
+    mov     w0, #640
+    mov     w1, #210
+    LA      x2, s_sleep2
+    mov     w3, #0
+    bl      text_center
     // ---- tela de morte ----
 ui_dead:
     ldr     w9, [x28, #G_DEAD]
@@ -4104,6 +4237,11 @@ icon_fit:
     cmp     w12, w13
     b.le    2f
 1:  mov     w11, #2
+    lsl     w12, w9, #1                 // nem com pixel 2? pixel 1
+    sub     w13, w3, #2
+    cmp     w12, w13
+    b.le    2f
+    mov     w11, #1
 2:  mul     w9, w9, w11
     mul     w10, w10, w11
     sub     w9, w3, w9
@@ -5362,6 +5500,8 @@ surv_selftest_craft:
     stp     x19, x20, [sp, #16]
     stp     x21, x22, [sp, #32]
     stp     d8, d9, [sp, #48]
+    cmp     w0, #4                      // a etapa 4 continua a noite (nao
+    b.eq    ct_stage4                   // mexe no relogio)
     str     wzr, [x28, #G_HOVOK]
     str     wzr, [x28, #G_LMB]
     str     wzr, [x28, #G_MX]
@@ -5374,7 +5514,10 @@ surv_selftest_craft:
     str     w9, [x28, #G_TIME]
     cmp     w0, #1
     b.eq    ct_stage1
-    b.gt    ct_stage2
+    cmp     w0, #3
+    b.eq    ct_stage3
+    cmp     w0, #2
+    b.eq    ct_stage2
     // ---- etapa 0 ----
     LA      x9, fires                   // do lado da fogueira (para assar)
     ldr     s8, [x9]
@@ -5589,6 +5732,88 @@ ct_stage2:
     LA      x1, s_nl
     bl      strcat_cur
     bl      sk_write
+    // foto: de dia, o personagem do lado da cabana
+    mov     w9, #6000
+    str     w9, [x28, #G_TIME]
+    mov     w0, #O_SHELTER
+    mov     w1, #O_SHELTER
+    bl      nearest_obj
+    tbnz    w0, #31, 1f
+    LA      x9, objs
+    add     x9, x9, x0, lsl #3
+    ldrh    w10, [x9]
+    scvtf   s0, w10
+    ldrh    w10, [x9, #2]
+    scvtf   s1, w10
+    FC      s2, F_INV64
+    fmul    s0, s0, s2
+    fmul    s1, s1, s2
+    fmov    s2, #2.0
+    fadd    s0, s0, s2
+    fmov    s2, #1.0
+    fadd    s1, s1, s2
+    str     s0, [x28, #G_PU]
+    str     s1, [x28, #G_PV]
+1:  bl      surv_update
+    b       ct_ret
+
+    // ---- etapa 3: deita na cabana as 22h (foto dormindo) ----
+ct_stage3:
+    mov     w9, #28800                  // 22:00
+    str     w9, [x28, #G_TIME]
+    FC      s0, F_HUNDRED
+    str     s0, [x28, #G_HP]
+    str     s0, [x28, #G_FOOD]
+    str     s0, [x28, #G_WARM]
+    str     wzr, [x28, #G_SATED]
+    mov     w0, #O_SHELTER
+    mov     w1, #O_SHELTER
+    bl      nearest_obj
+    tbnz    w0, #31, ct_ret
+    bl      try_sleep
+    mov     w19, #0
+1:  bl      surv_update
+    add     w19, w19, #1
+    cmp     w19, #3000
+    b.lt    1b
+    b       ct_ret
+
+    // ---- etapa 4: dorme ate acordar e imprime ----
+ct_stage4:                              // dorme ate acordar
+    ldr     w9, [x28, #G_DAY]
+    mov     w20, w9                     // dia em que deitou
+    MOVI32  w19, 30000                  // (limite)
+1:  ldr     w9, [x28, #G_SLEEP]
+    cbz     w9, 2f
+    bl      surv_update
+    subs    w19, w19, #1
+    b.ne    1b
+2:  LA      x0, lbuf                    // hora em que acordou
+    bl      surv_clock
+    LA      x0, txt
+    LA      x1, t_s1
+    ldr     w2, [x28, #G_SLEEP]
+    bl      ct_num
+    LA      x1, t_s2
+    bl      strcat_cur
+    LA      x1, lbuf
+    add     x1, x1, #6                  // sem o "   -  "
+    bl      strcat_cur
+    LA      x1, t_s3
+    ldr     s0, [x28, #G_FOOD]
+    fcvtzs  w2, s0
+    bl      ct_num
+    LA      x1, t_s4
+    ldr     s0, [x28, #G_WARM]
+    fcvtzs  w2, s0
+    bl      ct_num
+    LA      x1, t_s5
+    ldr     s0, [x28, #G_HP]
+    fcvtzs  w2, s0
+    bl      ct_num
+    LA      x1, s_nl
+    bl      strcat_cur
+    bl      sk_write
     mov     w9, #6000
     str     w9, [x28, #G_TIME]
 ct_ret:
@@ -5798,6 +6023,7 @@ surv_selftest_hunt:
     mov     w9, #6000
     str     w9, [x28, #G_TIME]
     str     wzr, [x28, #G_PLACE]
+    str     wzr, [x28, #G_SLEEP]
     bl      animals_reset
     cbnz    w0, ht_stage1
     // ---- etapa 0: foto ----
@@ -6505,7 +6731,7 @@ objnames:
     .p2align 5
     .asciz "Bau (botao dir.: abrir)"
     .p2align 5
-    .asciz "Abrigo (protege do frio)"
+    .asciz "Abrigo (botao dir.: dormir)"
     .p2align 5
     .asciz ""
     .p2align 5
@@ -6626,6 +6852,13 @@ m_nopick:       .asciz "Voce nao tem picareta (fabrique: Tab)"
 m_nobow:        .asciz "Voce nao tem arco (fabrique: Tab)"
 m_notorch:      .asciz "Voce nao tem tocha (fabrique: Tab)"
 s_plus:         .asciz "+"
+m_notnight:     .asciz "Ainda e dia: so da para dormir depois das 18h"
+m_morning:      .asciz "Bom dia! Voce dormiu a noite toda"
+m_wetwake:      .asciz "Acordou: a agua subiu!"
+m_weakwake:     .asciz "Acordou fraco: esta com fome ou frio"
+m_wokeup:       .asciz "Acordou"
+s_sleep1:       .asciz "Zzz..."
+s_sleep2:       .asciz "Dormindo ate amanhecer (qualquer tecla acorda)"
 m_toheavy:      .asciz "Pesado demais! Largue algo na mochila (I)"
 m_dropwater:    .asciz "Nao da para largar na agua"
 p_drop:         .asciz "Largou"
@@ -6655,6 +6888,11 @@ t_17:           .asciz " | nado/corrida/lenha/minerio/forca="
 t_18:           .asciz "skills: corrida sem treino "
 t_19:           .asciz " -> "
 t_20:           .asciz " | recolheu pedras="
+t_s1:           .asciz "dormir: deitou 22:00, dormindo="
+t_s2:           .asciz " | acordou"
+t_s3:           .asciz " | fome 100 -> "
+t_s4:           .asciz " calor 100 -> "
+t_s5:           .asciz " vida 100 -> "
 t_c1:           .asciz "fabricar: machado="
 t_c2:           .asciz " picareta="
 t_c3:           .asciz " tochas="

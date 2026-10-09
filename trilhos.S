@@ -277,6 +277,20 @@ shot_mode:
     bl      F(SDL_RenderPresent)
     mov     w0, #2
     bl      surv_selftest_craft
+    bl      draw_all                    // a cabana, de dia
+    LA      x0, s_shot_hut
+    bl      save_bmp
+    ldr     x0, [x28, #G_REN]
+    bl      F(SDL_RenderPresent)
+    mov     w0, #3                      // deita as 22h
+    bl      surv_selftest_craft
+    bl      draw_all
+    LA      x0, s_shot_sleep
+    bl      save_bmp
+    ldr     x0, [x28, #G_REN]
+    bl      F(SDL_RenderPresent)
+    mov     w0, #4                      // dorme ate acordar
+    bl      surv_selftest_craft
 
     // clima: cada um dos 8, com foto (shot_clima0.bmp ... shot_clima7.bmp)
     mov     w23, #0
@@ -1136,8 +1150,9 @@ start_game:
 //  Atualizacao
 // =====================================================================
 update:
-    stp     x29, x30, [sp, #-16]!
+    stp     x29, x30, [sp, #-32]!
     mov     x29, sp
+    str     x19, [sp, #16]
     ldr     w9, [x28, #G_STATE]
     cbnz    w9, 3f
     // titulo: a camera passeia
@@ -1156,8 +1171,14 @@ update:
     mov     w9, #16384
     str     w9, [x28, #G_CY]
     b       4f
-3:  bl      surv_update                 // personagem, tempo, fome...
-4:  ldp     x29, x30, [sp], #16
+3:  mov     w19, #SLEEPSPEED            // dormindo: a noite passa depressa
+31: bl      surv_update                 // personagem, tempo, fome...
+    ldr     w9, [x28, #G_SLEEP]
+    cbz     w9, 4f
+    subs    w19, w19, #1
+    b.ne    31b
+4:  ldr     x19, [sp, #16]
+    ldp     x29, x30, [sp], #32
     ret
 
 // calc_hover: usa o z-buffer para achar o ponto do mundo sob o mouse
@@ -2228,21 +2249,23 @@ sprites:
     .byte 31,31,31,31,31,31,31,31
     .byte 1,1,1,1,1,1,1,1
     .p2align 7
-// 21: abrigo (cabana de troncos)
-    .byte 11, 9, 5, 0
-    .byte 0,0,0,0,0,31,0,0,0,0,0
-    .byte 0,0,0,0,31,31,1,0,0,0,0
-    .byte 0,0,0,31,31,1,31,1,0,0,0
-    .byte 0,0,31,31,1,18,1,31,1,0,0
-    .byte 0,31,31,1,18,18,18,1,31,1,0
-    .byte 31,31,1,18,18,18,18,18,1,31,1
-    .byte 31,1,18,18,18,18,18,18,18,1,31
-    .byte 1,31,18,18,18,18,18,18,18,31,1
-    .byte 31,31,1,1,1,1,1,1,1,31,31
-    .p2align 7
-// 22: (vaga: pilha de abrigo nao existe)
-    .byte 1, 1, 1, 0
-    .byte 0
+// 21: abrigo (cabana; 18 x 14 = 252 pixels: ocupa as vagas 21 e 22)
+// a porta tem 6 x 10 pixels: o personagem (5 x 9) cabe de pe
+    .byte 18, 14, 9, 0
+    .byte 0,0,0,0,0,0,0,10,31,31,10,0,0,0,0,0,0,0
+    .byte 0,0,0,0,0,0,0,10,31,31,10,0,0,0,0,0,0,0
+    .byte 0,0,0,0,0,0,10,1,1,1,1,10,0,0,0,0,0,0
+    .byte 0,0,0,0,0,10,36,36,36,36,36,36,10,0,0,0,0,0
+    .byte 0,0,0,0,10,36,36,18,18,18,18,36,36,10,0,0,0,0
+    .byte 0,0,0,10,1,36,18,18,18,18,18,18,36,1,10,0,0,0
+    .byte 0,0,0,10,31,36,18,18,18,18,18,18,36,31,10,0,0,0
+    .byte 0,0,10,31,31,36,18,18,18,18,18,18,36,31,31,10,0,0
+    .byte 0,10,1,1,1,36,18,18,18,18,18,18,36,1,1,1,10,0
+    .byte 10,31,31,31,31,36,18,18,18,18,18,18,36,31,31,31,31,10
+    .byte 10,31,31,31,31,36,18,18,18,18,18,18,36,31,31,31,31,10
+    .byte 10,1,1,1,1,36,18,18,18,18,18,18,36,1,1,1,1,10
+    .byte 10,31,31,31,31,36,18,18,18,18,18,18,36,31,31,31,31,10
+    .byte 10,1,1,1,1,36,18,18,18,18,18,18,36,1,1,1,1,10
     .p2align 7
 // 23: arco
     .byte 4, 8, 2, 0
@@ -2453,6 +2476,8 @@ s_shot_craft:   .asciz "shot_fabricar.bmp"
 s_shot_torch:   .asciz "shot_tocha.bmp"
 s_shot_clima:   .asciz "shot_clima0.bmp"
 s_shot_anim:    .asciz "shot_animais.bmp"
+s_shot_hut:     .asciz "shot_abrigo.bmp"
+s_shot_sleep:   .asciz "shot_dormindo.bmp"
 s_shot_shark:   .asciz "shot_tubarao.bmp"
 s_shot_dead:    .asciz "shot_fim.bmp"
 

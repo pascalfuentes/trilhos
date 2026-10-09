@@ -2,7 +2,7 @@
 
 Um jogo de sobrevivência no estilo Factorio, escrito em **assembly ARM64** (AArch64).
 
-Você aparece sozinho num mundo gerado aleatoriamente: terreno contínuo, mar, praias, florestas, montanhas com neve. Precisa coletar madeira, pedra e frutas, caçar com arco e flecha, fabricar ferramentas e construções, fugir de lobos e ursos, não morrer de fome e passar a noite perto de uma fogueira, enfrentando as estações e o clima (chuva, tempestade, calorão, neve, granizo, enchente). Quanto mais você faz uma coisa, melhor fica nela, e para se curar precisa estar de barriga cheia.
+Você aparece sozinho num mundo gerado aleatoriamente: terreno contínuo, mar, praias, florestas, montanhas com neve. Precisa coletar madeira, pedra e frutas, caçar com arco e flecha, fabricar ferramentas e construções, fugir de lobos e ursos, não morrer de fome e passar a noite perto de uma fogueira (ou dormindo numa cabana), enfrentando as estações e o clima (chuva, tempestade, calorão, neve, granizo, enchente). Quanto mais você faz uma coisa, melhor fica nela, e para se curar precisa estar de barriga cheia.
 
 ![Dia](screenshots/jogo.png)
 ![Noite](screenshots/noite.png)
@@ -24,6 +24,7 @@ Você aparece sozinho num mundo gerado aleatoriamente: terreno contínuo, mar, p
 | clique com o arco na mão | atira uma flecha onde está o mouse |
 | clique num animal perto | golpe (machado tira mais vida) |
 | botão direito num baú | abre o baú (clique num item passa de um lado para o outro) |
+| botão direito no abrigo (depois das 18h) | dorme até amanhecer (qualquer tecla acorda) |
 | botão direito numa fogueira | pôr lenha (+2 min de fogo; no máximo 12 min) |
 | I ou botão **Mochila** | abre a mochila (clique num item: come, põe na mão, coloca ou guarda no baú aberto) |
 | C ou botão **Personagem** | abre as skills |
@@ -57,7 +58,7 @@ Como no Minecraft e no Factorio, uma grade de ícones mostra tudo o que dá para
 | Tocha | 2 madeira | na outra mão: acende sozinha quando escurece; luz forte e visão de 10 células por 4 minutos |
 | Fogueira | 5 madeira, 3 pedra | luz e calor por 4 minutos (construção) |
 | Baú | 8 madeira | guarda itens sem pesar na mochila (construção) |
-| Abrigo | 12 madeira, 4 pedra | dentro dele não passa frio à noite (construção) |
+| Abrigo | 12 madeira, 4 pedra | cabana: dentro dela não passa frio, e dá para dormir a noite toda (construção) |
 | Frutas assadas | 3 frutas, perto de uma fogueira | enchem 50 de fome |
 | Carne assada | 1 carne, perto de uma fogueira | enche 60 de fome (crua: só 10) |
 | Cesto | 6 madeira | +10 kg no limite da mochila (só um conta) |
@@ -66,6 +67,18 @@ Como no Minecraft e no Factorio, uma grade de ícones mostra tudo o que dá para
 
 - O desgaste das ferramentas e o tempo da tocha acesa aparecem como uma barrinha embaixo do ícone na mochila. Quando o machado ou a picareta quebra, o próximo (se você tiver) entra novo.
 - Para **desmontar** um baú ou um abrigo, segure o botão esquerdo nele: ele volta para a mochila. O baú precisa estar vazio.
+
+**Dormir**
+
+A cabana tem uma porta do tamanho do personagem.
+
+- Com o **botão direito nela, a partir das 18h**, você entra e dorme.
+- A tela escurece, aparece "Zzz..." e o relógio corre: a noite passa em uns 5 segundos.
+- Você acorda às 06:00. Se a água subir, se ficar fraco (fome ou frio) ou se você apertar qualquer tecla, acorda antes.
+- Dormindo, a fome continua caindo (uns 17 pontos por noite), mas a cabana protege do frio e dos lobos, e a tocha fica apagada.
+
+![A cabana](screenshots/abrigo.png)
+![Dormindo](screenshots/dormindo.png)
 
 ![Fabricar](screenshots/fabricar.png)
 ![Tocha à noite](screenshots/tocha.png)
@@ -224,7 +237,7 @@ sudo apt install libsdl3-dev   # ou compile o SDL3 a partir do código-fonte
 make run
 ```
 
-`./trilhos --shot` roda sem interação: tira screenshots, mede o tempo de cada quadro e faz um teste automático (coleta duas árvores, uma pedra e um arbusto, monta uma fogueira, come e passa a noite; corre, anda carregado, larga e recolhe uma pilha de pedras, vê a skill cair sem treino, confere que a vida só sobe com a fome cheia; fabrica tudo, monta baú e abrigo, gasta o machado, acende a tocha à noite e dorme no abrigo; passa 10 s em cada um dos 8 climas (com foto); caça um cervo com o arco, enfrenta um lobo à noite com o machado e vê os animais aparecendo; depois nada num lago e vai para o mar aberto até o tubarão atacar).
+`./trilhos --shot` roda sem interação: tira screenshots, mede o tempo de cada quadro e faz um teste automático (coleta duas árvores, uma pedra e um arbusto, monta uma fogueira, come e passa a noite; corre, anda carregado, larga e recolhe uma pilha de pedras, vê a skill cair sem treino, confere que a vida só sobe com a fome cheia; fabrica tudo, monta baú e abrigo, gasta o machado, acende a tocha à noite, passa a noite no abrigo e dorme das 22h às 06h; passa 10 s em cada um dos 8 climas (com foto); caça um cervo com o arco, enfrenta um lobo à noite com o machado e vê os animais aparecendo; depois nada num lago e vai para o mar aberto até o tubarão atacar).
 
 ## Próximos passos
 

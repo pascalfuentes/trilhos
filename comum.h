@@ -194,6 +194,9 @@
 .equ G_SPAWNT,   556         // proxima tentativa de aparecer um animal
 .equ G_OFFHAND,  560         // tocha na outra mao (1/0)
 .equ G_NOSPAWN,  564         // teste: animais nao aparecem sozinhos
+.equ G_SLEEP,    568         // dormindo na cabana (abrigo)
+.equ G_SLEEPDAY, 572         // dia em que deitou (acorda quando virar)
+.equ SLEEPSPEED, 60          // dormindo, cada quadro vale 60 (a noite passa em ~5 s)
 .equ G_INV,      576         // mochila: NITEMS contadores (u32), ate 32 itens
 .equ G_WOOD,     (G_INV + 0)
 .equ G_STONE,    (G_INV + 4)
