@@ -17,7 +17,8 @@
 //    (natacao, corrida, lenhador, mineracao, forca) e caem devagar sem
 //    treino. A mochila tem limite de peso: acima dele, anda devagar.
 //    I abre a mochila, C abre o personagem (ou os botoes no canto).
-//  - Um dia dura 12 minutos.
+//  - Um dia dura 12 minutos. O clima (clima.S) muda frio, fome, visao,
+//    fogo, velocidade, stamina e o nivel da agua.
 //  - A fome cheia segura 4 min antes de cair, e a vida so sobe com ela
 //    cheia. A stamina maxima cresce com corrida e natacao.
 //  - Tab abre a janela de fabricar: machado, picareta, tocha, fogueira,
@@ -324,6 +325,7 @@ surv_reset:
     b.ne    2b
     mov     w9, #SATTIME                // comeca de barriga cheia
     str     w9, [x28, #G_SATED]
+    bl      weather_reset               // primavera, com sol
     bl      calc_stats
     LA      x9, seen                   // nada foi descoberto ainda
     mov     w10, #(MAPN * MAPN / 16)
@@ -432,6 +434,28 @@ update_ambient:
     asr     w11, w11, #8
     add     w11, w11, #256
     str     w11, [x28, #G_AMBB]
+    // clima: as nuvens escurecem; o relampago clareia tudo
+    mov     w13, #256
+    ldr     w12, [x28, #G_FLASH]
+    cbnz    w12, 3f
+    ldr     w12, [x28, #G_WDARK]
+    sub     w13, w13, w12
+    ldr     w11, [x28, #G_AMBR]
+    mul     w11, w11, w13
+    lsr     w11, w11, #8
+    str     w11, [x28, #G_AMBR]
+    ldr     w11, [x28, #G_AMBG]
+    mul     w11, w11, w13
+    lsr     w11, w11, #8
+    str     w11, [x28, #G_AMBG]
+    ldr     w11, [x28, #G_AMBB]
+    mul     w11, w11, w13
+    lsr     w11, w11, #8
+    str     w11, [x28, #G_AMBB]
+    ret
+3:  str     w13, [x28, #G_AMBR]
+    str     w13, [x28, #G_AMBG]
+    str     w13, [x28, #G_AMBB]
     ret
 
 // find_obj_near(w0 = u, w1 = v em 1/64) -> w0 objeto coletavel (-1)
@@ -702,7 +726,8 @@ surv_update:
 
     // ---- movimento (WASD / setas, na direcao da tela) ----
     // teclas -> w22: bit 0 W, 1 S, 2 A, 3 D, 4 Shift (o teste soma as suas)
-4:  ldr     x19, [x28, #G_KEYS]
+4:  bl      weather_update              // estacao e clima
+    ldr     x19, [x28, #G_KEYS]
     ldr     w22, [x28, #G_TESTKEYS]
     ldrb    w9, [x19, #26]              // W ou seta para cima
     ldrb    w10, [x19, #82]
@@ -788,7 +813,9 @@ surv_update:
     FC      s3, F_RUNBASE
     fmadd   s1, s1, s2, s3              // 1.7 .. 2.2
     fmul    s0, s0, s1
-94: ldr     w9, [x28, #G_WEIGHT]        // sobrecarregado: bem mais lento
+94: ldr     s1, [x28, #G_WSPEED]        // neve e vento: mais devagar
+    fmul    s0, s0, s1
+    ldr     w9, [x28, #G_WEIGHT]        // sobrecarregado: bem mais lento
     ldr     w10, [x28, #G_CAP]
     cmp     w9, w10
     b.le    95f
@@ -826,9 +853,10 @@ su_after_move:
     ldr     s0, [x28, #G_PU]
     ldr     s1, [x28, #G_PV]
     bl      elev_at
-    mov     w19, w0                     // elevacao (negativa = agua)
-    cmp     w0, #0
-    csel    w0, wzr, w0, lt
+    ldr     w9, [x28, #G_FLOOD]         // enchente: a agua esta mais alta
+    sub     w19, w0, w9                 // elevacao acima da agua (< 0 = agua)
+    cmp     w0, w9
+    csel    w0, w9, w0, lt              // na agua: fica na superficie
     str     w0, [x28, #G_PE]
     // nivel da agua: 0 terra, 1 raso, 2 fundo, 3 mar aberto (perto da borda)
     mov     w20, #0
@@ -969,6 +997,8 @@ su_food:
     b       214f
 213: ldr    s0, [x28, #G_FOOD]
     FC      s1, F_FOODRATE
+    ldr     s2, [x28, #G_WFOOD]         // calorao e neve: mais fome
+    fmul    s1, s1, s2
     fsub    s0, s0, s1
     fmov    s1, wzr
     fmax    s0, s0, s1
@@ -987,6 +1017,8 @@ su_food:
     fsub    s2, s3, s2
     FC      s1, F_SWIMCOST
     fmul    s1, s1, s2
+    ldr     s2, [x28, #G_WSTAM]         // clima: cansa mais
+    fmul    s1, s1, s2
     ldr     w10, [x28, #G_WEIGHT]       // com peso demais afunda: o dobro
     ldr     w11, [x28, #G_CAP]
     cmp     w10, w11
@@ -1003,17 +1035,20 @@ su_food:
     fsub    s2, s3, s2
     FC      s1, F_RUNCOST
     fmul    s1, s1, s2
+    ldr     s2, [x28, #G_WSTAM]
+    fmul    s1, s1, s2
     fsub    s0, s0, s1
     b       212f
 2101: cbz   w9, 211f
     FC      s1, F_RECOVSH               // no raso: recupera devagar
-    fadd    s0, s0, s1
-    b       212f
+    b       2111f
 211: FC     s1, F_RECOV                 // em terra andando
     ldr     w10, [x28, #G_PMOVING]
     cbnz    w10, 2111f
     FC      s1, F_RECOVREST             // parado: mais rapido
-2111: fadd  s0, s0, s1
+2111: ldr   s2, [x28, #G_WRECOV]        // calorao: recupera devagar
+    fmul    s1, s1, s2
+    fadd    s0, s0, s1
 212: fmov   s1, wzr
     fmax    s0, s0, s1
     ldr     s1, [x28, #G_STAMAX]        // o maximo cresce com corrida e natacao
@@ -1152,7 +1187,11 @@ su_food:
     b.lt    171f
     FC      s1, F_WETCOLD
     fsub    s0, s0, s1
-171: fmov   s1, wzr
+171: ldr    w9, [x28, #G_INSHELTER]     // clima: chuva, neve... esfriam
+    cbnz    w9, 172f                    // (no calorao, esquenta); o abrigo
+    ldr     s1, [x28, #G_WCOLD]         // protege
+    fsub    s0, s0, s1
+172: fmov   s1, wzr
     fmax    s0, s0, s1
     FC      s1, F_HUNDRED
     fmin    s0, s0, s1
@@ -1178,7 +1217,11 @@ su_food:
     b.gt    191f
     FC      s1, F_DROWN
     fsub    s8, s8, s1
-191: FC     s2, F_HUNDRED               // vida so sobe com a fome cheia
+191: ldr    w9, [x28, #G_INSHELTER]     // granizo machuca fora do abrigo
+    cbnz    w9, 192f
+    ldr     s1, [x28, #G_WHAIL]
+    fsub    s8, s8, s1
+192: FC     s2, F_HUNDRED               // vida so sobe com a fome cheia
     ldr     s0, [x28, #G_FOOD]
     fcmp    s0, s2
     b.lt    20f
@@ -1208,7 +1251,19 @@ su_food:
     fcmp    s0, #0.0
     b.gt    203f
     LA      x0, m_drowned
-203: str    x0, [x28, #G_DEATHMSG]
+203: ldr    s0, [x28, #G_WHAIL]         // granizo (sem fome, frio ou agua)
+    fcmp    s0, #0.0
+    b.le    204f
+    ldr     w9, [x28, #G_INSHELTER]
+    cbnz    w9, 204f
+    ldr     s0, [x28, #G_WARM]
+    fcmp    s0, #0.0
+    b.le    204f
+    ldr     s0, [x28, #G_FOOD]
+    fcmp    s0, #0.0
+    b.le    204f
+    LA      x0, m_hailed
+204: str    x0, [x28, #G_DEATHMSG]
     bl      set_msg
 21: str     s8, [x28, #G_HP]
 
@@ -1220,6 +1275,12 @@ su_food:
     b.ge    24f
     add     x10, x20, x9, lsl #4
     ldr     w11, [x10, #12]
+    ldr     w12, [x28, #G_WFIRE]        // chuva/neve: queima mais rapido
+    sub     w11, w11, w12
+    ldr     w12, [x10, #8]              // debaixo da enchente: apaga
+    ldr     w13, [x28, #G_FLOOD]
+    cmp     w12, w13
+    csel    w11, wzr, w11, lt
     subs    w11, w11, #1
     str     w11, [x10, #12]
     b.gt    23f
@@ -1246,7 +1307,18 @@ su_food:
     b.ne    26f
     bl      rng
     mov     w9, #6
-    udiv    w10, w0, w9
+    ldr     w10, [x28, #G_WEATHER]      // chuva: frutas voltam 2x mais rapido
+    ldr     w11, [x28, #G_WK]
+    cmp     w11, #128
+    b.lt    251f
+    cmp     w10, #W_RAIN
+    b.eq    250f
+    cmp     w10, #W_STORM
+    b.eq    250f
+    cmp     w10, #W_FLOOD
+    b.ne    251f
+250: mov    w9, #3
+251: udiv   w10, w0, w9
     msub    w10, w10, w9, w0
     cbnz    w10, 26f
     mov     w9, #O_BUSH
@@ -1569,7 +1641,9 @@ place_check:
     bl      elev_at
     mov     w1, w0
     LA      x0, m_water
-    tbnz    w1, #31, 9f
+    ldr     w9, [x28, #G_FLOOD]         // agua (ou enchente)
+    cmp     w1, w9
+    b.lt    9f
     ldr     w9, [x28, #G_PLACE]
     sub     w9, w9, #1
     cmp     w9, #IT_FIRE
@@ -2579,6 +2653,8 @@ update_vision:
     FC      s4, F_INV256
     fmul    s3, s3, s4
     fadd    s2, s1, s3
+    ldr     s3, [x28, #G_WVIS]          // chuva, tempestade, neve: menos visao
+    fmul    s2, s2, s3
     ldr     w9, [x28, #G_TORCHLIT]      // tocha: enxerga 10 celulas de noite
     cbz     w9, 1f
     FC      s3, F_TORCHVIS
@@ -2645,6 +2721,7 @@ surv_status:
     strb    w9, [x0], #1
 2:  mov     w1, w20
     bl      numcat
+    bl      weather_status              // "   Primavera, Chuva"
     ldr     w9, [x28, #G_PAUSE]
     cbz     w9, 3f
     LA      x1, s_paused
@@ -2714,6 +2791,7 @@ surv_ui:
     mov     x29, sp
     stp     x19, x20, [sp, #16]
     stp     x21, x22, [sp, #32]
+    bl      weather_overlay             // cor do clima e relampago
     // ---- painel: inventario e barras ----
     mov     w0, #0
     mov     w1, #0
@@ -2880,7 +2958,17 @@ ui_torch:
     add     w20, w20, #10
 ui_shelter:
     ldr     w9, [x28, #G_INSHELTER]     // dentro do abrigo
-    cbz     w9, ui_tip
+    cbnz    w9, 2f
+    ldr     s0, [x28, #G_WHAIL]         // granizo e voce fora do abrigo
+    fcmp    s0, #0.0
+    b.le    ui_tip
+    RGBA    255, 110, 100, 255
+    mov     w0, #8
+    mov     w1, w20
+    LA      x2, s_hailbl
+    bl      text
+    b       ui_tip
+2:
     RGBA    170, 230, 160, 255
     mov     w0, #8
     mov     w1, w20
@@ -3444,7 +3532,9 @@ drop_item:
     fmov    s0, s8
     fmov    s1, s9
     bl      elev_at
-    tbz     w0, #31, 1f
+    ldr     w9, [x28, #G_FLOOD]
+    cmp     w0, w9
+    b.ge    1f
     LA      x0, m_dropwater
     bl      set_msg
     b       9f
@@ -5075,6 +5165,113 @@ ct_ret:
     ldp     x29, x30, [sp], #64
     ret
 
+// surv_selftest_weather(w0 = clima): 10 s nesse clima, em terra longe da
+// fogueira (na enchente: numa praia baixa); imprime calor, vida e agua
+    .globl surv_selftest_weather
+surv_selftest_weather:
+    stp     x29, x30, [sp, #-80]!
+    mov     x29, sp
+    stp     x19, x20, [sp, #16]
+    stp     x21, x22, [sp, #32]
+    stp     d8, d9, [sp, #48]
+    mov     w19, w0
+    str     wzr, [x28, #G_HOVOK]
+    str     wzr, [x28, #G_LMB]
+    str     wzr, [x28, #G_TESTKEYS]
+    mov     w9, #6000                   // de dia
+    str     w9, [x28, #G_TIME]
+    mov     w21, #60                    // elevacao: campo
+    mov     w22, #E_HILL
+    cmp     w19, #W_FLOOD
+    b.ne    1f
+    mov     w21, #10                    // enchente: praia / campo baixo
+    mov     w22, #90
+1:  mov     w20, #10                    // espiral a partir da fogueira
+2:  mov     w9, #0
+    str     w9, [sp, #64]
+3:  LA      x9, dirtab
+    ldr     w10, [sp, #64]
+    add     x9, x9, x10, lsl #2
+    ldrsh   w10, [x9]
+    scvtf   s0, w10
+    ldrsh   w10, [x9, #2]
+    scvtf   s1, w10
+    FC      s2, F_INV64
+    fmul    s0, s0, s2
+    fmul    s1, s1, s2
+    scvtf   s2, w20
+    LA      x9, fires
+    ldr     s3, [x9]
+    fmadd   s8, s0, s2, s3
+    ldr     s3, [x9, #4]
+    fmadd   s9, s1, s2, s3
+    fmov    s0, s8
+    fmov    s1, s9
+    bl      elev_at
+    cmp     w0, w21
+    b.lt    4f
+    cmp     w0, w22
+    b.lt    5f
+4:  ldr     w9, [sp, #64]
+    add     w9, w9, #1
+    str     w9, [sp, #64]
+    cmp     w9, #16
+    b.lt    3b
+    add     w20, w20, #2
+    cmp     w20, #200
+    b.lt    2b
+5:  str     s8, [x28, #G_PU]
+    str     s9, [x28, #G_PV]
+    mov     w0, w19                     // o clima, ja forte
+    MOVI32  w1, 100000
+    MOVI32  w2, 50000
+    bl      weather_set
+    mov     w9, #50
+    scvtf   s0, w9
+    str     s0, [x28, #G_WARM]
+    FC      s0, F_HUNDRED
+    str     s0, [x28, #G_HP]
+    mov     w9, #90                     // fome 90: sem cura (so com ela cheia)
+    scvtf   s0, w9
+    str     s0, [x28, #G_FOOD]
+    str     wzr, [x28, #G_SATED]
+    mov     w20, #0
+6:  bl      surv_update
+    add     w20, w20, #1
+    cmp     w20, #600
+    b.lt    6b
+    LA      x0, txt
+    LA      x1, t_w1
+    bl      strcat_cur
+    LA      x1, wnames
+    add     x1, x1, x19, lsl #4
+    bl      strcat_cur
+    ldr     s0, [x28, #G_WARM]
+    fcvtzs  w2, s0
+    LA      x1, t_w2
+    bl      ct_num
+    ldr     s0, [x28, #G_HP]
+    fcvtzs  w2, s0
+    LA      x1, t_w3
+    bl      ct_num
+    LA      x1, t_w4
+    ldr     w2, [x28, #G_FLOOD]
+    bl      ct_num
+    LA      x1, t_w5
+    ldr     w2, [x28, #G_WATER]
+    bl      ct_num
+    LA      x1, t_w6
+    ldr     w2, [x28, #G_AMBR]
+    bl      ct_num
+    LA      x1, s_nl
+    bl      strcat_cur
+    bl      sk_write
+    ldp     d8, d9, [sp, #48]
+    ldp     x21, x22, [sp, #32]
+    ldp     x19, x20, [sp, #16]
+    ldp     x29, x30, [sp], #80
+    ret
+
 // surv_selftest_water(w0 = etapa): teste automatico da agua
 //   0: coloca o personagem em agua funda longe da borda e deixa nadar
 //   1: coloca no mar aberto (perto da borda); o tubarao vem chegando
@@ -5495,6 +5692,8 @@ m_shark1:       .asciz "Agua muito funda! Um tubarao esta vindo... volte!"
 m_eaten:        .asciz "Um tubarao comeu voce!"
 m_drowned:      .asciz "Voce se afogou"
 m_starved:      .asciz "Voce morreu de fome"
+m_hailed:       .asciz "O granizo acabou com voce"
+s_hailbl:       .asciz "Granizo: perdendo vida!"
 m_froze:        .asciz "Voce morreu de frio"
 t_9:            .asciz "agua: nadando nivel="
 t_10:           .asciz " stamina="
@@ -5590,6 +5789,12 @@ t_c12:          .asciz " tochas sobrando="
 t_c13:          .asciz "fabricar: noite no abrigo, calor 50 -> "
 t_c14:          .asciz " (abrigado="
 t_c15:          .asciz ") | frutas assadas: fome 40 -> "
+t_w1:           .asciz "clima "
+t_w2:           .asciz ": em 10 s calor 50 -> "
+t_w3:           .asciz " vida 100 -> "
+t_w4:           .asciz " | enchente="
+t_w5:           .asciz " agua="
+t_w6:           .asciz " luz="
 t_21:           .asciz "fome: vida com fome 80 = 50 -> "
 t_22:           .asciz " | depois de encher -> "
 t_23:           .asciz " fome="

@@ -1,7 +1,8 @@
 // =====================================================================
 //  TRILHOS - um jogo de sobrevivencia (estilo Factorio), todo escrito em
 //  assembly ARM64 (AArch64). Roda no macOS (Apple Silicon) e no Linux ARM64.
-//  (sprites 15-21: ferramentas, tocha, comida, cesto, bau e abrigo)
+//  (sprites 15-21: ferramentas, tocha, comida, cesto, bau e abrigo;
+//  a enchente sobe o nivel da agua no desenho do terreno)
 //
 //  Terreno continuo (sem tiles): um mapa de altura 512x512 interpolado
 //  e desenhado coluna por coluna (tecnica "voxel space" com projecao
@@ -176,6 +177,10 @@ shot_mode:
     bl      F(SDL_RenderPresent)
 
     bl      start_game
+    mov     w0, #W_SUN                  // teste: sol fixo (resultados iguais
+    MOVI32  w1, 1000000                 // em toda rodada)
+    MOVI32  w2, 500000
+    bl      weather_set
     mov     w9, #700
     scvtf   s0, w9
     str     s0, [x28, #G_MX]
@@ -269,6 +274,25 @@ shot_mode:
     bl      F(SDL_RenderPresent)
     mov     w0, #2
     bl      surv_selftest_craft
+
+    // clima: cada um dos 8, com foto (shot_clima0.bmp ... shot_clima7.bmp)
+    mov     w23, #0
+71: mov     w0, w23
+    bl      surv_selftest_weather
+    bl      draw_all
+    LA      x0, s_shot_clima
+    add     w9, w23, #48
+    strb    w9, [x0, #10]
+    bl      save_bmp
+    ldr     x0, [x28, #G_REN]
+    bl      F(SDL_RenderPresent)
+    add     w23, w23, #1
+    cmp     w23, #NWEATHER
+    b.lt    71b
+    mov     w0, #W_SUN                  // de volta ao sol fixo
+    MOVI32  w1, 1000000
+    MOVI32  w2, 500000
+    bl      weather_set
 
     // agua: nadando, tubarao chegando e o fim
     mov     w0, #0
@@ -1250,7 +1274,7 @@ draw_terrain:
 
 // draw_cols(w0 = primeira coluna, w1 = coluna final exclusiva)
 draw_cols:
-    stp     x29, x30, [sp, #-112]!
+    stp     x29, x30, [sp, #-128]!
     mov     x29, sp
     stp     x19, x20, [sp, #16]
     stp     x21, x22, [sp, #32]
@@ -1272,6 +1296,8 @@ draw_cols:
     sub     w27, w27, #2                // yb final
     ldr     w9, [x28, #G_CONTOUR]
     str     w9, [sp, #104]
+    ldr     w9, [x28, #G_FLOOD]         // enchente: nivel da agua
+    str     w9, [sp, #112]
 dt_col:
     ldr     w9, [sp, #88]
     sub     w10, w26, #640
@@ -1317,8 +1343,10 @@ dt_row:
 dt_ocean:
     mov     w15, #-2000                 // fora do mapa: oceano
 dt_proj:
-    cmp     w15, #0
-    csel    w0, w15, wzr, gt            // agua fica no nivel do mar
+    ldr     w9, [sp, #112]              // abaixo do nivel da agua (mar ou
+    subs    w10, w15, w9                // enchente): desenha agua na superficie
+    csel    w0, w15, w9, ge             // altura: o chao, ou a superficie
+    csel    w15, w15, w10, ge           // cor: o chao, ou a profundidade
     mul     w0, w0, w20
     asr     w0, w0, #12
     sub     w0, w24, w0                 // y na tela
@@ -1376,7 +1404,7 @@ dt_coldone:
     ldp     x23, x24, [sp, #48]
     ldp     x21, x22, [sp, #32]
     ldp     x19, x20, [sp, #16]
-    ldp     x29, x30, [sp], #112
+    ldp     x29, x30, [sp], #128
     ret
 
 // terrain_color(w0 = u, w1 = v (16.16), w2 = elevacao, w3 = curva?)
@@ -1720,6 +1748,8 @@ draw_all:
     ldr     w9, [x28, #G_STATE]
     cbz     w9, 2f
     bl      surv_light                  // escuridao da noite
+    bl      weather_tint                // cor do clima (so no mundo)
+    bl      weather_fx                  // chuva, neve, granizo
 2:  ldr     x0, [x28, #G_TEX]
     mov     x1, #0
     LA      x2, fb
@@ -2225,6 +2255,7 @@ s_shot_swim:    .asciz "shot_nado.bmp"
 s_shot_bag:     .asciz "shot_mochila.bmp"
 s_shot_craft:   .asciz "shot_fabricar.bmp"
 s_shot_torch:   .asciz "shot_tocha.bmp"
+s_shot_clima:   .asciz "shot_clima0.bmp"
 s_shot_shark:   .asciz "shot_tubarao.bmp"
 s_shot_dead:    .asciz "shot_fim.bmp"
 

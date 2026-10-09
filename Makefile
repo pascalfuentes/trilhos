@@ -1,11 +1,11 @@
-# Trilhos - jogo de trens em assembly ARM64
+# Trilhos - jogo de sobrevivencia em assembly ARM64
 #   make        compila
 #   make run    compila e roda
 #   make clean  apaga o executavel e screenshots .bmp
 
 CC ?= cc
 UNAME := $(shell uname)
-SRCS := trilhos.S sobrevivencia.S
+SRCS := trilhos.S sobrevivencia.S clima.S
 
 SDL_LIBS := $(shell pkg-config --libs sdl3 2>/dev/null)
 ifeq ($(SDL_LIBS),)

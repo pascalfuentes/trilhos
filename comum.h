@@ -1,7 +1,7 @@
 // =====================================================================
 //  comum.h - macros e constantes compartilhadas por todos os modulos
 //  (incluido com #include no topo de cada arquivo .S)
-//  inclui itens, receitas e a interface de fabricar
+//  inclui itens, receitas, a interface de fabricar e o clima
 // =====================================================================
 
 // ---- diferencas entre macOS (Mach-O) e Linux (ELF) ------------------
@@ -163,11 +163,41 @@
 .equ G_TORCHLIT, 400         // tocha acesa agora
 .equ G_HOVREC,   404         // receita sob o mouse (-1)
 .equ G_INSHELTER, 408        // dentro de um abrigo
-.equ G_INV,      416         // mochila: NITEMS contadores (u32)
+.equ G_INV,      416         // mochila: NITEMS contadores (u32) ate 460
 .equ G_WOOD,     (G_INV + 0)
 .equ G_STONE,    (G_INV + 4)
 .equ G_BERRY,    (G_INV + 8)
-.equ GSIZE,      512
+// clima (calculado por weather_update a cada quadro)
+.equ G_WEATHER,  464         // clima atual (W_*)
+.equ G_WTIME,    468         // quadros que faltam neste clima
+.equ G_WDUR,     472         // duracao total deste clima
+.equ G_WK,       476         // intensidade 0..256 (entra e sai devagar)
+.equ G_FLOOD,    480         // nivel da enchente (1/16 px; 0 = normal)
+.equ G_FLASH,    484         // relampago (quadros)
+.equ G_WCOLD,    488         // frio extra por quadro (float; < 0 esquenta)
+.equ G_WFOOD,    492         // multiplica a fome (float)
+.equ G_WVIS,     496         // multiplica o raio de visao (float)
+.equ G_WFIRE,    500         // lenha extra gasta por quadro nas fogueiras
+.equ G_WHAIL,    504         // vida perdida por quadro fora do abrigo (float)
+.equ G_WSPEED,   508         // multiplica a velocidade (float)
+.equ G_WSTAM,    512         // multiplica o gasto de stamina (float)
+.equ G_WRECOV,   516         // multiplica a recuperacao de stamina (float)
+.equ G_WDARK,    520         // quanto escurece (0..256)
+.equ G_SEASON,   524         // 0 primavera, 1 verao, 2 outono, 3 inverno
+.equ GSIZE,      576
+
+.equ W_SUN,      0
+.equ W_CLOUDY,   1
+.equ W_RAIN,     2
+.equ W_STORM,    3
+.equ W_HEAT,     4
+.equ W_SNOW,     5
+.equ W_HAIL,     6
+.equ W_FLOOD,    7
+.equ NWEATHER,   8
+.equ SEASONDAYS, 3           // cada estacao dura 3 dias (36 min)
+.equ FLOODMAX,   120         // a enchente sobe ate 120 (cobre praias e campos baixos)
+.equ WFADE,      1200        // o clima entra e sai em 20 s
 
 // skills
 .equ SK_SWIM,    0           // natacao
