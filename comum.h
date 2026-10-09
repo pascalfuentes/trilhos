@@ -1,7 +1,7 @@
 // =====================================================================
 //  comum.h - macros e constantes compartilhadas por todos os modulos
 //  (incluido com #include no topo de cada arquivo .S)
-//  inclui itens, receitas, a interface de fabricar e o clima
+//  inclui itens, receitas, a interface de fabricar, o clima e os animais.
 // =====================================================================
 
 // ---- diferencas entre macOS (Mach-O) e Linux (ELF) ------------------
@@ -163,7 +163,7 @@
 .equ G_TORCHLIT, 400         // tocha acesa agora
 .equ G_HOVREC,   404         // receita sob o mouse (-1)
 .equ G_INSHELTER, 408        // dentro de um abrigo
-.equ G_INV,      416         // mochila: NITEMS contadores (u32) ate 460
+                             // 416-463: livre (a mochila foi para 576)
 .equ G_WOOD,     (G_INV + 0)
 .equ G_STONE,    (G_INV + 4)
 .equ G_BERRY,    (G_INV + 8)
@@ -184,7 +184,21 @@
 .equ G_WRECOV,   516         // multiplica a recuperacao de stamina (float)
 .equ G_WDARK,    520         // quanto escurece (0..256)
 .equ G_SEASON,   524         // 0 primavera, 1 verao, 2 outono, 3 inverno
-.equ GSIZE,      576
+// equipamento e animais
+.equ G_HAND,     528         // na mao: item + 1 (0 = maos vazias)
+.equ G_ATKCD,    532         // espera ate o proximo golpe / flecha
+.equ G_HOVANIM,  536         // animal sob o mouse (-1)
+.equ G_NANIM,    540         // animais vivos
+.equ G_KILLER,   544         // ultimo animal que mordeu (texto da morte, 8 bytes)
+.equ G_KILLT,    552         // quadros desde a mordida (conta para baixo)
+.equ G_SPAWNT,   556         // proxima tentativa de aparecer um animal
+.equ G_OFFHAND,  560         // tocha na outra mao (1/0)
+.equ G_NOSPAWN,  564         // teste: animais nao aparecem sozinhos
+.equ G_INV,      576         // mochila: NITEMS contadores (u32), ate 32 itens
+.equ G_WOOD,     (G_INV + 0)
+.equ G_STONE,    (G_INV + 4)
+.equ G_BERRY,    (G_INV + 8)
+.equ GSIZE,      768
 
 .equ W_SUN,      0
 .equ W_CLOUDY,   1
@@ -226,9 +240,16 @@
 .equ IT_FIRE,    8           // fogueira (construcao)
 .equ IT_CHEST,   9           // bau (construcao)
 .equ IT_SHELTER, 10          // abrigo (construcao)
-.equ NITEMS,     11
-.equ NDROP,      8           // itens 0..7 podem ser largados no chao
-.equ IT_FIRSTBUILD, 8        // 8..10 sao colocados no mapa
+.equ IT_BOW,     11          // arco
+.equ IT_ARROW,   12          // flechas
+.equ IT_MEAT,    13          // carne crua
+.equ IT_CMEAT,   14          // carne assada
+.equ IT_HIDE,    15          // couro
+.equ IT_COAT,    16          // roupa de couro (metade do frio)
+.equ IT_LBAG,    17          // mochila de couro (+20 kg)
+.equ NITEMS,     18
+.equ IT_FIRSTBUILD, 8        // 8..10 sao colocados no mapa (nao se largam)
+.equ IT_LASTBUILD, 10
 
 // objetos que voce cria
 .equ O_LOGS,     12          // pilhas largadas: 12 + item (sprites 12..19)
@@ -236,16 +257,30 @@
 .equ O_BERRIES,  14
 .equ O_CHEST,    20          // bau (sprite 20)
 .equ O_SHELTER,  21          // abrigo (sprite 21)
-.equ O_LAST,     21          // ultimo tipo de objeto desenhavel
+.equ O_LAST,     29          // pilhas vao ate 12 + 17 (sprites 23..29: itens novos)
+
+// animais (sprites 30..41, dois quadros cada)
+.equ A_RABBIT,   0
+.equ A_DEER,     1
+.equ A_GOAT,     2
+.equ A_WOLF,     3
+.equ A_BEAR,     4
+.equ A_CRAB,     5
+.equ NATYPES,    6
+.equ MAXANIM,    48          // vagas na lista
+.equ MAXALIVE,   18          // no maximo vivos ao mesmo tempo
+.equ MAXARROW,   16
+.equ HB_X,       242         // barra "na mao" (4 quadrados) embaixo, no meio
+.equ HB_Y,       306
 
 .equ TOOLDUR,    40          // usos de um machado ou picareta
 .equ TORCHTIME,  14400       // uma tocha queima 4 min
 .equ FIRETIME,   14400       // fogueira nova: 4 min de fogo
 .equ FIREWOOD,   7200        // cada lenha: +2 min
 .equ FIREMAX,    43200       // no maximo 12 min
-.equ MAXCHEST,   64
+.equ MAXCHEST,   64          // cada bau: 32 contadores (128 bytes)
 .equ MAXSHELTER, 32
-.equ NRECIPES,   8
+.equ NRECIPES,   13
 
 // interface (coordenadas do espaco de texto 640 x 360)
 .equ BTN_Y,      16
@@ -257,11 +292,11 @@
 .equ INV_X,      416         // janela da mochila
 .equ INV_Y,      36
 .equ INV_W,      220
-.equ INV_H,      218
-.equ SLOT_X,     (INV_X + 13)
+.equ INV_H,      226
+.equ SLOT_X,     (INV_X + 12) // mochila: grade 5 x 4
 .equ SLOT_Y,     (INV_Y + 48)
-.equ SLOT,       44          // lado do quadrado
-.equ SLOTSTEP,   50
+.equ SLOT,       36          // lado do quadrado
+.equ SLOTSTEP,   40
 .equ CHR_X,      4           // janela do personagem (embaixo do status)
 .equ CHR_Y,      126
 .equ CHR_W,      216
@@ -271,11 +306,11 @@
 .equ CRF_X,      224         // janela de fabricar (e do bau, no mesmo lugar)
 .equ CRF_Y,      36
 .equ CRF_W,      188
-.equ CRF_H,      246
-.equ CRF_ROW,    24          // altura de cada receita
-.equ CRF_TOP,    (CRF_Y + 18)
-.equ CHS_SLOTX,  (CRF_X + 22) // bau: grade 3 x 4
-.equ CHS_SLOTY,  (CRF_Y + 26)
+.equ CRF_H,      236
+.equ CRF_GX,     (CRF_X + 16) // fabricar: grade de icones 4 x 4
+.equ CRF_GY,     (CRF_Y + 20)
+.equ CHS_SLOTX,  (CRF_X + 16) // bau: grade 4 x 5
+.equ CHS_SLOTY,  (CRF_Y + 22)
 
 // agua: 3 niveis (raso, fundo, mar aberto)
 .equ W_SHALLOW,  150         // ate esta profundidade (1/16 px) e raso

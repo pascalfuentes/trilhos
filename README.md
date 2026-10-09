@@ -2,7 +2,7 @@
 
 Um jogo de sobrevivência no estilo Factorio, escrito em **assembly ARM64** (AArch64).
 
-Você aparece sozinho num mundo gerado aleatoriamente: terreno contínuo, mar, praias, florestas, montanhas com neve. Precisa coletar madeira, pedra e frutas, fabricar ferramentas e construções, não morrer de fome e passar a noite perto de uma fogueira, enfrentando as estações e o clima (chuva, tempestade, calorão, neve, granizo, enchente). Quanto mais você faz uma coisa, melhor fica nela, e para se curar precisa estar de barriga cheia.
+Você aparece sozinho num mundo gerado aleatoriamente: terreno contínuo, mar, praias, florestas, montanhas com neve. Precisa coletar madeira, pedra e frutas, caçar com arco e flecha, fabricar ferramentas e construções, fugir de lobos e ursos, não morrer de fome e passar a noite perto de uma fogueira, enfrentando as estações e o clima (chuva, tempestade, calorão, neve, granizo, enchente). Quanto mais você faz uma coisa, melhor fica nela, e para se curar precisa estar de barriga cheia.
 
 ![Dia](screenshots/jogo.png)
 ![Noite](screenshots/noite.png)
@@ -19,9 +19,13 @@ Você aparece sozinho num mundo gerado aleatoriamente: terreno contínuo, mar, p
 | F | fabricar uma fogueira e escolher onde montar |
 | Tab ou botão **Fabricar** | abre a janela de fabricar |
 | clique no mapa (com uma construção na mão) | coloca a construção; botão direito ou ESC cancela |
+| 1 / 2 / 3 | põe na mão o machado, a picareta ou o arco (de novo: mãos vazias) |
+| 4 | põe ou tira a tocha da outra mão |
+| clique com o arco na mão | atira uma flecha onde está o mouse |
+| clique num animal perto | golpe (machado tira mais vida) |
 | botão direito num baú | abre o baú (clique num item passa de um lado para o outro) |
 | botão direito numa fogueira | pôr lenha (+2 min de fogo; no máximo 12 min) |
-| I ou botão **Mochila** | abre a mochila (clique num item: come, coloca ou guarda no baú aberto) |
+| I ou botão **Mochila** | abre a mochila (clique num item: come, põe na mão, coloca ou guarda no baú aberto) |
 | C ou botão **Personagem** | abre as skills |
 | botão direito num item da mochila | larga 1 no chão (com Shift: a pilha toda) |
 | roda do mouse / `+` / `-` | zoom |
@@ -37,29 +41,62 @@ Você aparece sozinho num mundo gerado aleatoriamente: terreno contínuo, mar, p
 
 **Fabricar (Tab)**
 
-Como no Minecraft e no Factorio, uma janela mostra tudo o que dá para fazer.
+Como no Minecraft e no Factorio, uma grade de ícones mostra tudo o que dá para fazer.
 
-- O custo aparece em verde se você tem os materiais e em vermelho se falta algo.
-- Passando o mouse por cima de uma receita, aparece o que ela faz.
+- Ícone apagado: falta material. Borda verde: dá para fazer.
+- Passando o mouse por cima de uma receita, aparecem o nome, o custo (verde ou vermelho) e o que ela faz.
 - Fabricar é instantâneo.
 - Construções vão para a mochila e entram direto no modo de colocar: aparece uma prévia no mouse (piscando onde não dá) e você clica no chão, até 5 células do personagem.
 
 | Receita | Custo | O que faz |
 |---|---|---|
-| Machado | 3 madeira, 2 pedra | corta árvores 2x mais rápido; dura 40 madeiras |
-| Picareta | 3 madeira, 3 pedra | quebra pedras 2x mais rápido; dura 40 pedras |
-| Tocha | 2 madeira | acende sozinha quando escurece: luz forte e visão de 10 células por 4 minutos |
+| Machado | 3 madeira, 2 pedra | na mão: corta árvores 2x mais rápido; dura 40 madeiras |
+| Picareta | 3 madeira, 3 pedra | na mão: quebra pedras 2x mais rápido; dura 40 pedras |
+| Arco | 5 madeira | na mão: atira flechas |
+| Flechas (4) | 1 madeira, 1 pedra | munição do arco (somem ao acertar) |
+| Tocha | 2 madeira | na outra mão: acende sozinha quando escurece; luz forte e visão de 10 células por 4 minutos |
 | Fogueira | 5 madeira, 3 pedra | luz e calor por 4 minutos (construção) |
 | Baú | 8 madeira | guarda itens sem pesar na mochila (construção) |
 | Abrigo | 12 madeira, 4 pedra | dentro dele não passa frio à noite (construção) |
 | Frutas assadas | 3 frutas, perto de uma fogueira | enchem 50 de fome |
+| Carne assada | 1 carne, perto de uma fogueira | enche 60 de fome (crua: só 10) |
 | Cesto | 6 madeira | +10 kg no limite da mochila (só um conta) |
+| Roupa de couro | 4 couro | metade do frio (noite, água e clima) |
+| Mochila de couro | 3 couro, 2 madeira | +20 kg no limite (soma com o cesto) |
 
 - O desgaste das ferramentas e o tempo da tocha acesa aparecem como uma barrinha embaixo do ícone na mochila. Quando o machado ou a picareta quebra, o próximo (se você tiver) entra novo.
 - Para **desmontar** um baú ou um abrigo, segure o botão esquerdo nele: ele volta para a mochila. O baú precisa estar vazio.
 
 ![Fabricar](screenshots/fabricar.png)
 ![Tocha à noite](screenshots/tocha.png)
+
+**Na mão**
+
+- Embaixo da tela fica a barra **na mão**: 1 machado, 2 picareta, 3 arco e 4 tocha. O que você segura tem a borda amarela, e o número no arco é quantas flechas sobram.
+- Machado e picareta só ajudam (e só gastam) se estiverem na mão.
+- A **tocha** vai na **outra mão**: dá para segurar o arco ou o machado e ainda ter luz à noite. Ela só se gasta quando queima até o fim.
+
+**Animais e caça**
+
+Os animais aparecem longe da vista, cada um no seu terreno, e somem quando ficam muito longe.
+
+| Animal | Onde | Comportamento | Vida | Deixa |
+|---|---|---|---|---|
+| Coelho | campo | foge rápido | 2 | 1 carne |
+| Cervo | floresta e campo úmido | foge | 6 | 2 carne, 2 couro |
+| Cabra | colinas, rocha e neve | foge | 5 | 2 carne, 1 couro |
+| Caranguejo | praia | anda devagar | 1 | 1 carne |
+| Lobo | floresta (de noite, também campo e colinas) | **ataca**: mordida de 8 | 6 | 1 carne, 1 couro |
+| Urso | floresta, rocha e neve | **ataca**: mordida de 15 | 14 | 4 carne, 3 couro |
+
+- Bichos pacíficos fogem quando você chega perto ou quando são feridos.
+- Lobos e ursos perseguem: de dia só se você chegar perto, de noite de bem mais longe. Um animal ferido fica furioso.
+- Correndo (Shift), você escapa de um lobo.
+- Nenhum animal entra na água, e os perigosos têm medo de fogo: perto de uma fogueira acesa, ou dentro do abrigo, você está seguro.
+- **Flecha** tira 4 de vida. Golpe com machado tira 3, com picareta 2 e com as mãos 1.
+- O animal abatido deixa pilhas de **carne** e **couro** no chão; segure o botão esquerdo para recolher.
+
+![Animais](screenshots/animais.png)
 
 **Sobrevivência**
 
@@ -161,6 +198,7 @@ O **abrigo** protege do frio do clima e do granizo.
 | `trilhos.S` | janela, entrada, geração do mundo, terreno, árvores |
 | `sobrevivencia.S` | personagem, coleta, mochila, skills, fabricar, baús, abrigos, fome, calor, fogueiras, água, noite e interface |
 | `clima.S` | estações, sorteio do clima, efeitos, chuva/neve/granizo, cor do clima e relâmpago |
+| `animais.S` | animais (aparecer pelo terreno, fugir, perseguir, morder), flechas e golpes |
 
 - **Geração:** ruído fractal num mapa de altura de 512x512, só com aritmética inteira. A mesma semente sempre gera o mesmo mundo.
 - **Terreno contínuo ("voxel space" isométrico):** cada coluna da tela anda pelo mundo de frente para trás e pinta só o que fica visível. As 1280 colunas são divididas entre **8 threads**, uma para cada núcleo.
@@ -186,12 +224,12 @@ sudo apt install libsdl3-dev   # ou compile o SDL3 a partir do código-fonte
 make run
 ```
 
-`./trilhos --shot` roda sem interação: tira screenshots, mede o tempo de cada quadro e faz um teste automático (coleta duas árvores, uma pedra e um arbusto, monta uma fogueira, come e passa a noite; corre, anda carregado, larga e recolhe uma pilha de pedras, vê a skill cair sem treino, confere que a vida só sobe com a fome cheia; fabrica tudo, monta baú e abrigo, gasta o machado, acende a tocha à noite e dorme no abrigo; passa 10 s em cada um dos 8 climas (com foto); depois nada num lago e vai para o mar aberto até o tubarão atacar).
+`./trilhos --shot` roda sem interação: tira screenshots, mede o tempo de cada quadro e faz um teste automático (coleta duas árvores, uma pedra e um arbusto, monta uma fogueira, come e passa a noite; corre, anda carregado, larga e recolhe uma pilha de pedras, vê a skill cair sem treino, confere que a vida só sobe com a fome cheia; fabrica tudo, monta baú e abrigo, gasta o machado, acende a tocha à noite e dorme no abrigo; passa 10 s em cada um dos 8 climas (com foto); caça um cervo com o arco, enfrenta um lobo à noite com o machado e vê os animais aparecendo; depois nada num lago e vai para o mar aberto até o tubarão atacar).
 
 ## Próximos passos
 
 - [x] Fabricar: machado, picareta, tocha, baú, abrigo, cesto, frutas assadas
 - [ ] Minérios (ferro, carvão), fornalha e ferramentas melhores
-- [ ] Animais e caça
-- [ ] Inimigos de noite
+- [x] Animais e caça (arco, flechas, carne, couro)
+- [ ] Mais inimigos de noite
 - [ ] Salvar e carregar o jogo

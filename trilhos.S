@@ -2,6 +2,7 @@
 //  TRILHOS - um jogo de sobrevivencia (estilo Factorio), todo escrito em
 //  assembly ARM64 (AArch64). Roda no macOS (Apple Silicon) e no Linux ARM64.
 //  (sprites 15-21: ferramentas, tocha, comida, cesto, bau e abrigo;
+//  23-29: arco, flechas, carne, couro, roupa e mochila; 30-41: animais;
 //  a enchente sobe o nivel da agua no desenho do terreno)
 //
 //  Terreno continuo (sem tiles): um mapa de altura 512x512 interpolado
@@ -181,6 +182,8 @@ shot_mode:
     MOVI32  w1, 1000000                 // em toda rodada)
     MOVI32  w2, 500000
     bl      weather_set
+    mov     w9, #1                      // e animais so quando o teste pedir
+    str     w9, [x28, #G_NOSPAWN]
     mov     w9, #700
     scvtf   s0, w9
     str     s0, [x28, #G_MX]
@@ -293,6 +296,17 @@ shot_mode:
     MOVI32  w1, 1000000
     MOVI32  w2, 500000
     bl      weather_set
+
+    // animais: um de cada perto (foto), depois a caca e o lobo
+    mov     w0, #0
+    bl      surv_selftest_hunt
+    bl      draw_all
+    LA      x0, s_shot_anim
+    bl      save_bmp
+    ldr     x0, [x28, #G_REN]
+    bl      F(SDL_RenderPresent)
+    mov     w0, #1
+    bl      surv_selftest_hunt
 
     // agua: nadando, tubarao chegando e o fim
     mov     w0, #0
@@ -2004,7 +2018,8 @@ palette:
     .word 0xFFA7A39B, 0xFF85817A, 0xFF5F5C57, 0xFFD8263A  // 20-23 pedra, fruta
     .word 0xFFFFE066, 0xFFFF8A1F, 0xFFD8401A, 0xFFE8B48A  // 24-27 fogo, pele
     .word 0xFF2F6FB5, 0xFF4A3A2A, 0xFF3A2A1A, 0xFF7A4A24  // 28-31 roupa, cabelo, lenha
-    .word 0xFFCDEBF7, 0xFF6E7C86, 0xFF4A555D, 0           // 32-35 espuma, tubarao
+    .word 0xFFCDEBF7, 0xFF6E7C86, 0xFF4A555D, 0xFFB07A48  // 32-35 espuma, tubarao, cervo
+    .word 0xFF8C5A30, 0xFFF2F2F2, 0xFFE05030, 0xFF6A6A70  // 36-39 couro, branco, caranguejo, lobo
 
 roofc:
     .word 0xFFB5443A, 0xFF8C3029
@@ -2225,6 +2240,187 @@ sprites:
     .byte 1,31,18,18,18,18,18,18,18,31,1
     .byte 31,31,1,1,1,1,1,1,1,31,31
     .p2align 7
+// 22: (vaga: pilha de abrigo nao existe)
+    .byte 1, 1, 1, 0
+    .byte 0
+    .p2align 7
+// 23: arco
+    .byte 4, 8, 2, 0
+    .byte 0,0,31,6
+    .byte 0,31,0,6
+    .byte 31,0,0,6
+    .byte 31,0,0,6
+    .byte 31,0,0,6
+    .byte 31,0,0,6
+    .byte 0,31,0,6
+    .byte 0,0,31,6
+    .p2align 7
+// 24: flechas
+    .byte 8, 7, 4, 0
+    .byte 6,0,0,0,0,0,21,0
+    .byte 0,6,31,31,31,31,21,21
+    .byte 6,0,0,0,0,0,21,0
+    .byte 0,0,0,0,0,0,0,0
+    .byte 6,0,0,0,0,0,21,0
+    .byte 0,6,31,31,31,31,21,21
+    .byte 6,0,0,0,0,0,21,0
+    .p2align 7
+// 25: carne crua
+    .byte 6, 5, 3, 0
+    .byte 0,23,23,23,0,0
+    .byte 23,17,17,23,23,0
+    .byte 23,17,17,17,23,6
+    .byte 0,23,23,23,6,6
+    .byte 0,0,0,0,6,0
+    .p2align 7
+// 26: carne assada
+    .byte 6, 5, 3, 0
+    .byte 0,36,36,36,0,0
+    .byte 36,35,35,36,36,0
+    .byte 36,35,25,35,36,6
+    .byte 0,36,36,36,6,6
+    .byte 0,0,0,0,6,0
+    .p2align 7
+// 27: couro
+    .byte 6, 5, 3, 0
+    .byte 35,0,35,35,0,35
+    .byte 0,35,35,35,35,0
+    .byte 0,35,36,35,35,0
+    .byte 0,35,35,35,35,0
+    .byte 35,0,35,35,0,35
+    .p2align 7
+// 28: roupa de couro
+    .byte 7, 7, 3, 0
+    .byte 0,35,35,0,35,35,0
+    .byte 35,35,36,35,36,35,35
+    .byte 35,0,35,36,35,0,35
+    .byte 35,0,35,36,35,0,35
+    .byte 0,0,35,36,35,0,0
+    .byte 0,0,35,36,35,0,0
+    .byte 0,0,36,36,36,0,0
+    .p2align 7
+// 29: mochila de couro
+    .byte 6, 7, 3, 0
+    .byte 0,36,36,36,36,0
+    .byte 0,36,0,0,36,0
+    .byte 35,35,35,35,35,35
+    .byte 35,36,36,36,36,35
+    .byte 35,35,24,24,35,35
+    .byte 35,35,35,35,35,35
+    .byte 36,36,36,36,36,36
+    .p2align 7
+// 30: coelho A
+    .byte 6, 5, 3, 0
+    .byte 0,0,0,20,0,20
+    .byte 0,0,0,20,20,20
+    .byte 37,20,20,20,18,20
+    .byte 20,20,20,20,20,0
+    .byte 0,21,0,0,21,0
+    .p2align 7
+// 31: coelho B
+    .byte 6, 5, 3, 0
+    .byte 0,0,0,20,0,20
+    .byte 0,0,0,20,20,20
+    .byte 37,20,20,20,18,20
+    .byte 20,20,20,20,20,0
+    .byte 21,0,0,21,0,0
+    .p2align 7
+// 32: cervo A
+    .byte 9, 8, 4, 0
+    .byte 0,0,0,0,0,0,36,0,36
+    .byte 0,0,0,0,0,0,0,36,0
+    .byte 0,0,0,0,0,0,35,35,0
+    .byte 0,0,0,0,0,0,35,18,35
+    .byte 0,35,35,35,35,35,35,0,0
+    .byte 6,35,35,35,35,35,35,0,0
+    .byte 0,36,0,36,0,36,0,36,0
+    .byte 0,36,0,36,0,36,0,36,0
+    .p2align 7
+// 33: cervo B
+    .byte 9, 8, 4, 0
+    .byte 0,0,0,0,0,0,36,0,36
+    .byte 0,0,0,0,0,0,0,36,0
+    .byte 0,0,0,0,0,0,35,35,0
+    .byte 0,0,0,0,0,0,35,18,35
+    .byte 0,35,35,35,35,35,35,0,0
+    .byte 6,35,35,35,35,35,35,0,0
+    .byte 0,0,36,0,36,0,36,0,0
+    .byte 0,36,0,0,0,0,0,36,0
+    .p2align 7
+// 34: cabra A
+    .byte 8, 7, 4, 0
+    .byte 0,0,0,0,0,0,21,21
+    .byte 0,0,0,0,0,37,37,21
+    .byte 0,0,0,0,0,37,18,37
+    .byte 37,37,37,37,37,37,37,0
+    .byte 37,37,37,37,37,37,0,0
+    .byte 0,22,0,0,22,0,0,0
+    .byte 0,22,0,0,22,0,0,0
+    .p2align 7
+// 35: cabra B
+    .byte 8, 7, 4, 0
+    .byte 0,0,0,0,0,0,21,21
+    .byte 0,0,0,0,0,37,37,21
+    .byte 0,0,0,0,0,37,18,37
+    .byte 37,37,37,37,37,37,37,0
+    .byte 37,37,37,37,37,37,0,0
+    .byte 22,0,0,0,0,22,0,0
+    .byte 22,0,0,0,0,22,0,0
+    .p2align 7
+// 36: lobo A
+    .byte 9, 6, 4, 0
+    .byte 0,0,0,0,0,0,0,39,39
+    .byte 0,0,0,0,0,0,39,39,39
+    .byte 39,0,0,0,0,39,39,17,39
+    .byte 0,39,39,39,39,39,39,39,22
+    .byte 0,39,39,39,39,39,0,0,0
+    .byte 0,22,0,22,0,22,0,0,0
+    .p2align 7
+// 37: lobo B
+    .byte 9, 6, 4, 0
+    .byte 0,0,0,0,0,0,0,39,39
+    .byte 0,0,0,0,0,0,39,39,39
+    .byte 39,0,0,0,0,39,39,17,39
+    .byte 0,39,39,39,39,39,39,39,22
+    .byte 0,39,39,39,39,39,0,0,0
+    .byte 22,0,22,0,22,0,0,0,0
+    .p2align 7
+// 38: urso A
+    .byte 10, 8, 5, 0
+    .byte 0,0,0,0,0,0,0,10,0,10
+    .byte 0,0,0,0,0,0,10,10,10,10
+    .byte 0,10,10,10,10,10,10,10,18,10
+    .byte 10,10,10,10,10,10,10,10,10,29
+    .byte 10,10,10,10,10,10,10,10,0,0
+    .byte 10,10,10,10,10,10,10,0,0,0
+    .byte 0,30,30,0,0,30,30,0,0,0
+    .byte 0,30,30,0,0,30,30,0,0,0
+    .p2align 7
+// 39: urso B
+    .byte 10, 8, 5, 0
+    .byte 0,0,0,0,0,0,0,10,0,10
+    .byte 0,0,0,0,0,0,10,10,10,10
+    .byte 0,10,10,10,10,10,10,10,18,10
+    .byte 10,10,10,10,10,10,10,10,10,29
+    .byte 10,10,10,10,10,10,10,10,0,0
+    .byte 10,10,10,10,10,10,10,0,0,0
+    .byte 30,30,0,0,0,0,30,30,0,0
+    .byte 30,30,0,0,0,0,30,30,0,0
+    .p2align 7
+// 40: caranguejo A
+    .byte 7, 4, 3, 0
+    .byte 38,0,0,0,0,0,38
+    .byte 38,0,18,0,18,0,38
+    .byte 0,38,38,38,38,38,0
+    .byte 38,0,38,0,38,0,38
+    .p2align 7
+// 41: caranguejo B
+    .byte 7, 4, 3, 0
+    .byte 38,0,0,0,0,0,38
+    .byte 38,0,18,0,18,0,38
+    .byte 0,38,38,38,38,38,0
+    .byte 0,38,0,38,0,38,0
+    .p2align 7
 
 s_wintitle:     .asciz "Trilhos - jogo de trens em Assembly ARM64"
 s_title:        .asciz "TRILHOS"
@@ -2256,6 +2452,7 @@ s_shot_bag:     .asciz "shot_mochila.bmp"
 s_shot_craft:   .asciz "shot_fabricar.bmp"
 s_shot_torch:   .asciz "shot_tocha.bmp"
 s_shot_clima:   .asciz "shot_clima0.bmp"
+s_shot_anim:    .asciz "shot_animais.bmp"
 s_shot_shark:   .asciz "shot_tubarao.bmp"
 s_shot_dead:    .asciz "shot_fim.bmp"
 
