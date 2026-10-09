@@ -73,12 +73,12 @@
 .equ SPR_FIN,   11           // barbatana do tubarao
 .equ SPR_TORCH, 17           // tocha (icone e na mao)
 
-// ---- sobrevivencia ---------------------------------------------------------
+// ---- sobrevivencia (60 quadros = 1 s; tempos 4x mais longos) ---------------
 .equ MAXFIRE,   32           // fogueira: 16 bytes (u, v, e, lenha)
-.equ DAYLEN,    10800        // quadros por dia (3 minutos)
-.equ T_DUSK,    5400         // 18:00
-.equ T_NIGHT,   6480         // 20:24
-.equ T_DAWN,    9720         // 05:36
+.equ DAYLEN,    43200        // quadros por dia (12 minutos)
+.equ T_DUSK,    21600        // 18:00
+.equ T_NIGHT,   25920        // 20:24
+.equ T_DAWN,    38880        // 05:36
 
 // ---- estado global: x28 aponta sempre para G ----------------------------
 .equ G_REN,      0
@@ -176,8 +176,8 @@
 .equ SK_MINE,    3           // mineracao
 .equ SK_STR,     4           // forca
 .equ NSKILL,     5
-.equ SATTIME,    3600        // fome cheia segura 60 s antes de cair
-.equ SKREST,     1800        // 30 s sem treinar: a skill comeca a cair
+.equ SATTIME,    14400       // fome cheia segura 4 min antes de cair
+.equ SKREST,     7200        // 2 min sem treinar: a skill comeca a cair
 .equ G_SKSWIM,   (G_SKILL + 4 * SK_SWIM)
 .equ G_SKRUN,    (G_SKILL + 4 * SK_RUN)
 .equ G_SKCHOP,   (G_SKILL + 4 * SK_CHOP)
@@ -209,7 +209,10 @@
 .equ O_LAST,     21          // ultimo tipo de objeto desenhavel
 
 .equ TOOLDUR,    40          // usos de um machado ou picareta
-.equ TORCHTIME,  3600        // uma tocha queima 60 s
+.equ TORCHTIME,  14400       // uma tocha queima 4 min
+.equ FIRETIME,   14400       // fogueira nova: 4 min de fogo
+.equ FIREWOOD,   7200        // cada lenha: +2 min
+.equ FIREMAX,    43200       // no maximo 12 min
 .equ MAXCHEST,   64
 .equ MAXSHELTER, 32
 .equ NRECIPES,   8

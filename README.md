@@ -20,7 +20,7 @@ Você aparece sozinho num mundo gerado aleatoriamente: terreno contínuo, mar, p
 | Tab ou botão **Fabricar** | abre a janela de fabricar |
 | clique no mapa (com uma construção na mão) | coloca a construção; botão direito ou ESC cancela |
 | botão direito num baú | abre o baú (clique num item passa de um lado para o outro) |
-| botão direito numa fogueira | pôr lenha (+30 s de fogo) |
+| botão direito numa fogueira | pôr lenha (+2 min de fogo; no máximo 12 min) |
 | I ou botão **Mochila** | abre a mochila (clique num item: come, coloca ou guarda no baú aberto) |
 | C ou botão **Personagem** | abre as skills |
 | botão direito num item da mochila | larga 1 no chão (com Shift: a pilha toda) |
@@ -48,8 +48,8 @@ Como no Minecraft e no Factorio, uma janela mostra tudo o que dá para fazer.
 |---|---|---|
 | Machado | 3 madeira, 2 pedra | corta árvores 2x mais rápido; dura 40 madeiras |
 | Picareta | 3 madeira, 3 pedra | quebra pedras 2x mais rápido; dura 40 pedras |
-| Tocha | 2 madeira | acende sozinha quando escurece: luz forte e visão de 10 células por 60 s |
-| Fogueira | 5 madeira, 3 pedra | luz e calor (construção) |
+| Tocha | 2 madeira | acende sozinha quando escurece: luz forte e visão de 10 células por 4 minutos |
+| Fogueira | 5 madeira, 3 pedra | luz e calor por 4 minutos (construção) |
 | Baú | 8 madeira | guarda itens sem pesar na mochila (construção) |
 | Abrigo | 12 madeira, 4 pedra | dentro dele não passa frio à noite (construção) |
 | Frutas assadas | 3 frutas, perto de uma fogueira | enchem 50 de fome |
@@ -63,10 +63,10 @@ Como no Minecraft e no Factorio, uma janela mostra tudo o que dá para fazer.
 
 **Sobrevivência**
 
-- **Fome:** quando enche (comendo), fica **cheia por 60 segundos** antes de começar a cair. Comer de novo com ela cheia renova esse tempo. Depois cai de cheia a vazia em uns 6 minutos. Sem comida, a vida cai.
+- **Fome:** quando enche (comendo), fica **cheia por 4 minutos** antes de começar a cair. Comer de novo com ela cheia renova esse tempo. Depois cai de cheia a vazia em uns 24 minutos. Sem comida, a vida cai.
 - **Calor:** de dia fica tudo bem. À noite esfria; perto de uma fogueira acesa (5 células), esquenta. Sem calor, a vida cai.
 - **Vida:** só volta com a **fome cheia** (e sem passar frio). O HUD mostra "cheia" e um filete amarelo com o tempo que ainda falta.
-- **Dia e noite:** um dia dura 3 minutos. A noite escurece a tela de verdade; só a fogueira e uma luz fraca em volta do personagem iluminam.
+- **Dia e noite:** um dia dura **12 minutos** (a noite, uns 3). A noite escurece a tela de verdade; só a fogueira e uma luz fraca em volta do personagem iluminam.
 
 **Stamina e corrida**
 
@@ -93,8 +93,8 @@ Como no Minecraft e no Factorio, uma janela mostra tudo o que dá para fazer.
 
 Cada skill vai de nível 0 a 10.
 
-- Sobe treinando, mais devagar quanto mais alta.
-- Depois de **30 s sem treinar**, começa a cair devagarzinho (~1 nível a cada 10 minutos).
+- Sobe treinando, mais devagar quanto mais alta. Para chegar perto do máximo são uns 20 minutos só nadando (ou correndo), ou umas 650 madeiras cortadas.
+- Depois de **2 minutos sem treinar**, começa a cair devagarzinho (~1 nível a cada 40 minutos).
 - Na janela do personagem, `+` verde = treinando agora e `-` laranja = caindo.
 
 | Skill | Treina | Efeito no máximo |

@@ -17,7 +17,8 @@
 //    (natacao, corrida, lenhador, mineracao, forca) e caem devagar sem
 //    treino. A mochila tem limite de peso: acima dele, anda devagar.
 //    I abre a mochila, C abre o personagem (ou os botoes no canto).
-//  - A fome cheia segura 60 s antes de cair, e a vida so sobe com ela
+//  - Um dia dura 12 minutos.
+//  - A fome cheia segura 4 min antes de cair, e a vida so sobe com ela
 //    cheia. A stamina maxima cresce com corrida e natacao.
 //  - Tab abre a janela de fabricar: machado, picareta, tocha, fogueira,
 //    bau, abrigo, frutas assadas e cesto. Construcoes sao colocadas com
@@ -278,7 +279,7 @@ surv_reset:
     str     wzr, [x28, #G_WATER]
     str     wzr, [x28, #G_SHARK]
     str     xzr, [x28, #G_DEATHMSG]
-    mov     w9, #900                    // 08:00
+    mov     w9, #3600                   // 08:00
     str     w9, [x28, #G_TIME]
     mov     w9, #1
     str     w9, [x28, #G_DAY]
@@ -689,7 +690,7 @@ surv_update:
     str     w10, [x28, #G_DAY]
     str     wzr, [x28, #G_WARNED]
 3:  str     w9, [x28, #G_TIME]
-    mov     w10, #(T_DUSK - 400)        // aviso: vai escurecer
+    mov     w10, #(T_DUSK - 1600)       // aviso: vai escurecer
     cmp     w9, w10
     b.lt    4f
     ldr     w10, [x28, #G_WARNED]
@@ -1231,9 +1232,9 @@ su_food:
     b       22b
 24: str     w19, [x28, #G_NFIRE]
 
-    // ---- arbustos voltam a dar frutas (a cada 10 s, chance de 1/6) ----
+    // ---- arbustos voltam a dar frutas (a cada 40 s, chance de 1/6) ----
     ldr     w9, [x28, #G_TIME]
-    mov     w10, #600
+    mov     w10, #2400
     udiv    w11, w9, w10
     msub    w11, w11, w10, w9
     cbnz    w11, su_cam
@@ -1364,7 +1365,7 @@ eat_item:
     mov     x0, x10
     fcmp    s0, s1
     b.lt    popup
-    mov     w9, #SATTIME                // encheu: fica cheio 60 s (comer de
+    mov     w9, #SATTIME                // encheu: fica cheio 4 min (comer de
     str     w9, [x28, #G_SATED]         // novo cheio renova o tempo)
     LA      x0, p_full
     b       popup
@@ -1602,13 +1603,13 @@ place_try:
     sub     w20, w20, #1                // item
     cmp     w20, #IT_FIRE
     b.ne    2f
-    ldr     w9, [x28, #G_NFIRE]         // fogueira: 60 s de fogo
+    ldr     w9, [x28, #G_NFIRE]         // fogueira: 4 min de fogo
     LA      x10, fires
     add     x10, x10, x9, lsl #4
     str     s8, [x10]
     str     s9, [x10, #4]
     str     w19, [x10, #8]
-    mov     w11, #3600
+    MOVI32  w11, FIRETIME
     str     w11, [x10, #12]
     add     w9, w9, #1
     str     w9, [x28, #G_NFIRE]
@@ -1941,8 +1942,9 @@ surv_mouse:
     LA      x10, fires
     add     x10, x10, x19, lsl #4
     ldr     w11, [x10, #12]
-    add     w11, w11, #1800             // +30 s
-    MOVI32  w12, 10800
+    mov     w12, #FIREWOOD              // +2 min
+    add     w11, w11, w12
+    MOVI32  w12, FIREMAX
     cmp     w11, w12
     csel    w11, w12, w11, gt
     str     w11, [x10, #12]
@@ -3189,7 +3191,7 @@ calc_stats:
 2:  str     w9, [x28, #G_CAP]
     ret
 
-// skills_tick: cada skill sem treino ha mais de 30 s cai devagar   folha
+// skills_tick: cada skill sem treino ha mais de 2 min cai devagar   folha
 skills_tick:
     mov     x9, #0
 1:  add     x10, x28, #G_SKIDLE
@@ -3198,7 +3200,8 @@ skills_tick:
     cmp     w11, w12
     cinc    w11, w11, lo
     strh    w11, [x10, x9, lsl #1]
-    cmp     w11, #SKREST
+    mov     w12, #SKREST
+    cmp     w11, w12
     b.ls    2f
     add     x10, x28, #G_SKILL
     ldr     s0, [x10, x9, lsl #2]
@@ -4195,7 +4198,8 @@ draw_char:
     RGBA    120, 235, 120, 255
     LA      x22, s_up
     b       3f
-2:  cmp     w21, #SKREST
+2:  mov     w9, #SKREST
+    cmp     w21, w9
     b.ls    4f
     fcmp    s8, #0.0
     b.le    4f
@@ -4481,7 +4485,7 @@ surv_selftest:
     mov     w0, #8                      // E
     bl      surv_key
     // vai para a noite e deixa o tempo passar
-    mov     w9, #7200
+    mov     w9, #28800
     str     w9, [x28, #G_TIME]
     str     wzr, [x28, #G_HOVOK]
     mov     w19, #0
@@ -4549,7 +4553,7 @@ surv_selftest_skills:
     stp     d8, d9, [sp, #48]
     str     wzr, [x28, #G_HOVOK]
     str     wzr, [x28, #G_LMB]
-    mov     w9, #1500                   // de dia
+    mov     w9, #6000                   // de dia
     str     w9, [x28, #G_TIME]
     cbnz    w0, sk_stage1
     FC      s0, F_HUNDRED
@@ -4653,7 +4657,7 @@ sk_stage1:
     str     wzr, [x28, #G_MX]
     str     wzr, [x28, #G_MY]
     str     wzr, [x28, #G_TESTKEYS]
-    // corrida sem treino ha 30 s: 10 s parado e ela cai um pouco
+    // corrida sem treino ha 2 min: 40 s parado e ela cai um pouco
     mov     w9, #SKREST
     strh    w9, [x28, #(G_SKIDLE + 2 * SK_RUN)]
     ldr     s0, [x28, #G_SKRUN]
@@ -4663,7 +4667,7 @@ sk_stage1:
     mov     w19, #0
 4:  bl      surv_update
     add     w19, w19, #1
-    cmp     w19, #600
+    cmp     w19, #2400
     b.lt    4b
     ldr     s0, [x28, #G_SKRUN]
     FC      s1, F_HUNDRED
@@ -4722,7 +4726,7 @@ sk_stage1:
     mov     w19, #0
 6:  bl      surv_update
     add     w19, w19, #1
-    cmp     w19, #300
+    cmp     w19, #1200
     b.lt    6b
     ldr     s0, [x28, #G_HP]
     fcvtzs  w21, s0                     // vida com a fome cheia
@@ -4847,7 +4851,7 @@ surv_selftest_craft:
     str     wzr, [x28, #G_CRAFTOPEN]
     str     wzr, [x28, #G_CHESTOPEN]
     str     wzr, [x28, #G_CHAROPEN]
-    mov     w9, #1500                   // de dia
+    mov     w9, #6000                   // de dia
     str     w9, [x28, #G_TIME]
     cmp     w0, #1
     b.eq    ct_stage1
@@ -4987,7 +4991,7 @@ ct_stage1:
     mov     w1, #O_PINE
     bl      mine_test
     ldr     w19, [x28, #G_AXEDUR]
-    mov     w9, #7000                   // noite
+    mov     w9, #28000                  // noite
     str     w9, [x28, #G_TIME]
     mov     w20, #0
 2:  bl      surv_update
@@ -5007,7 +5011,7 @@ ct_stage1:
     LA      x1, s_nl
     bl      strcat_cur
     bl      sk_write
-    mov     w9, #7000
+    mov     w9, #28000
     str     w9, [x28, #G_TIME]
     b       ct_ret
 
@@ -5032,12 +5036,12 @@ ct_stage2:
     mov     w9, #50
     scvtf   s0, w9
     str     s0, [x28, #G_WARM]
-    mov     w9, #7000
+    mov     w9, #28000
     str     w9, [x28, #G_TIME]
     mov     w21, #0
 3:  bl      surv_update
     add     w21, w21, #1
-    cmp     w21, #120
+    cmp     w21, #480
     b.lt    3b
     ldr     s0, [x28, #G_WARM]
     fcvtzs  w19, s0
@@ -5062,7 +5066,7 @@ ct_stage2:
     LA      x1, s_nl
     bl      strcat_cur
     bl      sk_write
-    mov     w9, #1500
+    mov     w9, #6000
     str     w9, [x28, #G_TIME]
 ct_ret:
     ldp     d8, d9, [sp, #48]
@@ -5085,7 +5089,7 @@ surv_selftest_water:
     mov     w21, w0
     str     wzr, [x28, #G_HOVOK]
     str     wzr, [x28, #G_LMB]
-    mov     w9, #1500                   // de dia, para a foto
+    mov     w9, #6000                   // de dia, para a foto
     str     w9, [x28, #G_TIME]
     cmp     w21, #1
     b.eq    sw_ocean
@@ -5218,13 +5222,13 @@ fconsts:
     .float 0.015625         // F_INV64
     .float 0.075            // F_SPEED (celulas por quadro)
     .float 9.0              // F_REACH2 (alcance de 3 celulas)
-    .float 0.0046           // F_FOODRATE (100 -> 0 em ~6 min)
-    .float 0.03             // F_COLD
-    .float 0.2              // F_HEAT
-    .float 0.05             // F_DAYWARM
-    .float 0.025            // F_STARVE
-    .float 0.04             // F_FREEZE
-    .float 0.012            // F_REGEN
+    .float 0.00115          // F_FOODRATE (100 -> 0 em ~24 min)
+    .float 0.0075           // F_COLD
+    .float 0.05             // F_HEAT
+    .float 0.0125           // F_DAYWARM
+    .float 0.00625          // F_STARVE
+    .float 0.01             // F_FREEZE
+    .float 0.003            // F_REGEN
     .float 100.0            // F_HUNDRED
     .float 25.0             // F_FIRE2 (calor ate 5 celulas)
     .float 40.0             // F_FORTY
@@ -5246,7 +5250,7 @@ fconsts:
     .float 0.2              // F_RECOV (stamina volta andando em terra)
     .float 0.2              // F_RECOVSH (no raso)
     .float 0.25             // F_DROWN (vida perdida afogando)
-    .float 0.04             // F_WETCOLD (a agua esfria)
+    .float 0.01             // F_WETCOLD (a agua esfria)
     .float 3.0              // F_SHARKR (raio inicial da barbatana)
     .float 0.3              // F_RUNCOST (100 -> 0 em ~5.5 s correndo)
     .float 0.4              // F_RECOVREST (parado em terra)
@@ -5258,12 +5262,12 @@ fconsts:
     .float 0.005            // F_SK5 (skill 100 corta 50%)
     .float 0.55             // F_HEAVY (velocidade sobrecarregado)
     .float 25.0             // F_25
-    .float 0.012            // F_XPSWIM (por quadro nadando)
-    .float 0.01             // F_XPRUN (por quadro correndo)
-    .float 1.2              // F_XPCHOP (por madeira)
-    .float 1.5              // F_XPMINE (por pedra)
-    .float 0.006            // F_XPSTR (por quadro andando carregado)
-    .float 0.00025          // F_SKDECAY (~1 ponto por minuto sem treino)
+    .float 0.003            // F_XPSWIM (por quadro nadando)
+    .float 0.0025           // F_XPRUN (por quadro correndo)
+    .float 0.3              // F_XPCHOP (por madeira)
+    .float 0.375            // F_XPMINE (por pedra)
+    .float 0.0015           // F_XPSTR (por quadro andando carregado)
+    .float 0.0000625        // F_SKDECAY (~1 ponto a cada 4 min sem treino)
     .float 1.05             // F_P105
     .float 0.01             // F_INV100
     .float 0.1              // F_TENTH
@@ -5340,7 +5344,7 @@ recdesc:
     .p2align 5
     .asciz "Acesa a noite: luz e"
     .p2align 5
-    .asciz "visao por 60 s."
+    .asciz "visao por 4 minutos."
     .p2align 5
     .asciz "Luz e calor. Clique"
     .p2align 5
@@ -5476,7 +5480,7 @@ p_wood:         .asciz "+1 madeira"
 p_stone:        .asciz "+1 pedra"
 p_berry:        .asciz "+1 fruta"
 p_eat:          .asciz "Nham! +15"
-p_log:          .asciz "+30 s de fogo"
+p_log:          .asciz "+2 min de fogo"
 s_dia:          .asciz "   -   Dia "
 s_sp3:          .asciz "   "
 s_paused:       .asciz "   PAUSADO"
