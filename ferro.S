@@ -258,6 +258,7 @@ furnace_near:
 
 // smith_chest(w0 item, w1 quantos, w2 item 2, w3 quantos 2 (0 = nada))
 // -> w0 = bau com isso mais perto da pessoa (-1)   folha
+    .globl smith_chest
 smith_chest:
     mov     w12, w0
     mov     w13, w1
@@ -412,20 +413,14 @@ smith_valid:
 // smith_done: saiu da fornalha uma barra de ferro (ou um carvao)
     .globl smith_done
 smith_done:
+    strb    wzr, [x19, #P_BFAM]
     ldrb    w9, [x19, #P_BPROJ]
-    mov     w10, #(IT_IRON + 1)
+    mov     w0, #IT_IRON
     cmp     w9, #1
     b.eq    1f
-    mov     w10, #(IT_COAL + 1)
-1:  ldrb    w11, [x19, #P_CITEM]
-    ldrb    w12, [x19, #P_CCOUNT]
-    cmp     w11, w10
-    csel    w12, w12, wzr, eq
-    add     w12, w12, #1
-    strb    w10, [x19, #P_CITEM]
-    strb    w12, [x19, #P_CCOUNT]
-    strb    wzr, [x19, #P_BFAM]
-    ret
+    mov     w0, #IT_COAL
+1:  mov     w1, #1
+    b       pinv_add                    // na mochila
 
 // tool_fetch -> w0 = 1 se vai ao bau pegar a ferramenta de ferro da tarefa
     .globl tool_fetch
@@ -436,10 +431,12 @@ tool_fetch:
     LA      x10, jobtool
     ldrb    w9, [x10, x9]
     cbz     w9, 8f
-    ldrb    w10, [x19, #P_TOOL]
-    add     w11, w9, #1
-    cmp     w10, w11
-    b.eq    8f
+    str     w9, [sp, #-16]!
+    mov     w0, w9                      // ja tem na mochila?
+    bl      pinv_get
+    mov     w10, w0
+    ldr     w9, [sp], #16
+    cbnz    w10, 8f
     mov     w0, w9
     mov     w1, #1
     mov     w2, #0
@@ -470,14 +467,9 @@ tool_take:
     cbz     w10, 9f
     sub     w10, w10, #1
     str     w10, [x0, x9, lsl #2]
-    ldrb    w11, [x19, #P_TOOL]         // a de antes volta para o bau
-    cbz     w11, 1f
-    sub     w11, w11, #1
-    ldr     w12, [x0, x11, lsl #2]
-    add     w12, w12, #1
-    str     w12, [x0, x11, lsl #2]
-1:  add     w9, w9, #1
-    strb    w9, [x19, #P_TOOL]
+    mov     w0, w9                      // na mochila (a de antes fica la ate
+    mov     w1, #1                      // guardar no bau)
+    bl      pinv_add
 9:  ldp     x29, x30, [sp], #16
     ret
 
@@ -489,10 +481,13 @@ tool_bonus:
     ldrb    w9, [x10, x9]
     mov     w0, #0
     cbz     w9, 9f
-    add     w9, w9, #1
-    ldrb    w10, [x19, #P_TOOL]
-    cmp     w9, w10
-    cset    w0, eq
+    cmp     w9, #IT_ROD                 // a vara so deixa pescar
+    b.eq    9f
+    LA      x10, pinv
+    add     x10, x10, x20, lsl #8
+    ldr     w10, [x10, x9, lsl #2]
+    cmp     w10, #0
+    cset    w0, ne
 9:  ret
 
 
@@ -1054,13 +1049,13 @@ it_stage1:
     str     w9, [x19, #4]
     ldr     w9, [x24, #(4 * IT_COAL)]
     str     w9, [x19, #8]
-    LA      x9, people              // alguem pegou o machado de ferro?
+    LA      x9, pinv                // alguem pegou o machado de ferro?
     mov     w10, #0
     mov     w11, #0
-63: ldrb    w12, [x9, #P_TOOL]
-    cmp     w12, #(IT_IAXE + 1)
-    cinc    w10, w10, eq
-    add     x9, x9, #PSIZE
+63: ldr     w12, [x9, #(4 * IT_IAXE)]
+    cmp     w12, #0
+    cinc    w10, w10, ne
+    add     x9, x9, #256
     add     w11, w11, #1
     cmp     w11, #MAXPEOPLE
     b.lt    63b
@@ -1111,8 +1106,9 @@ fconst:
     .float 0.015625                     // 24 1/64
 // ferramenta de ferro de cada tarefa (nenhuma, floresta, pedra, plantar,
 // obras, ferreiro)
+    .globl jobtool
 jobtool:
-    .byte 0, IT_IAXE, IT_IPICK, IT_IHOE, 0, 0
+    .byte 0, IT_IAXE, IT_IPICK, IT_IHOE, 0, 0, IT_ROD
     .p2align 2
 
 itf:

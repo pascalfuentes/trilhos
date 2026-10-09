@@ -43,8 +43,8 @@
 .equ PP_ROWS,  14
 .equ ZP_X,     4
 .equ ZP_Y,     118
-.equ ZP_W,     150
-.equ ZP_H,     116
+.equ ZP_W,     190
+.equ ZP_H,     148
 
     .text
     .p2align 2
@@ -83,8 +83,22 @@ people_reset:
     str     wzr, [x28, #G_ZONEMODE]
     str     wzr, [x28, #G_ZDRAG]
     str     wzr, [x28, #G_ZONESHOW]
+    mov     w9, #3
+    str     w9, [x28, #G_ZBRUSH]
     ldr     w9, [x28, #G_DAY]
     str     w9, [x28, #G_PLASTDAY]
+    LA      x9, pinv                    // mochilas vazias...
+    mov     w10, #(MAXPEOPLE * 256 / 16)
+5:  stp     xzr, xzr, [x9], #16
+    subs    w10, w10, #1
+    b.ne    5b
+    LA      x9, pinv                    // ... com 2 frutas assadas de lanche
+    mov     w10, #2
+    mov     w11, #12
+6:  str     w10, [x9, #(4 * IT_COOKED)]
+    add     x9, x9, #256
+    subs    w11, w11, #1
+    b.ne    6b
     bl      vila_reset
     bl      ppl_spawn_all
     ldr     w9, [x28, #G_SHOT]
@@ -382,18 +396,29 @@ ppl_land:
 //  Um quadro da vila
 // =====================================================================
 
-// zone_update: o retangulo de zona segue o mouse   folha
+// zone_update: o pincel segue o mouse; segurando, pinta (ou apaga)
 zone_update:
-    ldr     w9, [x28, #G_ZDRAG]
+    ldr     w9, [x28, #G_ZONEMODE]
     cbz     w9, 9f
     ldr     w9, [x28, #G_HOVOK]
     cbz     w9, 9f
     ldr     w9, [x28, #G_HOVU]
-    lsr     w9, w9, #6
-    str     w9, [x28, #G_ZBU]
+    lsr     w0, w9, #6
+    str     w0, [x28, #G_ZBU]
     ldr     w9, [x28, #G_HOVV]
-    lsr     w9, w9, #6
-    str     w9, [x28, #G_ZBV]
+    lsr     w1, w9, #6
+    str     w1, [x28, #G_ZBV]
+    ldr     w9, [x28, #G_ZDRAG]
+    cbz     w9, 9f
+    ldr     w3, [x28, #G_ZONEMODE]
+    cmp     w3, #Z_ERASE
+    csel    w3, wzr, w3, eq
+    cmp     w9, #2                      // direito: apaga
+    csel    w3, wzr, w3, eq
+    ldr     w2, [x28, #G_ZBRUSH]
+    subs    w2, w2, #1
+    csel    w2, wzr, w2, lt
+    b       zone_paint
 9:  ret
 
     .globl people_update
@@ -858,6 +883,11 @@ ppl_decide:
     PF      s1, 112
     fcmp    s0, s1
     b.ge    20f
+    bl      pinv_eat                    // o lanche da mochila primeiro
+    ldr     s0, [x19, #P_FOOD]
+    PF      s1, 112
+    fcmp    s0, s1
+    b.ge    20f
     mov     w0, #1
     bl      ppl_chestfind
     tbnz    w0, #31, 11f
@@ -881,17 +911,11 @@ ppl_decide:
     ldrb    w21, [x19, #P_JOB]
     cbz     w21, 80f
     // ---- carregando outra coisa, ou cheio: guarda no bau ----
-    ldrb    w22, [x19, #P_CCOUNT]
-    cbz     w22, 30f
-    LA      x9, jobitem
-    ldrb    w9, [x9, x21]
-    add     w9, w9, #1
-    ldrb    w10, [x19, #P_CITEM]
-    cmp     w9, w10
-    b.ne    25f
+    bl      pinv_cargo
+    cbz     w0, 30f
     LA      x9, jobcap
     ldrb    w9, [x9, x21]
-    cmp     w22, w9
+    cmp     w0, w9
     b.lo    30f
 25: mov     w0, #0
     bl      ppl_chestfind
@@ -916,8 +940,8 @@ ppl_decide:
     mov     w0, w21
     bl      ppl_findwork
     cbnz    w0, 90f
-    ldrb    w22, [x19, #P_CCOUNT]       // nada para fazer: guarda o que tem
-    cbz     w22, 80f
+    bl      pinv_cargo                  // nada para fazer: guarda o que tem
+    cbz     w0, 80f
     mov     w0, #0
     bl      ppl_chestfind
     tbnz    w0, #31, 80f
@@ -974,8 +998,8 @@ ppl_findwork:
     b       7f
 2:  cmp     w21, #J_STONE
     b.ne    3f
-    ldrb    w9, [x19, #P_CCOUNT]        // de maos vazias: veios primeiro
-    cbnz    w9, 21f
+    bl      pinv_cargo                  // de mochila vazia: veios primeiro
+    cbnz    w0, 21f
     mov     w0, #O_IRONV
     mov     w1, #O_COALV
     mov     w2, #Z_STONE
@@ -1003,8 +1027,12 @@ ppl_findwork:
     bl      vila_buildwork              // obras (vila.S)
     b       9f
 5:  cmp     w21, #J_SMITH
-    b.ne    8f
+    b.ne    6f
     bl      smith_work                  // ferreiro (ferro.S)
+    b       9f
+6:  cmp     w21, #J_FISH
+    b.ne    8f
+    bl      fish_work                   // pescador (mochila.S)
     b       9f
 7:  mov     w0, #1
     b       9f
@@ -1027,7 +1055,11 @@ ppl_farmwork:
     mov     w1, #WK_PLANT
     bl      ppl_findcell
     tbnz    w0, #31, 3f
-    ldrb    w9, [x19, #P_SEEDS]
+    str     w0, [sp, #-16]!
+    mov     w0, #IT_SEED
+    bl      pinv_get
+    mov     w9, w0
+    ldr     w0, [sp], #16
     cbz     w9, 2f
     mov     w1, #WK_PLANT
     bl      ppl_gowork_cell
@@ -1901,8 +1933,12 @@ ppl_valid:
     bl      vila_valid
     b       9f
 61: cmp     w22, #WK_SMELT
-    b.ne    1f
+    b.ne    62f
     bl      smith_valid
+    b       9f
+62: cmp     w22, #WK_FISH
+    b.ne    1f
+    bl      fish_valid
     b       9f
 1:  cmp     w22, #WK_PLANT
     b.eq    30f
@@ -2014,9 +2050,20 @@ ppl_workdone:
     bl      ppl_valid
     cbz     w0, 80f
     cmp     w22, #WK_SMELT              // fornalha: barra (ou carvao) pronta
-    b.ne    69f
+    b.ne    68f
     bl      smith_done
     b       79f
+68: cmp     w22, #WK_FISH               // pescou: continua ate encher
+    b.ne    69f
+    bl      fish_done
+    bl      pinv_cargo
+    LA      x13, jobcap
+    mov     w12, #J_FISH
+    ldrb    w13, [x13, x12]
+    cmp     w0, w13
+    b.hs    79f
+    bl      ppl_startwork
+    b       99f
 69: cmp     w22, #WK_BUILD              // obra: mais um passo
     b.ne    10f
     mov     w0, w21
@@ -2043,14 +2090,13 @@ ppl_workdone:
     cmp     w11, #O_COALV
     mov     w12, #(IT_COAL + 1)
     csel    w10, w12, w10, eq
-11: ldrb    w11, [x19, #P_CITEM]
-    cmp     w11, w10
-    b.eq    12f
-    strb    w10, [x19, #P_CITEM]
-    strb    wzr, [x19, #P_CCOUNT]
-12: ldrb    w11, [x19, #P_CCOUNT]
-    add     w11, w11, #1
-    strb    w11, [x19, #P_CCOUNT]
+11: str     w9, [sp, #-16]!
+    sub     w0, w10, #1                 // na mochila
+    mov     w1, #1
+    bl      pinv_add
+    bl      pinv_cargo
+    mov     w11, w0
+    ldr     w9, [sp], #16
     cbnz    w9, 13f
     ldrb    w12, [x23, #6]              // acabou: some
     mov     w13, #O_GONE
@@ -2091,40 +2137,32 @@ ppl_workdone:
     mov     w0, #2
     bl      rng_mod
     add     w24, w0, #1
-    ldrb    w11, [x19, #P_CITEM]
-    mov     w10, #(IT_WHEAT + 1)
-    cmp     w11, w10
-    b.eq    21f
-    strb    w10, [x19, #P_CITEM]
-    strb    wzr, [x19, #P_CCOUNT]
-21: ldrb    w11, [x19, #P_CCOUNT]
-    add     w11, w11, w24
-    strb    w11, [x19, #P_CCOUNT]
+    mov     w0, #IT_WHEAT
+    mov     w1, w24
+    bl      pinv_add
     mov     w0, #3
     bl      rng_mod
-    add     w0, w0, #1
-    ldrb    w9, [x19, #P_SEEDS]
-    add     w9, w9, w0
-    mov     w10, #200
-    cmp     w9, w10
-    csel    w9, w9, w10, ls
-    strb    w9, [x19, #P_SEEDS]
+    add     w1, w0, #1
+    mov     w0, #IT_SEED
+    bl      pinv_add
     ldrh    w9, [x23]
     lsr     w9, w9, #6
     ldrh    w10, [x23, #2]
     lsr     w10, w10, #6
     add     w0, w9, w10, lsl #9
     bl      plant_at
-    ldrb    w9, [x19, #P_SEEDS]
-    sub     w9, w9, #1
-    strb    w9, [x19, #P_SEEDS]
+    mov     w0, #IT_SEED
+    mov     w1, #-1
+    bl      pinv_add
     b       78f
 30: cmp     w22, #WK_PLANT
     b.ne    40f
-    ldrb    w9, [x19, #P_SEEDS]
-    cbz     w9, 79f
-    sub     w9, w9, #1
-    strb    w9, [x19, #P_SEEDS]
+    mov     w0, #IT_SEED
+    bl      pinv_get
+    cbz     w0, 79f
+    mov     w0, #IT_SEED
+    mov     w1, #-1
+    bl      pinv_add
     mov     w0, w21
     bl      plant_at
     b       78f
@@ -2222,24 +2260,10 @@ ppl_deposit:
     ldr     w0, [x19, #P_TARGET]
     bl      ppl_chestptr
     cbz     x0, 9f
-    ldrb    w9, [x19, #P_CITEM]
-    cbz     w9, 2f
-    sub     w9, w9, #1
-    ldrb    w10, [x19, #P_CCOUNT]
-    ldr     w11, [x0, x9, lsl #2]
-    add     w11, w11, w10
-    str     w11, [x0, x9, lsl #2]
-    strb    wzr, [x19, #P_CITEM]
-    strb    wzr, [x19, #P_CCOUNT]
-2:  ldrb    w10, [x19, #P_SEEDS]
-    cmp     w10, #10
-    b.ls    9f
-    sub     w11, w10, #10
-    mov     w10, #10
-    strb    w10, [x19, #P_SEEDS]
-    ldr     w12, [x0, #(4 * IT_SEED)]
-    add     w12, w12, w11
-    str     w12, [x0, #(4 * IT_SEED)]
+    str     x0, [sp, #-16]!
+    bl      pinv_deposit                // tudo menos ferramenta, lanche, sementes
+    ldr     x0, [sp], #16
+    bl      pinv_takefood               // e repoe o lanche
 9:  ldp     x29, x30, [sp], #16
     ret
 
@@ -2248,6 +2272,7 @@ ppl_eat:
     stp     x29, x30, [sp, #-32]!
     mov     x29, sp
     stp     x21, x22, [sp, #16]
+    mov     x21, #0
     ldr     w0, [x19, #P_TARGET]
     bl      ppl_chestptr
     cbz     x0, 9f
@@ -2274,7 +2299,10 @@ ppl_eat:
     fmin    s0, s0, s1
     str     s0, [x19, #P_FOOD]
     b       1b
-9:  ldp     x21, x22, [sp, #16]
+9:  cbz     x21, 91f                    // e leva um lanche
+    mov     x0, x21
+    bl      pinv_takefood
+91: ldp     x21, x22, [sp, #16]
     ldp     x29, x30, [sp], #32
     ret
 
@@ -2285,17 +2313,21 @@ ppl_takeseeds:
     ldr     w0, [x19, #P_TARGET]
     bl      ppl_chestptr
     cbz     x0, 9f
-    ldrb    w9, [x19, #P_SEEDS]
+    mov     x12, x0
+    mov     w0, #IT_SEED
+    bl      pinv_get
+    mov     w9, w0
     mov     w10, #10
     subs    w10, w10, w9
     b.ls    9f
-    ldr     w11, [x0, #(4 * IT_SEED)]
+    ldr     w11, [x12, #(4 * IT_SEED)]
     cmp     w11, w10
     csel    w10, w11, w10, lo
     sub     w11, w11, w10
-    str     w11, [x0, #(4 * IT_SEED)]
-    add     w9, w9, w10
-    strb    w9, [x19, #P_SEEDS]
+    str     w11, [x12, #(4 * IT_SEED)]
+    mov     w0, #IT_SEED
+    mov     w1, w10
+    bl      pinv_add
 9:  ldp     x29, x30, [sp], #16
     ret
 
@@ -2648,6 +2680,7 @@ people_key:
     b       7f
 3:  mov     w9, #Z_FOREST
     str     w9, [x28, #G_ZONEMODE]
+    str     wzr, [x28, #G_ZDRAG]
     str     wzr, [x28, #G_CHAROPEN]
     str     wzr, [x28, #G_PLACE]
     LA      x0, m_zonemode
@@ -2655,16 +2688,26 @@ people_key:
     b       7f
 4:  ldr     w9, [x28, #G_ZONEMODE]
     cbz     w9, 8f
-    sub     w10, w0, #30                // 1-4
-    cmp     w10, #4
+    sub     w10, w0, #30                // 1-5
+    cmp     w10, #5
     b.hs    5f
     add     w10, w10, #1
     str     w10, [x28, #G_ZONEMODE]
     b       7f
 5:  cmp     w0, #39                     // 0: apagar
-    b.ne    8f
+    b.ne    51f
     mov     w10, #Z_ERASE
     str     w10, [x28, #G_ZONEMODE]
+    b       7f
+51: cmp     w0, #47                     // [ e ]: tamanho do pincel
+    b.ne    52f
+    mov     w0, #-1
+    bl      zone_wheel
+    b       7f
+52: cmp     w0, #48
+    b.ne    8f
+    mov     w0, #1
+    bl      zone_wheel
 7:  mov     w0, #1
     b       9f
 8:  mov     w0, #0
@@ -2705,25 +2748,12 @@ people_world_click:
     mov     w21, w0
     ldr     w9, [x28, #G_ZONEMODE]
     cbz     w9, 10f
+    mov     w9, #1                      // esquerdo pinta, direito apaga
     cmp     w21, #3
     b.ne    1f
-    str     wzr, [x28, #G_ZONEMODE]
-    str     wzr, [x28, #G_ZDRAG]
-    b       7f
-1:  cmp     w21, #1
-    b.ne    7f
-    ldr     w9, [x28, #G_HOVOK]
-    cbz     w9, 7f
-    ldr     w9, [x28, #G_HOVU]
-    lsr     w9, w9, #6
-    str     w9, [x28, #G_ZAU]
-    str     w9, [x28, #G_ZBU]
-    ldr     w9, [x28, #G_HOVV]
-    lsr     w9, w9, #6
-    str     w9, [x28, #G_ZAV]
-    str     w9, [x28, #G_ZBV]
-    mov     w9, #1
-    str     w9, [x28, #G_ZDRAG]
+    mov     w9, #2
+1:  str     w9, [x28, #G_ZDRAG]
+    bl      zone_update                 // ja pinta onde clicou
     b       7f
 10: ldr     w9, [x28, #G_NOPEOPLE]
     cbnz    w9, 8f
@@ -2747,7 +2777,11 @@ people_world_click:
     b       7f
 20: cmp     w21, #3
     b.ne    8f
-    ldr     w20, [x28, #G_SELPERS]      // direito: "va ate la"
+    ldr     w0, [x28, #G_HOVPERS]       // direito numa pessoa: a mochila dela
+    tbnz    w0, #31, 22f
+    bl      open_person
+    b       7f
+22: ldr     w20, [x28, #G_SELPERS]      // direito: "va ate la"
     tbnz    w20, #31, 8f
     ldr     w9, [x28, #G_HOVOK]
     cbz     w9, 8f
@@ -2846,40 +2880,10 @@ zone_fill:
 9:  mov     w0, w11
     ret
 
-// zone_release: soltou o botao pintando zonas: marca o retangulo
+// zone_release: soltou o botao: o pincel para   folha
     .globl zone_release
 zone_release:
-    stp     x29, x30, [sp, #-32]!
-    mov     x29, sp
-    str     x19, [sp, #16]
-    ldr     w9, [x28, #G_ZDRAG]
-    cbz     w9, 9f
     str     wzr, [x28, #G_ZDRAG]
-    ldr     w4, [x28, #G_ZONEMODE]
-    mov     w19, w4
-    cmp     w4, #Z_ERASE
-    csel    w4, wzr, w4, eq
-    ldr     w0, [x28, #G_ZAU]
-    ldr     w1, [x28, #G_ZAV]
-    ldr     w2, [x28, #G_ZBU]
-    ldr     w3, [x28, #G_ZBV]
-    bl      zone_fill
-    mov     w9, w0
-    LA      x0, pmsgbuf
-    LA      x1, s_zonedone
-    cmp     w19, #Z_ERASE
-    b.ne    1f
-    LA      x1, s_zoneerase
-1:  str     w9, [sp, #24]
-    bl      strcat_cur
-    ldr     w1, [sp, #24]
-    bl      numcat
-    LA      x1, s_quads
-    bl      strcat_cur
-    LA      x0, pmsgbuf
-    bl      set_msg
-9:  ldr     x19, [sp, #16]
-    ldp     x29, x30, [sp], #32
     ret
 
 // =====================================================================
@@ -2951,9 +2955,12 @@ people_ui_hit:
     b.lt    6f
     mov     w12, #16
     udiv    w12, w10, w12
-    cmp     w12, #5
+    cmp     w12, #6
     b.hs    6f
     add     w11, w12, #1
+    cmp     w11, #6                     // a ultima linha: apagar
+    mov     w12, #Z_ERASE
+    csel    w11, w12, w11, eq
 6:  mov     w0, #10
     mov     w1, w11
     ret
@@ -3001,7 +3008,12 @@ people_ui_click:
     cbz     w9, 9f
     cmp     w22, #1
     b.eq    2f
-    str     w20, [x28, #G_SELPERS]      // nome: seleciona
+    cmp     w22, #2                     // Agora: a mochila
+    b.ne    10f
+    mov     w0, w20
+    bl      open_person
+    b       9f
+10: str     w20, [x28, #G_SELPERS]      // nome: seleciona
     b       9f
 2:  ldrh    w9, [x19, #P_AGE]           // tarefa: crianca nao trabalha
     cmp     w9, #ADULTDAYS
@@ -3391,13 +3403,16 @@ ppl_drawpalette:
     LA      x4, s_ztitle
     bl      ui_panel
     mov     w19, #1
-1:  cmp     w19, #5
+1:  cmp     w19, #6
     b.gt    8f
     sub     w9, w19, #1
     mov     w10, #16
     mov     w11, #(ZP_Y + 20)
     madd    w20, w9, w10, w11
-    ldr     w9, [x28, #G_ZONEMODE]
+    cmp     w19, #6                     // a ultima linha: apagar
+    b.ne    11f
+    mov     w19, #Z_ERASE
+11: ldr     w9, [x28, #G_ZONEMODE]
     cmp     w9, w19
     b.ne    2f
     RGBA    60, 70, 110, 220
@@ -3424,12 +3439,25 @@ ppl_drawpalette:
     LA      x2, zonenames
     add     x2, x2, x19, lsl #4
     bl      text
+    cmp     w19, #Z_ERASE
+    b.eq    8f
     add     w19, w19, #1
     b       1b
 8:  RGBA    150, 150, 165, 255
+    LA      x0, pmsgbuf2
+    LA      x1, s_zfoot
+    bl      strcat_cur
+    ldr     w1, [x28, #G_ZBRUSH]
+    bl      numcat
+    LA      x1, s_zfoot2
+    bl      strcat_cur
+    mov     w0, #(ZP_X + 6)
+    mov     w1, #(ZP_Y + ZP_H - 26)
+    LA      x2, pmsgbuf2
+    bl      text
     mov     w0, #(ZP_X + 6)
     mov     w1, #(ZP_Y + ZP_H - 13)
-    LA      x2, s_zfoot
+    LA      x2, s_zfoot3
     bl      text
     ldr     x21, [sp, #32]
     ldp     x19, x20, [sp, #16]
@@ -4243,13 +4271,13 @@ ring8:
 // tempo de cada tipo de trabalho (quadros, com fe 50)
     .p2align 1
 worktime:
-    .hword 0, 150, 210, 60, 40, 90, 90, 40, 150, 300
+    .hword 0, 150, 210, 60, 40, 90, 90, 40, 150, 300, 500
 
 // o que cada tarefa carrega e quanto cabe
 jobitem:
-    .byte 0, IT_WOOD, IT_STONE, IT_WHEAT, 0, IT_IRON
+    .byte 0, IT_WOOD, IT_STONE, IT_WHEAT, 0, IT_IRON, IT_FISH
 jobcap:
-    .byte 0, 4, 3, 6, 0, 1
+    .byte 0, 4, 3, 6, 0, 1, 4
 // cor da roupa de cada familia (variante dos sprites: vermelho, azul, laranja)
 famvar:
     .byte 0, 2, 3
@@ -4260,7 +4288,7 @@ campoff:
     .p2align 2
     .globl zonecolors
 zonecolors:
-    .word 0, 0xFF30B050, 0xFFA8A8C8, 0xFFF0D040, 0xFFE09060, 0xFFE04848, 0xFFB86A3C
+    .word 0, 0xFF30B050, 0xFFA8A8C8, 0xFFF0D040, 0xFFE09060, 0xFF38C8F0, 0xFFB86A3C, 0xFFE04848
 
     .p2align 3
 causemsgs:
@@ -4336,6 +4364,8 @@ jobnames:
     .p2align 4
     .asciz "Ferreiro"
     .p2align 4
+    .asciz "Pescador"
+    .p2align 4
 zonenames:
     .asciz ""
     .p2align 4
@@ -4346,6 +4376,10 @@ zonenames:
     .asciz "3 Plantacao"
     .p2align 4
     .asciz "4 Moradia"
+    .p2align 4
+    .asciz "5 Pesca"
+    .p2align 4
+    .asciz ""
     .p2align 4
     .asciz "0 Apagar"
     .p2align 4
@@ -4372,7 +4406,7 @@ s_refuse:   .asciz " nao quis (pouca fe)"
 s_going:    .asciz ": indo"
 s_selected: .asciz " - botao direito no mapa: va ate la"
 m_nochest:  .asciz "Ninguem tem onde guardar: faca um bau"
-m_zonemode: .asciz "Zonas: 1-4 escolhe, 0 apaga; arraste no mapa (Z sai)"
+m_zonemode: .asciz "Zonas: 1-5 escolhe, 0 apaga; pinte segurando o botao (direito apaga), roda ou [ ] muda o pincel (Z sai)"
 s_zonedone: .asciz "Zona marcada: "
 s_zoneerase: .asciz "Zona apagada: "
 s_quads:    .asciz " quadrados"
@@ -4396,6 +4430,7 @@ d_sapl:     .asciz "pondo muda"
 d_fruit:    .asciz "pega fruta"
 d_build:    .asciz "construindo"
 d_smelt:    .asciz "na fornalha"
+d_fish:     .asciz "pescando"
 d_walk0:    .asciz "passeando"
 d_walk1:    .asciz "a caminho"
 d_walk2:    .asciz "vai guardar"
@@ -4404,7 +4439,7 @@ d_walk4:    .asciz "vai ao bau"
 d_walk5:    .asciz "vai dormir"
 d_walk6:    .asciz "ordem"
     .p2align 3
-d_work:     .quad d_idle, d_chop, d_mine, d_harv, d_plant, d_till, d_sapl, d_fruit, d_build, d_smelt
+d_work:     .quad d_idle, d_chop, d_mine, d_harv, d_plant, d_till, d_sapl, d_fruit, d_build, d_smelt, d_fish
 d_walk:     .quad d_walk0, d_walk1, d_walk2, d_walk3, d_walk4, d_walk5, d_walk6, d_walk4, d_walk4, d_walk4
 s_hfood:    .asciz "Fo"
 s_hhp:      .asciz "Vi"
@@ -4416,7 +4451,9 @@ s_tabf:     .asciz "Familias"
 s_lt:       .asciz "<"
 s_gt:       .asciz ">"
 s_slash:    .asciz "/"
-s_zfoot:    .asciz "Arraste no mapa"
+s_zfoot:    .asciz "Pincel: "
+s_zfoot2:   .asciz " (roda, [ ])"
+s_zfoot3:   .asciz "Esq pinta, dir apaga"
 t_p1:       .asciz "pessoas: vivas="
 t_p2:       .asciz " | no bau: madeira="
 t_p3:       .asciz " pedra="
@@ -4441,6 +4478,7 @@ t_q10:      .asciz " | vivos="
 t_pnl:      .asciz "\n"
     .globl pmsgbuf, psurn, pnames, pconst
 pmsgbuf:    .space 96
+pmsgbuf2:   .space 64
 pbuf:       .space 64
 ptitle:     .space 64
 pt_res:     .word -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0

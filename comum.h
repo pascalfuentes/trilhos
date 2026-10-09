@@ -231,11 +231,11 @@
 .equ G_HOVPERS,  868         // pessoa sob o mouse (-1)
 .equ G_SELPERS,  872         // pessoa selecionada (-1)
 .equ G_PEOPLEOPEN, 876       // painel de pessoas aberto (P)
-.equ G_ZONEMODE, 880         // pintando zonas (Z): tipo 1..4, 5 apaga; 0 = nao
-.equ G_ZDRAG,    884         // arrastando o retangulo da zona
+.equ G_ZONEMODE, 880         // pintando zonas (Z): tipo 1..5, 7 apaga; 0 = nao
+.equ G_ZDRAG,    884         // pincel apertado: 1 pinta, 2 apaga
 .equ G_ZAU,      888         // retangulo: celula onde comecou
 .equ G_ZAV,      892
-.equ G_ZBU,      896         // ... e onde esta o mouse
+.equ G_ZBU,      896         // celula sob o mouse (pincel)
 .equ G_ZBV,      900
 .equ G_PLASTDAY, 904         // ultimo dia contado (aniversarios)
 .equ G_NOPEOPLE, 908         // teste: sem a vila
@@ -255,6 +255,8 @@
 .equ G_IRONDUR,  1152        // usos que restam: machado, picareta, enxada de ferro
 .equ G_NLAMP,    1164        // lampioes
 .equ G_FURNT,    1168        // conta quadros ate olhar a fornalha de novo
+.equ G_ZBRUSH,   1172        // pincel de zonas: tamanho 1..12
+.equ G_NOFISHT,  1176        // quando avisou que o pescador nao tem vara
 .equ GSIZE,      1184
 
 .equ W_SUN,      0
@@ -393,13 +395,15 @@
 .equ J_FARM,     3
 .equ J_BUILD,    4           // obras: barracos, casas e cercas
 .equ J_SMITH,    5           // ferreiro: barras de ferro e carvao na fornalha
-.equ NJOBS,      6
+.equ J_FISH,     6           // pescador: zona de Pesca na agua
+.equ NJOBS,      7
 .equ Z_FOREST,   1
 .equ Z_STONE,    2
 .equ Z_FARM,     3
 .equ Z_HOME,     4           // moradia: onde as familias novas constroem
-.equ Z_ERASE,    5
+.equ Z_FISH,     5           // pesca (na agua)
 .equ Z_LOT,      6           // terreno de uma casa (5 x 5)
+.equ Z_ERASE,    7           // (so o pincel: apaga)
 .equ MAXCROP,    512         // plantas
 .equ CROPRIPE,   192         // maduro (a variante vai de 0 a 192)
 .equ CROPP,      71          // chance de crescer por passo (em 1000)

@@ -412,6 +412,23 @@ shot_mode:
     bl      F(SDL_RenderPresent)
     mov     w0, #1                      // ferro: a vila
     bl      iron_selftest
+    mov     w0, #0                      // pincel, pescador e mochilas
+    bl      mochila_selftest
+    bl      draw_all
+    LA      x0, s_shot_brush
+    bl      save_bmp
+    ldr     x0, [x28, #G_REN]
+    bl      F(SDL_RenderPresent)
+    mov     w0, #1                      // a mochila da pescadora
+    bl      mochila_selftest
+    bl      draw_all
+    LA      x0, s_shot_pbag
+    bl      save_bmp
+    ldr     x0, [x28, #G_REN]
+    bl      F(SDL_RenderPresent)
+    str     wzr, [x28, #G_ZONEMODE]
+    str     wzr, [x28, #G_CHESTOPEN]
+    str     wzr, [x28, #G_INVOPEN]
     mov     w0, w19
     bl      set_zoom
     mov     w9, #1                      // o resto do teste sem a vila
@@ -1225,7 +1242,16 @@ he_wheel:
     fneg    s0, s0
 1:  ldr     w9, [x28, #G_STATE]
     cbz     w9, he_loop
-    ldr     s1, [x28, #G_WHEEL]
+    ldr     w9, [x28, #G_ZONEMODE]      // pintando zonas: tamanho do pincel
+    cbz     w9, 4f
+    fcmp    s0, #0.0
+    b.eq    he_loop
+    mov     w0, #1
+    mov     w9, #-1
+    csel    w0, w0, w9, gt
+    bl      zone_wheel
+    b       he_loop
+4:  ldr     s1, [x28, #G_WHEEL]
     fadd    s1, s1, s0
     fmov    s2, #1.0
     fcmp    s1, s2
@@ -1692,58 +1718,7 @@ tc_light:
     orr     w0, w6, w5, lsl #8
     orr     w0, w0, w4, lsl #16
     orr     w0, w0, #0xFF000000
-    // zonas de trabalho (pintando, ou com o painel de pessoas aberto):
-    // cor de cada tipo; o retangulo sendo arrastado aparece mais forte
-    ldr     w9, [x28, #G_ZONESHOW]
-    cbz     w9, 69f
-    LA      x9, zonegrid
-    ldrb    w1, [x9, w15, uxtw]
-    mov     w4, #110
-    ldr     w9, [x28, #G_ZDRAG]
-    cbz     w9, 62f
-    asr     w2, w10, #16
-    asr     w3, w11, #16
-    ldr     w5, [x28, #G_ZAU]
-    ldr     w6, [x28, #G_ZBU]
-    cmp     w5, w6
-    csel    w7, w5, w6, lt
-    csel    w6, w6, w5, lt
-    cmp     w2, w7
-    b.lt    62f
-    cmp     w2, w6
-    b.gt    62f
-    ldr     w5, [x28, #G_ZAV]
-    ldr     w6, [x28, #G_ZBV]
-    cmp     w5, w6
-    csel    w7, w5, w6, lt
-    csel    w6, w6, w5, lt
-    cmp     w3, w7
-    b.lt    62f
-    cmp     w3, w6
-    b.gt    62f
-    ldr     w1, [x28, #G_ZONEMODE]
-    mov     w4, #170
-62: cbz     w1, 69f
-    LA      x9, zonecolors
-    ldr     w9, [x9, w1, uxtw #2]
-    ubfx    w5, w0, #16, #8
-    ubfx    w6, w9, #16, #8
-    sub     w6, w6, w5
-    mul     w6, w6, w4
-    add     w5, w5, w6, asr #8
-    ubfx    w2, w0, #8, #8
-    ubfx    w6, w9, #8, #8
-    sub     w6, w6, w2
-    mul     w6, w6, w4
-    add     w2, w2, w6, asr #8
-    and     w3, w0, #255
-    and     w6, w9, #255
-    sub     w6, w6, w3
-    mul     w6, w6, w4
-    add     w3, w3, w6, asr #8
-    orr     w0, w3, w2, lsl #8
-    orr     w0, w0, w5, lsl #16
-    orr     w0, w0, #0xFF000000
+    bl      tc_zone                     // zonas de trabalho
 69:
     // grade: linha clara na borda de cada quadrado perto do personagem
     // (mais forte no alcance; some aos poucos ate 20 celulas)
@@ -1833,8 +1808,65 @@ tc_water:
     MOVI32  w0, 0x00202020
     add     w5, w5, w0
 4:  mov     w0, w5
+    bl      tc_zone                     // zona de Pesca na agua
     ldp     x29, x30, [sp], #16
     ret
+
+// tc_zone(w0 = cor; w10, w11 = u, v 16.16) -> w0   (usa x1-x9)
+// zonas de trabalho (pintando, ou com o painel de pessoas aberto): a cor
+// de cada tipo; o circulo do pincel sob o mouse aparece mais forte
+tc_zone:
+    ldr     w9, [x28, #G_ZONESHOW]
+    cbz     w9, 69f
+    asr     w2, w10, #16
+    asr     w3, w11, #16
+    cmp     w2, #511
+    b.hi    69f
+    cmp     w3, #511
+    b.hi    69f
+    add     w9, w2, w3, lsl #9
+    LA      x8, zonegrid
+    ldrb    w1, [x8, w9, uxtw]
+    mov     w4, #110
+    ldr     w9, [x28, #G_ZONEMODE]
+    cbz     w9, 62f
+    ldr     w9, [x28, #G_HOVOK]
+    cbz     w9, 62f
+    ldr     w5, [x28, #G_ZBU]
+    sub     w2, w2, w5
+    ldr     w5, [x28, #G_ZBV]
+    sub     w3, w3, w5
+    mul     w2, w2, w2
+    madd    w2, w3, w3, w2
+    ldr     w5, [x28, #G_ZBRUSH]
+    sub     w5, w5, #1
+    madd    w6, w5, w5, w5              // raio^2 + raio
+    cmp     w2, w6
+    b.gt    62f
+    ldr     w1, [x28, #G_ZONEMODE]
+    mov     w4, #170
+62: cbz     w1, 69f
+    LA      x9, zonecolors
+    ldr     w9, [x9, w1, uxtw #2]
+    ubfx    w5, w0, #16, #8
+    ubfx    w6, w9, #16, #8
+    sub     w6, w6, w5
+    mul     w6, w6, w4
+    add     w5, w5, w6, asr #8
+    ubfx    w2, w0, #8, #8
+    ubfx    w6, w9, #8, #8
+    sub     w6, w6, w2
+    mul     w6, w6, w4
+    add     w2, w2, w6, asr #8
+    and     w3, w0, #255
+    and     w6, w9, #255
+    sub     w6, w6, w3
+    mul     w6, w6, w4
+    add     w3, w3, w6, asr #8
+    orr     w0, w3, w2, lsl #8
+    orr     w0, w0, w5, lsl #16
+    orr     w0, w0, #0xFF000000
+69: ret
 
 // =====================================================================
 //  Objetos (sprites com teste de profundidade)
@@ -3167,6 +3199,8 @@ s_shot_panel:   .asciz "shot_painel.bmp"
 s_shot_village: .asciz "shot_vila.bmp"
 s_shot_family:  .asciz "shot_familias.bmp"
 s_shot_iron:    .asciz "shot_ferro.bmp"
+s_shot_brush:   .asciz "shot_pincel.bmp"
+s_shot_pbag:    .asciz "shot_morador.bmp"
 s_shot_fish:    .asciz "shot_pesca.bmp"
 s_shot_hut:     .asciz "shot_abrigo.bmp"
 s_shot_sleep:   .asciz "shot_dormindo.bmp"

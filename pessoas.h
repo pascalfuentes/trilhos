@@ -102,6 +102,7 @@
 .equ WK_FORAGE,  7
 .equ WK_BUILD,   8
 .equ WK_SMELT,   9              // na fornalha
+.equ WK_FISH,   10              // pescando (alvo = celula de agua)
 
 .equ CAUSE_FOME,  1
 .equ CAUSE_FRIO,  2

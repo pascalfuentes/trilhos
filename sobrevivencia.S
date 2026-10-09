@@ -1380,6 +1380,11 @@ su_food:
     // ---- bau aberto: fecha se voce se afastar ----
     ldr     w9, [x28, #G_CHESTOPEN]
     cbz     w9, 231f
+    cmp     w9, #128                    // mochila de alguem: so se morrer
+    b.ls    232f
+    bl      open_check
+    b       231f
+232:
     ldr     w0, [x28, #G_CHESTOBJ]
     bl      obj_dist2
     FC      s1, F_FIRE2
@@ -2279,16 +2284,16 @@ chest_count:
     ret
 
 // chest_move(w0 = item, w1 = 0 mochila -> bau, 1 bau -> mochila): tudo
+    .globl chest_move
 chest_move:
     stp     x29, x30, [sp, #-32]!
     mov     x29, sp
     stp     x19, x20, [sp, #16]
     ldr     w9, [x28, #G_CHESTOPEN]
     cbz     w9, 9f
-    sub     w9, w9, #1
-    LA      x19, chests
-    add     x19, x19, x9, lsl #CHESTSHIFT
     mov     w20, w0
+    bl      open_ptr                    // bau ou mochila de alguem
+    mov     x19, x0
     cbnz    w1, 1f
     add     x9, x28, #G_INV
     ldr     w10, [x9, x20, lsl #2]
@@ -2323,13 +2328,13 @@ surv_mouse:
     mov     w19, w0
     mov     w20, w1
     cbnz    w20, 1f
+    bl      zone_release                // soltou: o pincel de zonas para
     cmp     w19, #1                     // soltou o esquerdo: para de coletar
     b.ne    sm_ret
     str     wzr, [x28, #G_LMB]
     str     wzr, [x28, #G_FARMLAST]     // enxada/sementes: de novo em qualquer celula
     str     wzr, [x28, #G_FARMMODE]
     bl      fence_commit                // soltou uma fileira de cercas
-    bl      zone_release                // soltou o retangulo da zona
     b       sm_ret
     // apertou: primeiro os botoes e janelas da interface
 1:  bl      mouse_ui
@@ -2437,10 +2442,7 @@ surv_mouse:
     cmp     w19, #1
     b.ne    sm_ret
     tbnz    w21, #31, sm_ret
-    ldr     w9, [x28, #G_CHESTOPEN]
-    sub     w9, w9, #1
-    LA      x0, chests
-    add     x0, x0, x9, lsl #CHESTSHIFT
+    bl      open_ptr
     mov     w1, w21
     bl      slot_item
     tbnz    w0, #31, sm_ret
@@ -4891,6 +4893,9 @@ draw_inv:
     ldr     w9, [x28, #G_CHESTOPEN]
     cbz     w9, 8f
     LA      x2, s_invhint2
+    cmp     w9, #128                    // mochila de alguem: da
+    b.ls    8f
+    LA      x2, s_invhint3
 8:  mov     w0, #(INV_X + 8)
     mov     w1, #(INV_Y + INV_H - 14)
     bl      text
@@ -4910,13 +4915,15 @@ draw_chest:
     mov     w0, #CRF_X
     mov     w1, #CRF_Y
     mov     w2, #CRF_W
+    bl      open_title                  // "Bau" ou "Mochila de ..."
+    mov     x4, x0
+    mov     w0, #CRF_X
+    mov     w1, #CRF_Y
+    mov     w2, #CRF_W
     mov     w3, #CRF_H
-    LA      x4, s_chesttitle
     bl      ui_panel
-    ldr     w9, [x28, #G_CHESTOPEN]
-    sub     w9, w9, #1
-    LA      x19, chests
-    add     x19, x19, x9, lsl #CHESTSHIFT
+    bl      open_ptr
+    mov     x19, x0
     bl      mouse_ui
     bl      ui_hit
     mov     w20, #-1
@@ -7970,9 +7977,11 @@ s_plus1:        .asciz "+1 "
 s_plusfire:     .asciz " + fogo"
 s_btncraft:     .asciz "Fabricar [Tab]"
 s_crafttitle:   .asciz "Fabricar"
+    .globl s_chesttitle
 s_chesttitle:   .asciz "Bau (clique: pegar)"
 s_crafthint:    .asciz "Clique numa receita"
 s_invhint2:     .asciz "Clique: guardar no bau"
+s_invhint3:     .asciz "Clique: dar a pessoa"
 s_chesthint:    .asciz "Clique: pegar"
 s_place1:       .asciz "Clique: colocar "
 s_place2:       .asciz " (dir.: cancela)"
