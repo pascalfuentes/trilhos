@@ -256,6 +256,10 @@ surv_reset:
     str     s0, [x28, #G_HP]
     str     s0, [x28, #G_FOOD]
     str     s0, [x28, #G_WARM]
+    str     s0, [x28, #G_STAMINA]
+    str     wzr, [x28, #G_WATER]
+    str     wzr, [x28, #G_SHARK]
+    str     xzr, [x28, #G_DEATHMSG]
     str     wzr, [x28, #G_WOOD]
     str     wzr, [x28, #G_STONE]
     str     wzr, [x28, #G_BERRY]
@@ -584,6 +588,16 @@ surv_update:
 9:  fsqrt   s10, s10
     FC      s11, F_SPEED
     fdiv    s11, s11, s10
+    ldr     w9, [x28, #G_WATER]         // na agua anda mais devagar
+    LA      x10, waterspeed
+    ldr     s0, [x10, x9, lsl #2]
+    cmp     w9, #2
+    b.lt    91f
+    ldr     s1, [x28, #G_STAMINA]
+    fcmp    s1, #0.0
+    b.gt    91f
+    FC      s0, F_TIRED                 // sem folego: quase parado
+91: fmul    s11, s11, s0
     fmul    s8, s8, s11
     fmul    s9, s9, s11
     mov     w9, #1
@@ -591,29 +605,59 @@ surv_update:
     ldr     w9, [x28, #G_PFRAME]
     add     w9, w9, #1
     str     w9, [x28, #G_PFRAME]
-    // tenta andar em u (sem entrar na agua)
+    // anda em u e em v (so nao pode sair do mapa)
+    mov     w9, #509
+    scvtf   s2, w9
+    fmov    s1, #2.0
     ldr     s0, [x28, #G_PU]
     fadd    s10, s0, s8
-    fmov    s0, s10
-    ldr     s1, [x28, #G_PV]
-    bl      elev_at
-    tbnz    w0, #31, 10f
+    fcmp    s10, s1
+    b.lt    10f
+    fcmp    s10, s2
+    b.gt    10f
     str     s10, [x28, #G_PU]
-    // tenta andar em v
-10: ldr     s0, [x28, #G_PU]
-    ldr     s1, [x28, #G_PV]
-    fadd    s10, s1, s9
-    fmov    s1, s10
-    bl      elev_at
-    tbnz    w0, #31, su_after_move
+10: ldr     s0, [x28, #G_PV]
+    fadd    s10, s0, s9
+    fcmp    s10, s1
+    b.lt    su_after_move
+    fcmp    s10, s2
+    b.gt    su_after_move
     str     s10, [x28, #G_PV]
 su_after_move:
     ldr     s0, [x28, #G_PU]
     ldr     s1, [x28, #G_PV]
     bl      elev_at
+    mov     w19, w0                     // elevacao (negativa = agua)
     cmp     w0, #0
     csel    w0, wzr, w0, lt
     str     w0, [x28, #G_PE]
+    // nivel da agua: 0 terra, 1 raso, 2 fundo, 3 mar aberto (perto da borda)
+    mov     w20, #0
+    tbz     w19, #31, 202f
+    mov     w20, #1
+    cmn     w19, #W_SHALLOW
+    b.ge    202f
+    mov     w20, #2
+    mov     w9, #-W_OCEAN
+    cmp     w19, w9
+    b.gt    202f
+    ldr     s0, [x28, #G_PU]
+    fcvtzs  w9, s0
+    ldr     s0, [x28, #G_PV]
+    fcvtzs  w10, s0
+    mov     w11, #511
+    sub     w12, w11, w9
+    sub     w13, w11, w10
+    cmp     w9, w10
+    csel    w9, w9, w10, lt
+    cmp     w9, w12
+    csel    w9, w9, w12, lt
+    cmp     w9, w13
+    csel    w9, w9, w13, lt             // distancia ate a borda
+    cmp     w9, #W_BORDER
+    b.ge    202f
+    mov     w20, #3
+202: str    w20, [x28, #G_WATER]
 
     // ---- o que esta sob o mouse ----
     mov     w9, #-1
@@ -689,6 +733,54 @@ su_food:
     fmax    s0, s0, s1
     str     s0, [x28, #G_FOOD]
 
+    // ---- agua: folego e tubarao ----
+    ldr     w9, [x28, #G_WATER]
+    ldr     s0, [x28, #G_STAMINA]
+    cmp     w9, #2
+    b.lt    210f
+    FC      s1, F_SWIMCOST              // nadando: cansa
+    fsub    s0, s0, s1
+    b       212f
+210: cbz    w9, 211f
+    FC      s1, F_RECOVSH               // no raso: recupera devagar
+    fadd    s0, s0, s1
+    b       212f
+211: FC     s1, F_RECOV                 // em terra: recupera rapido
+    fadd    s0, s0, s1
+212: fmov   s1, wzr
+    fmax    s0, s0, s1
+    FC      s1, F_HUNDRED
+    fmin    s0, s0, s1
+    str     s0, [x28, #G_STAMINA]
+    ldr     w9, [x28, #G_WATER]
+    cmp     w9, #3
+    b.ne    215f
+    ldr     w10, [x28, #G_SHARK]        // mar aberto: o tubarao vem chegando
+    add     w10, w10, #1
+    str     w10, [x28, #G_SHARK]
+    cmp     w10, #1
+    b.ne    213f
+    LA      x0, m_shark1
+    bl      set_msg
+    ldr     w10, [x28, #G_SHARK]
+213: mov    w9, #SHARKTIME
+    cmp     w10, w9
+    b.lt    216f
+    LA      x9, m_eaten                 // tarde demais
+    str     x9, [x28, #G_DEATHMSG]
+    str     wzr, [x28, #G_HP]
+    mov     w9, #1
+    str     w9, [x28, #G_DEAD]
+    str     wzr, [x28, #G_LMB]
+    LA      x0, m_eaten
+    bl      set_msg
+    b       su_cam
+215: ldr    w10, [x28, #G_SHARK]        // longe do mar aberto: ele vai embora
+    subs    w10, w10, #2
+    csel    w10, wzr, w10, lt
+    str     w10, [x28, #G_SHARK]
+216:
+
     // ---- calor ----
     mov     w21, #0                     // perto de uma fogueira?
     ldr     w19, [x28, #G_NFIRE]
@@ -717,7 +809,12 @@ su_food:
     b       17f
 16: FC      s1, F_DAYWARM
     fadd    s0, s0, s1
-17: fmov    s1, wzr
+17: ldr     w9, [x28, #G_WATER]         // nadando: a agua esfria
+    cmp     w9, #2
+    b.lt    171f
+    FC      s1, F_WETCOLD
+    fsub    s0, s0, s1
+171: fmov   s1, wzr
     fmax    s0, s0, s1
     FC      s1, F_HUNDRED
     fmin    s0, s0, s1
@@ -735,7 +832,15 @@ su_food:
     b.gt    19f
     FC      s1, F_FREEZE
     fsub    s8, s8, s1
-19: FC      s2, F_FORTY
+19: ldr     w9, [x28, #G_WATER]         // sem folego na agua funda: afoga
+    cmp     w9, #2
+    b.lt    191f
+    ldr     s0, [x28, #G_STAMINA]
+    fcmp    s0, #0.0
+    b.gt    191f
+    FC      s1, F_DROWN
+    fsub    s8, s8, s1
+191: FC     s2, F_FORTY
     ldr     s0, [x28, #G_FOOD]
     fcmp    s0, s2
     b.le    20f
@@ -752,7 +857,19 @@ su_food:
     mov     w9, #1
     str     w9, [x28, #G_DEAD]
     str     wzr, [x28, #G_LMB]
-    LA      x0, m_dead
+    LA      x0, m_froze                 // causa da morte
+    ldr     s0, [x28, #G_FOOD]
+    fcmp    s0, #0.0
+    b.gt    201f
+    LA      x0, m_starved
+201: ldr    w9, [x28, #G_WATER]
+    cmp     w9, #2
+    b.lt    203f
+    ldr     s0, [x28, #G_STAMINA]
+    fcmp    s0, #0.0
+    b.gt    203f
+    LA      x0, m_drowned
+203: str    x0, [x28, #G_DEATHMSG]
     bl      set_msg
 21: str     s8, [x28, #G_HP]
 
@@ -1021,7 +1138,16 @@ surv_draw:
     mov     w2, w1
     mov     w1, w0
     mov     w9, #SPR_PLAYER
-    ldr     w10, [x28, #G_PMOVING]
+    ldr     w11, [x28, #G_WATER]
+    cmp     w11, #2
+    b.lt    21f
+    mov     w9, #SPR_SWIM               // nadando (sempre batendo os bracos)
+    ldr     w10, [x28, #G_FRAME]
+    lsr     w10, w10, #4
+    and     w10, w10, #1
+    add     w9, w9, w10
+    b       3f
+21: ldr     w10, [x28, #G_PMOVING]
     cbz     w10, 3f
     ldr     w10, [x28, #G_PFRAME]
     lsr     w10, w10, #3
@@ -1032,7 +1158,60 @@ surv_draw:
     mov     w3, w21
     mov     w5, #0
     bl      blit
-    ldr     x21, [sp, #32]
+    // barbatana do tubarao rondando, cada vez mais perto
+    ldr     w19, [x28, #G_SHARK]
+    cmp     w19, #60
+    b.lt    4f
+    ldr     w9, [x28, #G_FRAME]
+    lsr     w10, w9, #3
+    and     w10, w10, #15               // direcao atual (16 direcoes)
+    and     w11, w9, #7                 // fracao ate a proxima
+    add     w12, w10, #1
+    and     w12, w12, #15
+    LA      x13, dirtab
+    add     x14, x13, x10, lsl #2
+    add     x15, x13, x12, lsl #2
+    ldrsh   w0, [x14]
+    ldrsh   w1, [x15]
+    sub     w1, w1, w0
+    mul     w1, w1, w11
+    add     w0, w0, w1, asr #3          // cos * 64
+    ldrsh   w2, [x14, #2]
+    ldrsh   w3, [x15, #2]
+    sub     w3, w3, w2
+    mul     w3, w3, w11
+    add     w2, w2, w3, asr #3          // sen * 64
+    scvtf   s2, w0
+    scvtf   s3, w2
+    FC      s4, F_INV64
+    fmul    s2, s2, s4
+    fmul    s3, s3, s4
+    scvtf   s4, w19                     // raio: 3 celulas -> 0.75
+    mov     w9, #SHARKTIME
+    scvtf   s5, w9
+    fdiv    s4, s4, s5
+    fmov    s5, #0.75
+    fmul    s4, s4, s5
+    fmov    s5, #1.0
+    fsub    s4, s5, s4
+    FC      s5, F_SHARKR
+    fmul    s4, s4, s5
+    ldr     s0, [x28, #G_PU]
+    ldr     s1, [x28, #G_PV]
+    fmadd   s0, s2, s4, s0
+    fmadd   s1, s3, s4, s1
+    mov     w0, #0
+    bl      proj
+    mov     w4, w2
+    add     w4, w4, #16
+    mov     w2, w1
+    mov     w1, w0
+    LA      x0, sprites
+    add     x0, x0, #(SPR_FIN * 128)
+    mov     w3, w21
+    mov     w5, #0
+    bl      blit
+4:  ldr     x21, [sp, #32]
     ldp     x19, x20, [sp, #16]
     ldp     x29, x30, [sp], #48
     ret
@@ -1622,7 +1801,7 @@ surv_ui:
     mov     w0, #4
     mov     w1, #16
     mov     w2, #252
-    mov     w3, #60
+    mov     w3, #73
     bl      fillrect
     LA      x0, lbuf
     LA      x1, s_wood
@@ -1667,6 +1846,37 @@ surv_ui:
     mov     w3, #160
     mov     w4, #240
     bl      bar
+    mov     w0, #75
+    LA      x1, s_stamina
+    ldr     s0, [x28, #G_STAMINA]
+    mov     w2, #120
+    mov     w3, #225
+    mov     w4, #210
+    bl      bar
+    // ---- na agua? ----
+    ldr     w9, [x28, #G_WATER]
+    cbz     w9, ui_tip
+    LA      x10, waternames
+    add     x19, x10, x9, lsl #5
+    mov     w0, #150                    // raso / nadando: azul claro
+    mov     w1, #210
+    mov     w2, #255
+    mov     w3, #255
+    cmp     w9, #3
+    b.ne    1f
+    mov     w0, #255                    // mar aberto: vermelho piscando
+    mov     w1, #70
+    mov     w2, #60
+    ldr     w10, [x28, #G_FRAME]
+    tbz     w10, #4, 1f
+    mov     w1, #200
+    mov     w2, #190
+1:  bl      setcolor
+    mov     w0, #8
+    mov     w1, #94
+    mov     x2, x19
+    bl      text
+ui_tip:
 
     // ---- dica sobre o que esta sob o mouse ----
     ldr     s0, [x28, #G_MX]
@@ -1883,7 +2093,19 @@ ui_dead:
     bl      text_center
     mov     w0, #2
     bl      setscale
-    LA      x0, lbuf
+    ldr     x2, [x28, #G_DEATHMSG]      // causa da morte
+    cbz     x2, 1f
+    mov     w0, #255
+    mov     w1, #200
+    mov     w2, #140
+    mov     w3, #255
+    bl      setcolor
+    mov     w0, #640
+    mov     w1, #160
+    ldr     x2, [x28, #G_DEATHMSG]
+    mov     w3, #0
+    bl      text_center
+1:  LA      x0, lbuf
     LA      x1, s_dead2
     bl      strcat_cur
     ldr     w1, [x28, #G_DAY]
@@ -2126,6 +2348,143 @@ surv_selftest:
     ldp     x29, x30, [sp], #32
     ret
 
+// surv_selftest_water(w0 = etapa): teste automatico da agua
+//   0: coloca o personagem em agua funda longe da borda e deixa nadar
+//   1: coloca no mar aberto (perto da borda); o tubarao vem chegando
+//   2: espera o tubarao atacar e imprime o resultado
+    .globl surv_selftest_water
+surv_selftest_water:
+    stp     x29, x30, [sp, #-64]!
+    mov     x29, sp
+    stp     x19, x20, [sp, #16]
+    stp     d8, d9, [sp, #32]
+    str     x21, [sp, #48]
+    mov     w21, w0
+    str     wzr, [x28, #G_HOVOK]
+    str     wzr, [x28, #G_LMB]
+    mov     w9, #1500                   // de dia, para a foto
+    str     w9, [x28, #G_TIME]
+    cmp     w21, #1
+    b.eq    sw_ocean
+    b.gt    sw_wait
+    // etapa 0: agua funda longe da borda (espiral a partir do centro)
+    mov     w19, #0
+1:  mov     w20, #0
+2:  LA      x9, dirtab
+    add     x9, x9, x20, lsl #2
+    ldrsh   w10, [x9]
+    scvtf   s0, w10
+    ldrsh   w10, [x9, #2]
+    scvtf   s1, w10
+    FC      s2, F_INV64
+    fmul    s0, s0, s2
+    fmul    s1, s1, s2
+    scvtf   s2, w19
+    mov     w9, #256
+    scvtf   s3, w9
+    fmadd   s8, s0, s2, s3
+    fmadd   s9, s1, s2, s3
+    fmov    s0, s8
+    fmov    s1, s9
+    bl      elev_at
+    mov     w9, #-300
+    cmp     w0, w9
+    b.ge    3f
+    fcvtzs  w9, s8                      // longe da borda
+    fcvtzs  w10, s9
+    mov     w11, #(W_BORDER + 10)
+    cmp     w9, w11
+    b.lt    3f
+    cmp     w10, w11
+    b.lt    3f
+    mov     w12, #(511 - W_BORDER - 10)
+    cmp     w9, w12
+    b.gt    3f
+    cmp     w10, w12
+    b.le    sw_found
+3:  add     w20, w20, #1
+    cmp     w20, #16
+    b.lt    2b
+    add     w19, w19, #2
+    cmp     w19, #200
+    b.lt    1b
+    b       sw_print0                   // nenhum lago fundo neste mundo
+sw_found:
+    str     s8, [x28, #G_PU]
+    str     s9, [x28, #G_PV]
+    mov     w19, #0
+4:  bl      surv_update
+    add     w19, w19, #1
+    cmp     w19, #240
+    b.lt    4b
+sw_print0:
+    LA      x0, txt
+    LA      x1, t_9
+    bl      strcat_cur
+    ldr     w1, [x28, #G_WATER]
+    bl      numcat
+    LA      x1, t_10
+    bl      strcat_cur
+    ldr     s0, [x28, #G_STAMINA]
+    fcvtzs  w1, s0
+    bl      numcat
+    b       sw_write
+    // etapa 1: mar aberto, perto da borda oeste
+sw_ocean:
+    mov     w19, #100
+5:  mov     w9, #24
+    scvtf   s8, w9
+    scvtf   s9, w19
+    fmov    s0, s8
+    fmov    s1, s9
+    bl      elev_at
+    mov     w9, #-W_OCEAN
+    cmp     w0, w9
+    b.lt    6f
+    add     w19, w19, #10
+    cmp     w19, #412
+    b.lt    5b
+6:  str     s8, [x28, #G_PU]
+    str     s9, [x28, #G_PV]
+    mov     w19, #0
+7:  bl      surv_update
+    add     w19, w19, #1
+    cmp     w19, #300
+    b.lt    7b
+    b       sw_ret
+    // etapa 2: espera o ataque
+sw_wait:
+    mov     w19, #0
+8:  bl      surv_update
+    ldr     w9, [x28, #G_DEAD]
+    cbnz    w9, 9f
+    add     w19, w19, #1
+    cmp     w19, #400
+    b.lt    8b
+9:  LA      x0, txt
+    LA      x1, t_11
+    bl      strcat_cur
+    ldr     w1, [x28, #G_SHARK]
+    bl      numcat
+    LA      x1, t_12
+    bl      strcat_cur
+    ldr     w1, [x28, #G_DEAD]
+    bl      numcat
+    LA      x1, s_nl
+    bl      strcat_cur
+sw_write:
+    LA      x9, txt
+    sub     x2, x0, x9
+    mov     x1, x9
+    mov     w0, #1
+    bl      F(write)
+sw_ret:
+    ldr     x21, [sp, #48]
+    ldp     d8, d9, [sp, #32]
+    ldp     x19, x20, [sp, #16]
+    ldp     x29, x30, [sp], #64
+    ret
+
 // =====================================================================
 //  Dados
 // =====================================================================
@@ -2159,6 +2518,29 @@ fconsts:
     .float 0.8              // F_P8
     .float 255.0            // F_255
     .float 0.3              // F_TREEBLK (quanto cada arvore tapa)
+    .float 0.22             // F_TIRED (velocidade sem folego)
+    .float 0.12             // F_SWIMCOST (100 -> 0 em ~14 s nadando)
+    .float 0.5              // F_RECOV (folego volta em terra)
+    .float 0.2              // F_RECOVSH (no raso)
+    .float 0.25             // F_DROWN (vida perdida afogando)
+    .float 0.04             // F_WETCOLD (a agua esfria)
+    .float 3.0              // F_SHARKR (raio inicial da barbatana)
+
+// velocidade em cada nivel de agua: terra, raso, fundo, mar aberto
+waterspeed:
+    .float 1.0, 0.6, 0.45, 0.45
+
+// nomes dos niveis de agua (32 bytes cada)
+    .p2align 5
+waternames:
+    .asciz ""
+    .p2align 5
+    .asciz "Agua rasa"
+    .p2align 5
+    .asciz "Nadando"
+    .p2align 5
+    .asciz "MAR ABERTO - TUBARAO!"
+    .p2align 5
 
     .p2align 2
 dirtab:
@@ -2209,6 +2591,16 @@ s_berry:        .asciz "   Frutas "
 s_hp:           .asciz "Vida"
 s_food:         .asciz "Fome"
 s_warm:         .asciz "Calor"
+s_stamina:      .asciz "Folego"
+m_shark1:       .asciz "Agua muito funda! Um tubarao esta vindo... volte!"
+m_eaten:        .asciz "Um tubarao comeu voce!"
+m_drowned:      .asciz "Voce se afogou"
+m_starved:      .asciz "Voce morreu de fome"
+m_froze:        .asciz "Voce morreu de frio"
+t_9:            .asciz "agua: nadando nivel="
+t_10:           .asciz " folego="
+t_11:           .asciz " | mar aberto: tubarao="
+t_12:           .asciz " morto="
 s_paren:        .asciz " ("
 s_paren2:       .asciz ")"
 s_far:          .asciz " - longe"

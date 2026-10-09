@@ -35,6 +35,19 @@ Você aparece sozinho num mundo gerado aleatoriamente: terreno contínuo, mar, p
 - **Vida:** volta devagar quando você está alimentado e aquecido.
 - **Dia e noite:** um dia dura 3 minutos. A noite escurece a tela de verdade; só a fogueira e uma luz fraca em volta do personagem iluminam.
 
+**Água**
+
+| Nível | Onde | O que acontece |
+|---|---|---|
+| **Rasa** | beira de lagos e praias | anda um pouco mais devagar |
+| **Funda** | meio dos lagos e do mar | nada (mais devagar ainda), gasta **fôlego** e esfria. Sem fôlego, quase não sai do lugar e começa a se afogar |
+| **Mar aberto** | água muito funda perto das bordas do mapa | aviso de tubarão; uma barbatana começa a rodear e chega mais perto. Em 7 segundos ele ataca |
+
+O fôlego volta em terra (e mais devagar na água rasa).
+
+![Nadando](screenshots/nado.png)
+![Tubarão](screenshots/tubarao.png)
+
 **Neblina de guerra**
 
 - O mapa começa todo **preto**: você descobre andando.
@@ -72,7 +85,7 @@ sudo apt install libsdl3-dev   # ou compile o SDL3 a partir do código-fonte
 make run
 ```
 
-`./trilhos --shot` roda sem interação: tira screenshots, mede o tempo de cada quadro e faz um teste automático (coleta duas árvores, uma pedra e um arbusto, monta uma fogueira, come e passa a noite).
+`./trilhos --shot` roda sem interação: tira screenshots, mede o tempo de cada quadro e faz um teste automático (coleta duas árvores, uma pedra e um arbusto, monta uma fogueira, come e passa a noite; depois nada num lago e vai para o mar aberto até o tubarão atacar).
 
 ## Próximos passos
 

@@ -237,6 +237,29 @@ shot_mode:
     bl      draw_all
     LA      x0, s_shot_night
     bl      save_bmp
+    ldr     x0, [x28, #G_REN]
+    bl      F(SDL_RenderPresent)
+
+    // agua: nadando, tubarao chegando e o fim
+    mov     w0, #0
+    bl      surv_selftest_water
+    bl      draw_all
+    LA      x0, s_shot_swim
+    bl      save_bmp
+    ldr     x0, [x28, #G_REN]
+    bl      F(SDL_RenderPresent)
+    mov     w0, #1
+    bl      surv_selftest_water
+    bl      draw_all
+    LA      x0, s_shot_shark
+    bl      save_bmp
+    ldr     x0, [x28, #G_REN]
+    bl      F(SDL_RenderPresent)
+    mov     w0, #2
+    bl      surv_selftest_water
+    bl      draw_all
+    LA      x0, s_shot_dead
+    bl      save_bmp
     b       main_exit
 
 // =====================================================================
@@ -1919,6 +1942,7 @@ palette:
     .word 0xFFA7A39B, 0xFF85817A, 0xFF5F5C57, 0xFFD8263A  // 20-23 pedra, fruta
     .word 0xFFFFE066, 0xFFFF8A1F, 0xFFD8401A, 0xFFE8B48A  // 24-27 fogo, pele
     .word 0xFF2F6FB5, 0xFF4A3A2A, 0xFF3A2A1A, 0xFF7A4A24  // 28-31 roupa, cabelo, lenha
+    .word 0xFFCDEBF7, 0xFF6E7C86, 0xFF4A555D, 0           // 32-35 espuma, tubarao
 
 roofc:
     .word 0xFFB5443A, 0xFF8C3029
@@ -2026,6 +2050,30 @@ sprites:
     .byte 29,0,0,0,29
     .byte 18,0,0,0,18
     .p2align 7
+// 9: nadando (quadro 1)
+    .byte 5, 5, 2, 0
+    .byte 0,30,30,30,0
+    .byte 0,27,27,27,0
+    .byte 27,28,28,28,0
+    .byte 32,32,32,32,32
+    .byte 0,32,0,32,0
+    .p2align 7
+// 10: nadando (quadro 2)
+    .byte 5, 5, 2, 0
+    .byte 0,30,30,30,0
+    .byte 0,27,27,27,0
+    .byte 0,28,28,28,27
+    .byte 32,32,32,32,32
+    .byte 32,0,32,0,32
+    .p2align 7
+// 11: barbatana do tubarao (em volta de quem nada no mar aberto)
+    .byte 5, 5, 2, 0
+    .byte 0,0,33,0,0
+    .byte 0,33,33,0,0
+    .byte 0,33,33,34,0
+    .byte 33,33,34,34,0
+    .byte 32,32,32,32,32
+    .p2align 7
 
 s_wintitle:     .asciz "Trilhos - jogo de trens em Assembly ARM64"
 s_title:        .asciz "TRILHOS"
@@ -2052,6 +2100,9 @@ s_shot_far:     .asciz "shot_longe.bmp"
 s_shot_near:    .asciz "shot_perto.bmp"
 s_shot_contour: .asciz "shot_curvas.bmp"
 s_shot_night:   .asciz "shot_noite.bmp"
+s_shot_swim:    .asciz "shot_nado.bmp"
+s_shot_shark:   .asciz "shot_tubarao.bmp"
+s_shot_dead:    .asciz "shot_fim.bmp"
 
 // ---- memoria zerada (bss) -------------------------------------------
 GBSS hmap, 262144

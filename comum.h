@@ -68,6 +68,8 @@
 .equ O_GONE,    255          // removido
 .equ SPR_FIRE,  5            // 5 e 6: fogueira (2 quadros)
 .equ SPR_PLAYER, 7           // 7 e 8: personagem (2 quadros)
+.equ SPR_SWIM,  9            // 9 e 10: personagem nadando
+.equ SPR_FIN,   11           // barbatana do tubarao
 
 // ---- sobrevivencia ---------------------------------------------------------
 .equ MAXFIRE,   32           // fogueira: 16 bytes (u, v, e, lenha)
@@ -135,7 +137,17 @@
 .equ G_WARNED,   264         // ja avisou que esta escurecendo hoje
 .equ G_INGAME,   268         // existe uma partida em andamento
 .equ G_NIGHTK,   272         // 0 = dia ... 256 = noite
-.equ GSIZE,      288
+.equ G_STAMINA,  276         // folego (float 0..100)
+.equ G_WATER,    280         // 0 terra, 1 raso, 2 fundo, 3 muito fundo
+.equ G_SHARK,    284         // tempo no mar aberto (o tubarao chega)
+.equ G_DEATHMSG, 288         // causa da morte (ponteiro)
+.equ GSIZE,      304
+
+// agua: 3 niveis (raso, fundo, mar aberto)
+.equ W_SHALLOW,  150         // ate esta profundidade (1/16 px) e raso
+.equ W_OCEAN,    700         // mais fundo que isto perto da borda: mar aberto
+.equ W_BORDER,   90          // "perto da borda" = a menos de 90 celulas
+.equ SHARKTIME,  420         // 7 s no mar aberto e o tubarao ataca
 
 // neblina: celula visivel se vis >= VIS_MIN
 .equ VIS_MIN,    40
@@ -168,3 +180,10 @@
 .equ F_P8,       96
 .equ F_255,      100
 .equ F_TREEBLK,  104
+.equ F_TIRED,    108
+.equ F_SWIMCOST, 112
+.equ F_RECOV,    116
+.equ F_RECOVSH,  120
+.equ F_DROWN,    124
+.equ F_WETCOLD,  128
+.equ F_SHARKR,   132
