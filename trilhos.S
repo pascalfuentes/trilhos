@@ -7,93 +7,23 @@
 //  isometrica), com y-buffer, z-buffer e iluminacao suave. Arvores,
 //  casas e predios ficam em posicoes livres e respeitam a profundidade.
 //
-//  Toda a logica e todo o desenho estao aqui em assembly. A SDL3 so abre
-//  a janela, le teclado/mouse e mostra o framebuffer.
+//  Este arquivo cuida do mundo (geracao, terreno, objetos, camera e
+//  interface basica). A ferrovia fica em ferrovia.S. A SDL3 so abre a
+//  janela, le teclado/mouse e mostra o framebuffer.
 //
-//  Compilar:  make        (ou: cc trilhos.S -o trilhos -lSDL3)
+//  Compilar:  make   (junta trilhos.S + ferrovia.S, com comum.h)
 //  Testar sem tela:  ./trilhos --shot  (salva screenshots e mede o tempo)
 // =====================================================================
 
-#ifdef __APPLE__
-#define F(x) _##x
-#define BSS(name, size) .zerofill __DATA,__bss,name,size,4
-#else
-#define F(x) x
-#define BSS(name, size) .section .bss ; .balign 16 ; name: .space size
-#endif
-
-.macro LA reg, sym
-#ifdef __APPLE__
-    adrp    \reg, \sym@PAGE
-    add     \reg, \reg, \sym@PAGEOFF
-#else
-    adrp    \reg, \sym
-    add     \reg, \reg, :lo12:\sym
-#endif
-.endm
-
-.macro MOVI32 reg, val
-    movz    \reg, #((\val) & 0xFFFF)
-    movk    \reg, #(((\val) >> 16) & 0xFFFF), lsl #16
-.endm
-
-// ---- constantes -----------------------------------------------------
-.equ MAPN,      512          // mapa de altura 512 x 512
-.equ SCRW,      1280
-.equ SCRH,      720
-.equ MAXTOWNS,  16
-.equ TOWNSZ,    64           // x y pop nome[32] R e
-.equ NSYL,      32
-.equ MAXOBJ,    200000
-.equ SEA,       104          // altura do nivel do mar (0..255)
-
-// faixas de elevacao (1/16 de pixel do mundo)
-.equ E_SAND,    30
-.equ E_GRASS,   724
-.equ E_HILL,    1056
-.equ E_ROCK,    1424
-
-// tipos de objeto
-.equ O_TREE,    0
-.equ O_PINE,    1
-.equ O_HOUSE,   2
-.equ O_TOWER,   3
-
-// estado global: x28 aponta sempre para G
-.equ G_REN,      0
-.equ G_WIN,      8
-.equ G_TEX,      16
-.equ G_KEYS,     24
-.equ G_CX,       32          // camera (1/16 px do mundo, zoom 1)
-.equ G_CY,       36
-.equ G_ZOOM,     40          // 0..3
-.equ G_Z256,     44          // escala * 256 (128, 256, 512, 1024)
-.equ G_SEED,     48
-.equ G_RNG,      52
-.equ G_STATE,    56
-.equ G_RUNNING,  60
-.equ G_FRAME,    64
-.equ G_MX,       68          // float
-.equ G_MY,       72          // float
-.equ G_HOVOK,    76
-.equ G_HOVU,     80          // 1/64 de celula
-.equ G_HOVV,     84
-.equ G_CONTOUR,  88
-.equ G_DAX,      92          // float
-.equ G_DAY,      96          // float
-.equ G_WHEEL,    100         // float
-.equ G_NTOWNS,   104
-.equ G_SHOT,     108
-.equ G_WANTSHOT, 112
-.equ G_NOBJ,     116
-.equ G_EMAXZ,    120         // altura maxima em pixels de tela
-.equ G_K,        124         // 1/16 px do mundo por pixel de tela
+#include "comum.h"
 
 .equ SDL_INIT_VIDEO,        0x20
 .equ SDL_EVENT_QUIT,        0x100
 .equ SDL_EVENT_KEY_DOWN,    0x300
 .equ SDL_EVENT_MOUSE_MOTION,0x400
 .equ SDL_EVENT_MOUSE_WHEEL, 0x403
+.equ SDL_EVENT_MOUSE_DOWN,  0x401
+.equ SDL_EVENT_MOUSE_UP,    0x402
 
 // =====================================================================
     .text
@@ -310,6 +240,22 @@ shot_mode:
     bl      draw_all
     LA      x0, s_shot_contour
     bl      save_bmp
+    ldr     x0, [x28, #G_REN]
+    bl      F(SDL_RenderPresent)
+
+    // ferrovia: monta uma linha de teste, roda o trem e fotografa
+    str     wzr, [x28, #G_CONTOUR]
+    bl      rail_selftest
+    bl      draw_all
+    LA      x0, s_shot_train
+    bl      save_bmp
+    ldr     x0, [x28, #G_REN]
+    bl      F(SDL_RenderPresent)
+    mov     w0, #3
+    bl      set_zoom
+    bl      draw_all
+    LA      x0, s_shot_train2
+    bl      save_bmp
     b       main_exit
 
 // =====================================================================
@@ -317,6 +263,7 @@ shot_mode:
 // =====================================================================
 
 // set_zoom(w0 = 0..3): 0 = longe (0.5x) ... 3 = perto (4x)
+    .globl set_zoom
 set_zoom:
     str     w0, [x28, #G_ZOOM]
     mov     w9, #128
@@ -347,6 +294,7 @@ zoom_out:
 1:  ret
 
 // rng() -> w0   (xorshift32)
+    .globl rng
 rng:
     ldr     w0, [x28, #G_RNG]
     eor     w0, w0, w0, lsl #13
@@ -356,6 +304,7 @@ rng:
     ret
 
 // rng_mod(w0 = n) -> [0, n)   (usa w0, w9, w10)
+    .globl rng_mod
 rng_mod:
     mov     w10, w0
     ldr     w0, [x28, #G_RNG]
@@ -368,6 +317,7 @@ rng_mod:
     ret
 
 // hash3(w0 = x, w1 = y, w2 = sal) -> w0   (usa SO w0 e w9)
+    .globl hash3
 hash3:
     MOVI32  w9, 0x27d4eb2d
     mul     w0, w0, w9
@@ -385,6 +335,7 @@ hash3:
     ret
 
 // mystrlen(x0) -> x0   (usa x9, x10)
+    .globl mystrlen
 mystrlen:
     mov     x9, x0
 1:  ldrb    w10, [x9], #1
@@ -394,6 +345,7 @@ mystrlen:
     ret
 
 // strcat_cur(x0 = destino, x1 = origem) -> x0 no '\0'  (usa w9)
+    .globl strcat_cur
 strcat_cur:
 1:  ldrb    w9, [x1], #1
     strb    w9, [x0], #1
@@ -402,6 +354,7 @@ strcat_cur:
     ret
 
 // numcat(x0 = destino, w1 = numero) -> x0 no '\0'  (usa x9-x13)
+    .globl numcat
 numcat:
     sub     sp, sp, #16
     mov     w10, #10
@@ -422,6 +375,7 @@ numcat:
     ret
 
 // save_bmp(x0 = nome)
+    .globl save_bmp
 save_bmp:
     stp     x29, x30, [sp, #-32]!
     mov     x29, sp
@@ -442,6 +396,7 @@ save_bmp:
 
 // sample_elev(w0 = u, w1 = v em 1/64 de celula) -> w0 = elevacao
 // interpolacao bilinear   (usa x0-x7)
+    .globl sample_elev
 sample_elev:
     lsr     w2, w0, #6
     lsr     w3, w1, #6
@@ -473,6 +428,7 @@ sample_elev:
     ret
 
 // add_obj(w0 = u, w1 = v, w2 = e, w3 = tipo, w4 = variante)  (usa x9, x10)
+    .globl add_obj
 add_obj:
     ldr     w9, [x28, #G_NOBJ]
     MOVI32  w10, MAXOBJ
@@ -527,6 +483,7 @@ generate_map:
     str     w0, [x28, #G_RNG]
     str     wzr, [x28, #G_NOBJ]
     str     wzr, [x28, #G_NTOWNS]
+    bl      rail_reset
 
     // relevo: 6 oitavas (128, 64, 32, 16, 8, 4 celulas)
     LA      x0, accum
@@ -1232,6 +1189,12 @@ he_loop:
     mov     w10, #SDL_EVENT_MOUSE_MOTION
     cmp     w9, w10
     b.eq    he_motion
+    mov     w10, #SDL_EVENT_MOUSE_DOWN
+    cmp     w9, w10
+    b.eq    he_mdown
+    mov     w10, #SDL_EVENT_MOUSE_UP
+    cmp     w9, w10
+    b.eq    he_mup
     mov     w10, #SDL_EVENT_MOUSE_WHEEL
     cmp     w9, w10
     b.eq    he_wheel
@@ -1262,6 +1225,7 @@ he_key:
 he_enter:
     mov     w9, #1
     str     w9, [x28, #G_STATE]
+    str     wzr, [x28, #G_TOOL]
     mov     w0, #1
     bl      set_zoom
     str     wzr, [x28, #G_CX]
@@ -1270,8 +1234,14 @@ he_enter:
     b       he_loop
 
 he_key_game:
-    cmp     w20, #41
+    cmp     w20, #41                    // ESC: sai da ferramenta / menu
     b.ne    1f
+    ldr     w9, [x28, #G_TOOL]
+    cbz     w9, 11f
+    bl      tool_cancel
+    str     wzr, [x28, #G_TOOL]
+    b       he_loop
+11: bl      tool_cancel
     str     wzr, [x28, #G_STATE]
     mov     w0, #0
     bl      set_zoom
@@ -1299,20 +1269,87 @@ he_key_game:
 6:  bl      zoom_out
     b       he_loop
 7:  cmp     w20, #69
-    b.ne    he_loop
+    b.ne    8f
     mov     w9, #1
     str     w9, [x28, #G_WANTSHOT]
+    b       he_loop
+8:  sub     w9, w20, #30                // teclas 1..5: ferramentas
+    cmp     w9, #5
+    b.hs    9f
+    add     w0, w9, #1
+    bl      tool_select
+    b       he_loop
+9:  cmp     w20, #44                    // espaco: pausa
+    b.ne    he_loop
+    ldr     w9, [x28, #G_PAUSE]
+    eor     w9, w9, #1
+    str     w9, [x28, #G_PAUSE]
+    b       he_loop
+
+he_mdown:
+    ldr     s0, [x19, #28]
+    str     s0, [x28, #G_DOWNX]
+    ldr     s0, [x19, #32]
+    str     s0, [x28, #G_DOWNY]
+    str     wzr, [x28, #G_DRAGGED]
+    b       he_loop
+
+he_mup:
+    ldr     w9, [x28, #G_STATE]
+    cbz     w9, he_loop
+    ldr     w9, [x28, #G_DRAGGED]
+    cbnz    w9, he_loop                 // foi arrasto, nao clique
+    ldrb    w9, [x19, #24]
+    cmp     w9, #3                      // botao direito: termina/cancela
+    b.ne    1f
+    bl      tool_cancel
+    b       he_loop
+1:  cmp     w9, #1
+    b.ne    he_loop
+    ldr     s0, [x19, #32]
+    fcvtzs  w10, s0
+    cmp     w10, #692                   // clicou na barra de ferramentas?
+    b.lt    2f
+    ldr     s0, [x19, #28]
+    fcvtzs  w10, s0
+    subs    w10, w10, #4
+    b.lt    he_loop
+    mov     w11, #184
+    udiv    w10, w10, w11
+    cmp     w10, #5
+    b.hs    he_loop
+    add     w0, w10, #1
+    bl      tool_select
+    b       he_loop
+2:  bl      tool_click
     b       he_loop
 
 he_motion:
     ldr     s0, [x19, #28]
     str     s0, [x28, #G_MX]
-    ldr     s0, [x19, #32]
-    str     s0, [x28, #G_MY]
+    ldr     s1, [x19, #32]
+    str     s1, [x28, #G_MY]
     ldr     w9, [x28, #G_STATE]
     cbz     w9, he_loop
-    ldr     w9, [x19, #24]
+    ldr     w9, [x19, #24]              // botoes apertados
     cbz     w9, he_loop
+    ldr     s2, [x28, #G_DOWNX]         // arrastou mais de 4 px?
+    fsub    s2, s0, s2
+    fabs    s2, s2
+    ldr     s3, [x28, #G_DOWNY]
+    fsub    s3, s1, s3
+    fabs    s3, s3
+    fadd    s2, s2, s3
+    fmov    s3, #4.0
+    fcmp    s2, s3
+    b.le    1f
+    mov     w10, #1
+    str     w10, [x28, #G_DRAGGED]
+1:  tbnz    w9, #2, 2f                  // botao direito sempre move a camera
+    tbz     w9, #0, he_loop
+    ldr     w10, [x28, #G_TOOL]         // esquerdo so sem ferramenta
+    cbnz    w10, he_loop
+2:
     ldr     w9, [x28, #G_K]
     scvtf   s1, w9
     ldr     s0, [x19, #36]
@@ -1432,6 +1469,7 @@ up_game:
     csel    w11, w9, w11, gt
     str     w10, [x28, #G_CX]
     str     w11, [x28, #G_CY]
+    bl      rail_update
 up_done:
     ldp     x19, x20, [sp, #16]
     ldp     x29, x30, [sp], #32
@@ -1800,6 +1838,8 @@ do_loop:
     ldrsh   w12, [x9, #4]
     ldrb    w13, [x9, #6]
     ldrb    w14, [x9, #7]
+    cmp     w13, #8                     // objeto removido (255)
+    b.hs    do_skip
     sub     w0, w10, w11
     sub     w0, w0, w22
     mul     w0, w0, w21
@@ -1841,6 +1881,7 @@ do_done:
 
 // blit(x0 = sprite, w1 = x, w2 = y base, w3 = escala, w4 = profundidade,
 //      w5 = variante)   folha; usa x0-x17
+    .globl blit
 blit:
     sub     sp, sp, #16
     ldrb    w6, [x0]                    // largura
@@ -1927,6 +1968,7 @@ draw_all:
     bl      draw_terrain
     bl      draw_objects
     bl      calc_hover
+    bl      rail_draw
     ldr     x0, [x28, #G_TEX]
     mov     x1, #0
     LA      x2, fb
@@ -1954,6 +1996,7 @@ draw_all:
     ldp     x29, x30, [sp], #16
     ret
 
+    .globl setcolor
 setcolor:
     mov     w4, w3
     mov     w3, w2
@@ -1962,12 +2005,14 @@ setcolor:
     ldr     x0, [x28, #G_REN]
     b       F(SDL_SetRenderDrawColor)
 
+    .globl setscale
 setscale:
     scvtf   s0, w0
     fmov    s1, s0
     ldr     x0, [x28, #G_REN]
     b       F(SDL_SetRenderScale)
 
+    .globl fillrect
 fillrect:
     stp     x29, x30, [sp, #-32]!
     mov     x29, sp
@@ -1985,6 +2030,7 @@ fillrect:
     ldp     x29, x30, [sp], #32
     ret
 
+    .globl text
 text:
     scvtf   s0, w0
     scvtf   s1, w1
@@ -1992,6 +2038,7 @@ text:
     ldr     x0, [x28, #G_REN]
     b       F(SDL_RenderDebugText)
 
+    .globl text_center
 text_center:
     stp     x29, x30, [sp, #-48]!
     mov     x29, sp
@@ -2131,6 +2178,7 @@ draw_ui:
     mov     w3, #12
     bl      fillrect
     bl      build_status
+    bl      rail_status
     mov     w0, #255
     mov     w1, #255
     mov     w2, #255
@@ -2140,25 +2188,7 @@ draw_ui:
     mov     w1, #2
     LA      x2, txt
     bl      text
-    mov     w0, #0
-    mov     w1, #0
-    mov     w2, #0
-    mov     w3, #180
-    bl      setcolor
-    mov     w0, #0
-    mov     w1, #348
-    mov     w2, #640
-    mov     w3, #12
-    bl      fillrect
-    mov     w0, #200
-    mov     w1, #200
-    mov     w2, #200
-    mov     w3, #255
-    bl      setcolor
-    mov     w0, #4
-    mov     w1, #350
-    LA      x2, s_help
-    bl      text
+    bl      rail_ui
     ldp     x29, x30, [sp], #16
     ret
 
@@ -2365,7 +2395,8 @@ draw_town_labels:
 // =====================================================================
     .data
     .p2align 4
-G:  .space 128
+    .globl G
+G:  .space GSIZE
 
 // 16 direcoes (cos, sin) * 64
     .p2align 2
@@ -2377,11 +2408,13 @@ dirtab:
 
 // paleta dos sprites (indice 0 = transparente; 8, 9 e 15 sao especiais)
     .p2align 2
+    .globl palette
 palette:
     .word 0, 0xFF5B3A1E, 0xFF2E6B2E, 0xFF4E9A45
     .word 0xFF1F5530, 0xFF2F7440, 0xFFE8DDC6, 0xFFBFAF92
     .word 0, 0, 0xFF4A3524, 0xFF9FC4E0
     .word 0xFFA9B6C6, 0xFF7D8999, 0xFF4F5866, 0
+    .word 0xFF3CE04A, 0xFFE8382E, 0xFF2A2A2E, 0
 
 roofc:
     .word 0xFFB5443A, 0xFF8C3029
@@ -2391,6 +2424,7 @@ roofc:
 
 // sprites: largura, altura, ancora, 0, pixels (128 bytes por sprite)
     .p2align 7
+    .globl sprites
 sprites:
 // 0: arvore
     .byte 7, 8, 3, 0
@@ -2444,6 +2478,39 @@ sprites:
     .byte 12,12,12,13,13,13,13
     .byte 12,15,12,13,15,13,13
     .byte 12,12,10,13,13,13,13
+    .p2align 7
+// 4: estacao
+    .byte 11, 8, 5, 0
+    .byte 0,0,0,14,14,14,14,14,0,0,0
+    .byte 0,14,14,14,14,14,14,14,14,14,0
+    .byte 14,14,14,14,14,14,14,14,14,14,14
+    .byte 0,6,6,6,6,6,7,7,7,7,0
+    .byte 0,6,11,6,11,6,7,11,7,11,0
+    .byte 0,6,6,6,6,6,7,7,7,7,0
+    .byte 0,6,11,6,10,6,7,11,7,11,0
+    .byte 0,6,6,6,10,6,7,7,7,7,0
+    .p2align 7
+// 5: sinal verde
+    .byte 3, 8, 1, 0
+    .byte 0,18,0
+    .byte 18,16,18
+    .byte 18,16,18
+    .byte 0,18,0
+    .byte 0,18,0
+    .byte 0,18,0
+    .byte 0,18,0
+    .byte 0,18,0
+    .p2align 7
+// 6: sinal vermelho
+    .byte 3, 8, 1, 0
+    .byte 0,18,0
+    .byte 18,17,18
+    .byte 18,17,18
+    .byte 0,18,0
+    .byte 0,18,0
+    .byte 0,18,0
+    .byte 0,18,0
+    .byte 0,18,0
     .p2align 7
 
 // nomes de terreno (16 bytes cada)
@@ -2594,17 +2661,19 @@ s_shot_game:    .asciz "shot_jogo.bmp"
 s_shot_far:     .asciz "shot_longe.bmp"
 s_shot_near:    .asciz "shot_perto.bmp"
 s_shot_contour: .asciz "shot_curvas.bmp"
+s_shot_train:   .asciz "shot_trem.bmp"
+s_shot_train2:  .asciz "shot_trem_perto.bmp"
 
 // ---- memoria zerada (bss) -------------------------------------------
-BSS(hmap,    262144)
-BSS(moist,   262144)
-BSS(light,   262144)
-BSS(overlay, 262144)
-BSS(elev,    524288)
-BSS(accum,   1048576)
-BSS(objs,    1600000)
-BSS(towns,   1024)
-BSS(txt,     256)
-BSS(noisetab, 65536)
-BSS(zb,      1843200)
-BSS(fb,      3686400)
+GBSS hmap, 262144
+GBSS moist, 262144
+GBSS light, 262144
+GBSS overlay, 262144
+GBSS elev, 524288
+GBSS accum, 1048576
+GBSS objs, 1600000
+GBSS towns, 1024
+GBSS txt, 256
+GBSS noisetab, 65536
+GBSS zb, 1843200
+GBSS fb, 3686400

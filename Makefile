@@ -5,6 +5,7 @@
 
 CC ?= cc
 UNAME := $(shell uname)
+SRCS := trilhos.S ferrovia.S
 
 SDL_LIBS := $(shell pkg-config --libs sdl3 2>/dev/null)
 ifeq ($(SDL_LIBS),)
@@ -19,8 +20,8 @@ ifeq ($(UNAME),Darwin)
   ARCH := -arch arm64
 endif
 
-trilhos: trilhos.S
-	$(CC) $(ARCH) -o $@ trilhos.S $(SDL_LIBS)
+trilhos: $(SRCS) comum.h
+	$(CC) $(ARCH) -o $@ $(SRCS) $(SDL_LIBS)
 
 run: trilhos
 	./trilhos
