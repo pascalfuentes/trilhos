@@ -17,6 +17,8 @@
 //    (natacao, corrida, lenhador, mineracao, forca) e caem devagar sem
 //    treino. A mochila tem limite de peso: acima dele, anda devagar.
 //    I abre a mochila, C abre o personagem (ou os botoes no canto).
+//  - A fome cheia segura 60 s antes de cair, e a vida so sobe com ela
+//    cheia. A stamina maxima cresce com corrida e natacao.
 // =====================================================================
 
 #include "comum.h"
@@ -300,8 +302,10 @@ surv_reset:
     add     x9, x28, #G_SKILL           // skills, tempo sem treino e niveis
     stp     xzr, xzr, [x9]
     stp     xzr, xzr, [x9, #16]
-    stp     xzr, xzr, [x9, #32]
-    bl      calc_weight
+    stp     xzr, xzr, [x9, #32]         // (zera tambem G_STAMAX e G_SATED)
+    mov     w9, #SATTIME                // comeca de barriga cheia
+    str     w9, [x28, #G_SATED]
+    bl      calc_stats
     LA      x9, seen                   // nada foi descoberto ainda
     mov     w10, #(MAPN * MAPN / 16)
 1:  stp     xzr, xzr, [x9], #16
@@ -564,7 +568,7 @@ surv_update:
     sub     w9, w9, #1
     str     w9, [x28, #G_POPT]
 2:  bl      update_ambient
-    bl      calc_weight
+    bl      calc_stats
     ldr     w9, [x28, #G_DEAD]
     cbnz    w9, su_cam
     ldr     w9, [x28, #G_PAUSE]
@@ -844,12 +848,18 @@ su_nomine:
 
     // ---- fome ----
 su_food:
-    ldr     s0, [x28, #G_FOOD]
+    ldr     w9, [x28, #G_SATED]         // cheio: segura um tempo antes de cair
+    cbz     w9, 213f
+    sub     w9, w9, #1
+    str     w9, [x28, #G_SATED]
+    b       214f
+213: ldr    s0, [x28, #G_FOOD]
     FC      s1, F_FOODRATE
     fsub    s0, s0, s1
     fmov    s1, wzr
     fmax    s0, s0, s1
     str     s0, [x28, #G_FOOD]
+214:
 
     // ---- stamina: nadar e correr gastam; parado em terra volta rapido ----
     ldr     w9, [x28, #G_WATER]
@@ -892,7 +902,7 @@ su_food:
 2111: fadd  s0, s0, s1
 212: fmov   s1, wzr
     fmax    s0, s0, s1
-    FC      s1, F_HUNDRED
+    ldr     s1, [x28, #G_STAMAX]        // o maximo cresce com corrida e natacao
     fmin    s0, s0, s1
     str     s0, [x28, #G_STAMINA]
     fcmp    s0, #0.0                    // acabou: so corre de novo com 25
@@ -1023,10 +1033,11 @@ su_food:
     b.gt    191f
     FC      s1, F_DROWN
     fsub    s8, s8, s1
-191: FC     s2, F_FORTY
+191: FC     s2, F_HUNDRED               // vida so sobe com a fome cheia
     ldr     s0, [x28, #G_FOOD]
     fcmp    s0, s2
-    b.le    20f
+    b.lt    20f
+    FC      s2, F_FORTY                 // ... e sem passar frio
     ldr     s0, [x28, #G_WARM]
     fcmp    s0, s2
     b.le    20f
@@ -1158,6 +1169,11 @@ eat:
     fmin    s0, s0, s1
     str     s0, [x28, #G_FOOD]
     LA      x0, p_eat
+    fcmp    s0, s1
+    b.lt    popup
+    mov     w9, #SATTIME                // encheu: fica cheio 60 s (comer de
+    str     w9, [x28, #G_SATED]         // novo cheio renova o tempo)
+    LA      x0, p_full
     b       popup
 
 build_fire:
@@ -2075,20 +2091,55 @@ surv_ui:
     mov     w3, #150
     mov     w4, #40
     bl      bar
-    mov     w0, #62
+    // fome cheia: "cheia" e um filete com o tempo que ainda segura
+    ldr     w19, [x28, #G_SATED]
+    cbz     w19, 2f
+    RGBA    255, 240, 170, 255
+    mov     w0, #196
+    mov     w1, #49
+    LA      x2, s_full
+    bl      text
+    mov     w9, #120
+    mul     w2, w19, w9
+    mov     w9, #SATTIME
+    udiv    w2, w2, w9
+    cbz     w2, 2f
+    mov     w0, #70
+    mov     w1, #57
+    mov     w3, #2
+    bl      fillrect
+2:  mov     w0, #62
     LA      x1, s_warm
     ldr     s0, [x28, #G_WARM]
     mov     w2, #80
     mov     w3, #160
     mov     w4, #240
     bl      bar
-    mov     w0, #75
+    mov     w0, #75                     // stamina: barra = atual / maximo
     LA      x1, s_stamina
     ldr     s0, [x28, #G_STAMINA]
+    ldr     s1, [x28, #G_STAMAX]
+    fdiv    s0, s0, s1
+    FC      s1, F_HUNDRED
+    fmul    s0, s0, s1
     mov     w2, #120
     mov     w3, #225
     mov     w4, #210
     bl      bar
+    LA      x0, lbuf                    // "85/140"
+    ldr     s0, [x28, #G_STAMINA]
+    fcvtzs  w1, s0
+    bl      numcat
+    mov     w9, #47
+    strb    w9, [x0], #1
+    ldr     s0, [x28, #G_STAMAX]
+    fcvtzs  w1, s0
+    bl      numcat
+    RGBA    200, 235, 230, 255
+    mov     w0, #196
+    mov     w1, #75
+    LA      x2, lbuf
+    bl      text
     // ---- na agua? ----
     ldr     w9, [x28, #G_WATER]
     cbz     w9, ui_heavy
@@ -2393,8 +2444,19 @@ ui_ret:
 //  Skills, peso e mochila
 // =====================================================================
 
-// calc_weight: peso carregado e limite (que cresce com a forca)   folha
-calc_weight:
+// calc_stats: peso carregado, limite de peso (cresce com a forca) e
+// stamina maxima (cresce com corrida e natacao)   folha
+calc_stats:
+    ldr     s0, [x28, #G_SKRUN]         // 100 + 0.4 * (corrida + natacao)
+    ldr     s1, [x28, #G_SKSWIM]
+    fadd    s0, s0, s1
+    FC      s1, F_STAMSK
+    FC      s2, F_HUNDRED
+    fmadd   s0, s0, s1, s2
+    str     s0, [x28, #G_STAMAX]
+    ldr     s1, [x28, #G_STAMINA]       // a skill caiu: a stamina nao passa do maximo
+    fmin    s1, s1, s0
+    str     s1, [x28, #G_STAMINA]
     add     x9, x28, #G_WOOD
     LA      x10, itemweight
     mov     w11, #0
@@ -2669,7 +2731,7 @@ drop_item:
     ldr     w10, [x9, x19, lsl #2]
     sub     w10, w10, w20
     str     w10, [x9, x19, lsl #2]
-    bl      calc_weight
+    bl      calc_stats
     LA      x0, p_drop
     bl      popup
 9:  ldp     d8, d9, [sp, #64]
@@ -3405,10 +3467,11 @@ surv_selftest:
 //   1: deixa a corrida sem treino (ela cai), recolhe a pilha e fecha tudo
     .globl surv_selftest_skills
 surv_selftest_skills:
-    stp     x29, x30, [sp, #-48]!
+    stp     x29, x30, [sp, #-64]!
     mov     x29, sp
     stp     x19, x20, [sp, #16]
     stp     x21, x22, [sp, #32]
+    stp     d8, d9, [sp, #48]
     str     wzr, [x28, #G_HOVOK]
     str     wzr, [x28, #G_LMB]
     mov     w9, #1500                   // de dia
@@ -3561,10 +3624,73 @@ sk_stage1:
     LA      x1, s_nl
     bl      strcat_cur
     bl      sk_write
+    // fome: com 80 a vida nao sobe; depois de comer ate encher, sobe
+    mov     w9, #50
+    scvtf   s0, w9
+    str     s0, [x28, #G_HP]
+    mov     w9, #80
+    scvtf   s0, w9
+    str     s0, [x28, #G_FOOD]
+    str     wzr, [x28, #G_SATED]
+    mov     w19, #0
+5:  bl      surv_update
+    add     w19, w19, #1
+    cmp     w19, #120
+    b.lt    5b
+    ldr     s0, [x28, #G_HP]
+    fcvtzs  w20, s0                     // vida sem a fome cheia
+    ldr     w9, [x28, #G_BERRY]
+    add     w9, w9, #2
+    str     w9, [x28, #G_BERRY]
+    bl      eat
+    bl      eat
+    mov     w19, #0
+6:  bl      surv_update
+    add     w19, w19, #1
+    cmp     w19, #300
+    b.lt    6b
+    ldr     s0, [x28, #G_HP]
+    fcvtzs  w21, s0                     // vida com a fome cheia
+    ldr     s0, [x28, #G_FOOD]
+    fcvtzs  w22, s0                     // continua cheia?
+    // stamina maxima com corrida 50 e natacao 50
+    ldr     s8, [x28, #G_SKRUN]
+    ldr     s9, [x28, #G_SKSWIM]
+    mov     w9, #50
+    scvtf   s0, w9
+    str     s0, [x28, #G_SKRUN]
+    str     s0, [x28, #G_SKSWIM]
+    bl      calc_stats
+    ldr     s0, [x28, #G_STAMAX]
+    fcvtzs  w19, s0
+    str     s8, [x28, #G_SKRUN]
+    str     s9, [x28, #G_SKSWIM]
+    bl      calc_stats
+    LA      x0, txt
+    LA      x1, t_21
+    bl      strcat_cur
+    mov     w1, w20
+    bl      numcat
+    LA      x1, t_22
+    bl      strcat_cur
+    mov     w1, w21
+    bl      numcat
+    LA      x1, t_23
+    bl      strcat_cur
+    mov     w1, w22
+    bl      numcat
+    LA      x1, t_24
+    bl      strcat_cur
+    mov     w1, w19
+    bl      numcat
+    LA      x1, s_nl
+    bl      strcat_cur
+    bl      sk_write
 sk_ret:
+    ldp     d8, d9, [sp, #48]
     ldp     x21, x22, [sp, #32]
     ldp     x19, x20, [sp, #16]
-    ldp     x29, x30, [sp], #48
+    ldp     x29, x30, [sp], #64
     ret
 
 // sk_write(x0 = fim do texto em txt): imprime txt
@@ -3771,6 +3897,7 @@ fconsts:
     .float 1.05             // F_P105
     .float 0.01             // F_INV100
     .float 0.1              // F_TENTH
+    .float 0.4              // F_STAMSK (stamina max: +0.4 por ponto de corrida e de natacao)
 
 // velocidade em cada nivel de agua: terra, raso, fundo, mar aberto
 waterspeed:
@@ -3944,6 +4071,12 @@ t_17:           .asciz " | nado/corrida/lenha/minerio/forca="
 t_18:           .asciz "skills: corrida sem treino "
 t_19:           .asciz " -> "
 t_20:           .asciz " | recolheu pedras="
+t_21:           .asciz "fome: vida com fome 80 = 50 -> "
+t_22:           .asciz " | depois de encher -> "
+t_23:           .asciz " fome="
+t_24:           .asciz " | stamina max (corrida 50, natacao 50) = "
+s_full:         .asciz "cheia"
+p_full:         .asciz "Cheio! A vida vai subir"
 t_1:            .asciz "sobrevivencia: madeira="
 t_2:            .asciz " pedra="
 t_3:            .asciz " frutas="

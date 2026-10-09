@@ -151,6 +151,8 @@
 .equ G_SKILL,    324         // 5 skills (float 0..100)
 .equ G_SKIDLE,   344         // 5 x u16: quadros sem treinar cada skill
 .equ G_SKLAST,   356         // 5 x u8: ultimo nivel anunciado
+.equ G_STAMAX,   364         // stamina maxima (float; cresce com corrida e natacao)
+.equ G_SATED,    368         // quadros que a fome ainda fica cheia (vida so sobe assim)
 .equ GSIZE,      384
 
 // skills
@@ -160,6 +162,7 @@
 .equ SK_MINE,    3           // mineracao
 .equ SK_STR,     4           // forca
 .equ NSKILL,     5
+.equ SATTIME,    3600        // fome cheia segura 60 s antes de cair
 .equ SKREST,     1800        // 30 s sem treinar: a skill comeca a cair
 .equ G_SKSWIM,   (G_SKILL + 4 * SK_SWIM)
 .equ G_SKRUN,    (G_SKILL + 4 * SK_RUN)
@@ -257,3 +260,4 @@
 .equ F_P105,     200
 .equ F_INV100,   204
 .equ F_TENTH,    208
+.equ F_STAMSK,   212

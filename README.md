@@ -2,7 +2,7 @@
 
 Um jogo de sobrevivência no estilo Factorio, escrito em **assembly ARM64** (AArch64).
 
-Você aparece sozinho num mundo gerado aleatoriamente: terreno contínuo, mar, praias, florestas, montanhas com neve. Precisa coletar madeira, pedra e frutas, não morrer de fome e passar a noite perto de uma fogueira. Quanto mais você faz uma coisa, melhor fica nela.
+Você aparece sozinho num mundo gerado aleatoriamente: terreno contínuo, mar, praias, florestas, montanhas com neve. Precisa coletar madeira, pedra e frutas, não morrer de fome e passar a noite perto de uma fogueira. Quanto mais você faz uma coisa, melhor fica nela, e para se curar precisa estar de barriga cheia.
 
 ![Dia](screenshots/jogo.png)
 ![Noite](screenshots/noite.png)
@@ -34,14 +34,15 @@ Você aparece sozinho num mundo gerado aleatoriamente: terreno contínuo, mar, p
 
 **Sobrevivência**
 
-- **Fome:** cai sempre (de cheia a vazia em uns 6 minutos). Sem comida, a vida cai.
+- **Fome:** quando enche (comendo), fica **cheia por 60 segundos** antes de começar a cair. Comer de novo com ela cheia renova esse tempo. Depois cai de cheia a vazia em uns 6 minutos. Sem comida, a vida cai.
 - **Calor:** de dia fica tudo bem. À noite esfria; perto de uma fogueira acesa (5 células), esquenta. Sem calor, a vida cai.
-- **Vida:** volta devagar quando você está alimentado e aquecido.
+- **Vida:** só volta com a **fome cheia** (e sem passar frio). O HUD mostra "cheia" e um filete amarelo com o tempo que ainda falta.
 - **Dia e noite:** um dia dura 3 minutos. A noite escurece a tela de verdade; só a fogueira e uma luz fraca em volta do personagem iluminam.
 
 **Stamina e corrida**
 
-- Correr deixa o personagem ~1,7x mais rápido e gasta **stamina** (de cheia a vazia em uns 5 s).
+- Correr deixa o personagem ~1,7x mais rápido e gasta **stamina** (de cheia a vazia em uns 5 s, no começo).
+- A **stamina máxima** começa em 100 e cresce com as skills Corrida e Natação: +0,4 por ponto de cada uma, até 180. O HUD mostra atual/máximo.
 - Nadar também gasta a mesma stamina.
 - Ela volta parado em terra (rápido), andando (devagar) e na água rasa (mais devagar).
 - Se a stamina zerar, só dá para correr de novo quando ela voltar a 25.
@@ -69,8 +70,8 @@ Cada skill vai de nível 0 a 10.
 
 | Skill | Treina | Efeito no máximo |
 |---|---|---|
-| Natação | nadando | nada quase 2x mais rápido e cansa 60% menos |
-| Corrida | correndo | corre 2,2x mais rápido e cansa 50% menos |
+| Natação | nadando | nada quase 2x mais rápido, cansa 60% menos e +40 de stamina máxima |
+| Corrida | correndo | corre 2,2x mais rápido, cansa 50% menos e +40 de stamina máxima |
 | Lenhador | cortando árvores | corta 2x mais rápido |
 | Mineração | quebrando pedras | quebra 2x mais rápido |
 | Força | andando com mais de 60% do limite de peso | carrega até 60 kg |
@@ -126,7 +127,7 @@ sudo apt install libsdl3-dev   # ou compile o SDL3 a partir do código-fonte
 make run
 ```
 
-`./trilhos --shot` roda sem interação: tira screenshots, mede o tempo de cada quadro e faz um teste automático (coleta duas árvores, uma pedra e um arbusto, monta uma fogueira, come e passa a noite; corre, anda carregado, larga e recolhe uma pilha de pedras, vê a skill cair sem treino; depois nada num lago e vai para o mar aberto até o tubarão atacar).
+`./trilhos --shot` roda sem interação: tira screenshots, mede o tempo de cada quadro e faz um teste automático (coleta duas árvores, uma pedra e um arbusto, monta uma fogueira, come e passa a noite; corre, anda carregado, larga e recolhe uma pilha de pedras, vê a skill cair sem treino, confere que a vida só sobe com a fome cheia; depois nada num lago e vai para o mar aberto até o tubarão atacar).
 
 ## Próximos passos
 
