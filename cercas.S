@@ -7,6 +7,10 @@
 //  - Colocar: com cercas na mao, segure o clique e arraste; a fileira
 //    vai seguindo o mouse, celula por celula (sem buracos na diagonal).
 //  - O portao pode ser colocado em cima de uma cerca (troca por ela).
+//  - Toda construcao fica presa na grade (um quadrado = uma celula; o
+//    abrigo ocupa 2 x 2) e so vai em quadrado livre: nada em cima
+//    (arvore, pedra, arbusto, trigo, pilha, bau, fogueira), sem cerca,
+//    sem terra arada e fora da agua.
 //  - Cada cerca tambem e um objeto do mapa (para desenhar, lembrar na
 //    neblina e desmontar segurando o botao esquerdo).
 // =====================================================================
@@ -43,65 +47,183 @@ fence_at:
     ldrb    w0, [x10, w9, uxtw]
 9:  ret
 
-// fence_check(s0 = u, s1 = v) -> x0 = 0 se da para por cerca/portao
-// ali (senao o motivo), s0/s1 = centro da celula, w1 = elevacao
+// occ_build: marca as celulas com alguma coisa em cima (arvore, pedra,
+// arbusto, trigo, pilha, bau, abrigo 2 x 2, fogueira). Cerca e portao
+// ficam na fencegrid, a terra arada no overlay. Chamada ao comecar a
+// colocar, a cada quadro colocando e depois de colocar.
+    .globl occ_build
+occ_build:
+    LA      x9, occgrid
+    mov     w10, #(MAPN * MAPN / 16)
+1:  stp     xzr, xzr, [x9], #16
+    subs    w10, w10, #1
+    b.ne    1b
+    LA      x9, occgrid
+    LA      x10, objs
+    ldr     w11, [x28, #G_NOBJ]
+    mov     w15, #1
+2:  cbz     w11, 5f
+    ldrb    w12, [x10, #6]
+    cmp     w12, #O_LAST                // removido
+    b.hi    4f
+    cmp     w12, #O_FENCE               // cerca e portao: fencegrid
+    b.eq    4f
+    cmp     w12, #O_GATE
+    b.eq    4f
+    ldrh    w13, [x10]
+    lsr     w13, w13, #6
+    ldrh    w14, [x10, #2]
+    lsr     w14, w14, #6
+    add     w13, w13, w14, lsl #9
+    strb    w15, [x9, w13, uxtw]
+    cmp     w12, #O_SHELTER             // abrigo: posicao no canto do meio
+    b.ne    4f                          // do bloco 2 x 2
+    sub     w13, w13, #1
+    strb    w15, [x9, w13, uxtw]
+    sub     w13, w13, #512
+    strb    w15, [x9, w13, uxtw]
+    add     w13, w13, #1
+    strb    w15, [x9, w13, uxtw]
+4:  add     x10, x10, #8
+    sub     w11, w11, #1
+    b       2b
+5:  LA      x10, fires
+    ldr     w11, [x28, #G_NFIRE]
+6:  cbz     w11, 9f
+    ldr     s0, [x10]
+    fcvtzs  w13, s0
+    ldr     s0, [x10, #4]
+    fcvtzs  w14, s0
+    add     w13, w13, w14, lsl #9
+    strb    w15, [x9, w13, uxtw]
+    add     x10, x10, #16
+    sub     w11, w11, #1
+    b       6b
+9:  ret
+
+// build_check(s0 = u, s1 = v): da para colocar a construcao da mao
+// (G_PLACE) no quadrado sob esse ponto?  -> x0 = 0 sim (senao o motivo),
+// s0/s1 = onde vai (meio do quadrado; abrigo: canto do meio do bloco
+// 2 x 2, com o quadrado do mouse em cima a esquerda), w1 = elevacao
+    .globl build_check
     .globl fence_check
+build_check:
 fence_check:
-    stp     x29, x30, [sp, #-48]!
+    stp     x29, x30, [sp, #-96]!
     mov     x29, sp
     stp     x19, x20, [sp, #16]
-    stp     d8, d9, [sp, #32]
-    fcvtzs  w19, s0                     // celula
+    stp     x21, x22, [sp, #32]
+    stp     x23, x24, [sp, #48]
+    stp     x25, x26, [sp, #64]
+    stp     d8, d9, [sp, #80]
+    fcvtzs  w19, s0                     // quadrado
     fcvtzs  w20, s1
+    ldr     w21, [x28, #G_PLACE]
+    sub     w21, w21, #1                // item
+    mov     w22, #1                     // tamanho
+    cmp     w21, #IT_SHELTER
+    cinc    w22, w22, eq
     scvtf   s8, w19
     scvtf   s9, w20
     fmov    s2, #0.5
-    fadd    s8, s8, s2                  // centro
+    cmp     w22, #2
+    b.ne    1f
+    fmov    s2, #1.0
+1:  fadd    s8, s8, s2                  // ponto
     fadd    s9, s9, s2
-    LA      x0, m_far                   // ate 8 celulas
-    ldr     s2, [x28, #G_PU]
+    mov     w24, #0                     // elevacao
+    LA      x0, m_far
+    cmp     w19, #2                     // dentro do mapa
+    b.lt    8f
+    cmp     w20, #2
+    b.lt    8f
+    mov     w9, #508
+    cmp     w19, w9
+    b.gt    8f
+    cmp     w20, w9
+    b.gt    8f
+    ldr     s2, [x28, #G_PU]            // alcance: cerca 8 celulas, o resto 5
     ldr     s3, [x28, #G_PV]
     fsub    s2, s8, s2
     fsub    s3, s9, s3
     fmul    s2, s2, s2
     fmadd   s2, s3, s3, s2
-    mov     w9, #FENCEREACH
-    scvtf   s3, w9
+    mov     w9, #25
+    cmp     w21, #IT_FENCE
+    b.eq    11f
+    cmp     w21, #IT_GATE
+    b.ne    12f
+11: mov     w9, #FENCEREACH
+    LA      x0, m_onplayer              // cerca/portao: nao em cima de voce
+    ldr     s3, [x28, #G_PU]
+    fcvtzs  w10, s3
+    ldr     s3, [x28, #G_PV]
+    fcvtzs  w11, s3
+    cmp     w10, w19
+    b.ne    12f
+    cmp     w11, w20
+    b.eq    8f
+12: scvtf   s3, w9
+    LA      x0, m_far
     fcmp    s2, s3
     b.gt    8f
-    LA      x0, m_onplayer              // nao na celula do personagem
-    ldr     s2, [x28, #G_PU]
-    fcvtzs  w9, s2
-    ldr     s2, [x28, #G_PV]
-    fcvtzs  w10, s2
-    cmp     w9, w19
-    b.ne    1f
-    cmp     w10, w20
-    b.eq    8f
-1:  add     w9, w19, w20, lsl #9        // ja tem cerca? (portao pode trocar)
-    LA      x10, fencegrid
-    ldrb    w9, [x10, w9, uxtw]
-    cbz     w9, 2f
-    LA      x0, m_hasfence
-    cmp     w9, #1
-    b.ne    8f
-    ldr     w10, [x28, #G_PLACE]
-    cmp     w10, #(IT_GATE + 1)
-    b.ne    8f
-2:  fmov    s0, s8                      // agua?
-    fmov    s1, s9
+    cmp     w21, #IT_FIRE               // fogueiras demais?
+    b.ne    13f
+    ldr     w9, [x28, #G_NFIRE]
+    LA      x0, m_toomanyfires
+    cmp     w9, #MAXFIRE
+    b.hs    8f
+    // cada quadrado do bloco
+13: mov     w23, #0                     // (dy << 1) | dx
+2:  and     w9, w23, #1
+    add     w25, w19, w9                // u
+    lsr     w10, w23, #1
+    add     w26, w20, w10               // v
+    scvtf   s0, w25                     // agua? (no meio do quadrado)
+    scvtf   s1, w26
+    fmov    s2, #0.5
+    fadd    s0, s0, s2
+    fadd    s1, s1, s2
     bl      elev_at
-    mov     w1, w0
-    LA      x0, m_water
-    ldr     w9, [x28, #G_FLOOD]
-    cmp     w1, w9
+    cbnz    w23, 21f
+    mov     w24, w0
+21: ldr     w9, [x28, #G_FLOOD]
+    LA      x1, m_water
+    cmp     w0, w9
+    mov     x0, x1
     b.lt    8f
+    add     w9, w25, w26, lsl #9        // celula
+    LA      x10, overlay                // terra arada
+    ldrb    w11, [x10, w9, uxtw]
+    LA      x0, m_farmland
+    cmp     w11, #2
+    b.hs    8f
+    LA      x10, occgrid                // arvore, pedra, bau...
+    ldrb    w11, [x10, w9, uxtw]
+    LA      x0, m_occupied
+    cbnz    w11, 8f
+    LA      x10, fencegrid              // cerca (o portao pode trocar)
+    ldrb    w11, [x10, w9, uxtw]
+    cbz     w11, 3f
+    LA      x0, m_hasfence
+    cmp     w11, #1
+    b.ne    8f
+    cmp     w21, #IT_GATE
+    b.ne    8f
+3:  add     w23, w23, #1
+    mul     w9, w22, w22                // 1 x 1 ou 2 x 2
+    cmp     w23, w9
+    b.lt    2b
     mov     x0, #0
 8:  fmov    s0, s8
     fmov    s1, s9
-    ldp     d8, d9, [sp, #32]
+    mov     w1, w24
+    ldp     d8, d9, [sp, #80]
+    ldp     x25, x26, [sp, #64]
+    ldp     x23, x24, [sp, #48]
+    ldp     x21, x22, [sp, #32]
     ldp     x19, x20, [sp, #16]
-    ldp     x29, x30, [sp], #48
+    ldp     x29, x30, [sp], #96
     ret
 
 // fence_put(w0 = celula u, w1 = celula v, w2 = 1 cerca / 2 portao)
@@ -227,22 +349,22 @@ fence_unset:
     ret
 
 // fence_drag (todo quadro): guarda a celula sob o mouse enquanto coloca
-// cerca/portao; arrastando, mostra quantas cercas a fileira vai gastar
+// qualquer construcao; arrastando cercas, mostra quantas a fileira gasta
     .globl fence_drag
 fence_drag:
     stp     x29, x30, [sp, #-32]!
     mov     x29, sp
     str     x19, [sp, #16]
     ldr     w9, [x28, #G_PLACE]
-    sub     w9, w9, #1
-    cmp     w9, #IT_GATE
-    b.eq    1f
-    cmp     w9, #IT_FENCE
-    b.eq    1f
+    cbnz    w9, 1f
     str     wzr, [x28, #G_FDRAG]
     str     wzr, [x28, #G_FTGOK]
     b       9f
-1:  ldr     w10, [x28, #G_HOVOK]
+1:  cmp     w9, #(IT_FENCE + 1)         // so a cerca arrasta
+    b.eq    11f
+    str     wzr, [x28, #G_FDRAG]
+11: bl      occ_build                   // o que ocupa cada quadrado
+    ldr     w10, [x28, #G_HOVOK]
     str     w10, [x28, #G_FTGOK]
     cbz     w10, 2f
     ldr     w10, [x28, #G_HOVU]
@@ -717,8 +839,61 @@ ovl_cell:
     ldp     x29, x30, [sp], #96
     ret
 
-// fence_overlay: com cerca ou portao na mao, a grade das celulas ate onde
-// alcanca, e a previa: verde = da, vermelho = nao da, branco = ja tem
+// grid_prep (antes do terreno): a grade aparece no chao com uma
+// construcao, enxada ou sementes na mao, ou ligada pela tecla G. O
+// terreno desenha as linhas (seguindo o relevo, atras das arvores).
+    .globl grid_prep
+grid_prep:
+    str     wzr, [x28, #G_GRIDSHOW]
+    str     wzr, [x28, #G_ZONESHOW]
+    ldr     w9, [x28, #G_STATE]
+    cbz     w9, 9f
+    ldr     w9, [x28, #G_SLEEP]
+    cbnz    w9, 9f
+    ldr     w9, [x28, #G_DEAD]
+    cbnz    w9, 9f
+    ldr     w9, [x28, #G_ZONEMODE]      // zonas no chao: pintando ou com o
+    ldr     w11, [x28, #G_PEOPLEOPEN]   // painel de pessoas aberto
+    orr     w11, w11, w9
+    str     w11, [x28, #G_ZONESHOW]
+    mov     w10, #-1                    // alcance (linhas mais fortes)
+    cbnz    w9, 2f                      // pintando zonas: a grade tambem
+    ldr     w9, [x28, #G_PLACE]
+    cbz     w9, 1f
+    sub     w9, w9, #1
+    mov     w10, #25                    // construcoes: 5 celulas
+    cmp     w9, #IT_FENCE
+    b.eq    11f
+    cmp     w9, #IT_GATE
+    b.ne    2f
+11: mov     w10, #FENCEREACH            // cerca e portao: 8
+    b       2f
+1:  ldr     w9, [x28, #G_HAND]
+    cmp     w9, #(IT_HOE + 1)
+    b.lo    12f
+    cmp     w9, #(IT_SEED + 1)
+    b.hi    12f
+    mov     w10, #9                     // enxada e sementes: 3
+    b       2f
+12: ldr     w9, [x28, #G_GRIDON]
+    cbz     w9, 9f
+2:  str     w10, [x28, #G_GRIDREACH]
+    ldr     s0, [x28, #G_PU]
+    fcvtzs  w9, s0
+    str     w9, [x28, #G_GRIDPU]
+    ldr     s0, [x28, #G_PV]
+    fcvtzs  w9, s0
+    str     w9, [x28, #G_GRIDPV]
+    ldr     w9, [x28, #G_K]             // um passo do terreno: linha fina
+    lsl     w9, w9, #10
+    str     w9, [x28, #G_GRIDW]
+    mov     w9, #1
+    str     w9, [x28, #G_GRIDSHOW]
+9:  ret
+
+// fence_overlay: previa do que esta na mao (a grade fica no chao).
+// Construcao: o(s) quadrado(s) que vai ocupar, verde = da, vermelho = nao
+// da, branco = ja tem cerca. Enxada e sementes: o quadrado sob o mouse.
     .globl fence_overlay
 fence_overlay:
     stp     x29, x30, [sp, #-80]!
@@ -727,81 +902,28 @@ fence_overlay:
     stp     x21, x22, [sp, #32]
     stp     x23, x24, [sp, #48]
     stp     x25, x26, [sp, #64]
-    ldr     w9, [x28, #G_PLACE]
-    sub     w26, w9, #1                 // item
-    cmp     w26, #IT_FENCE
-    b.eq    1f
-    cmp     w26, #IT_GATE
-    b.ne    99f
-1:  ldr     w9, [x28, #G_SLEEP]
+    ldr     w9, [x28, #G_SLEEP]
     cbnz    w9, 99f
     ldr     w9, [x28, #G_DEAD]
     cbnz    w9, 99f
-    // ---- grade: cada lado entre duas celulas, se uma delas alcanca ----
-    ldr     s0, [x28, #G_PU]
-    fcvtzs  w19, s0
-    ldr     s0, [x28, #G_PV]
-    fcvtzs  w20, s0
-    mov     w21, #-10                   // dv
-2:  mov     w22, #-10                   // du
-3:  add     w0, w19, w22
-    add     w1, w20, w21
-    cmp     w0, #1
-    b.lt    6f
-    cmp     w1, #1
-    b.lt    6f
-    cmp     w0, #510
-    b.gt    6f
-    cmp     w1, #510
-    b.gt    6f
-    // lado em u (entre (du, dv-1) e (du, dv))
-    mov     w0, w22
-    mov     w1, w21
-    bl      ovl_inrange
-    mov     w23, w0
-    mov     w0, w22
-    sub     w1, w21, #1
-    bl      ovl_inrange
-    orr     w0, w0, w23
-    cbz     w0, 4f
-    add     w0, w19, w22
-    add     w1, w20, w21
-    mov     w2, #0
-    MOVI32  w3, 0xFFF0F4FF
-    mov     w4, #0
-    bl      ovl_edge
-    // lado em v (entre (du-1, dv) e (du, dv))
-4:  sub     w0, w22, #1
-    mov     w1, w21
-    bl      ovl_inrange
-    orr     w0, w0, w23
-    cbz     w0, 6f
-    add     w0, w19, w22
-    add     w1, w20, w21
-    mov     w2, #1
-    MOVI32  w3, 0xFFF0F4FF
-    mov     w4, #0
-    bl      ovl_edge
-6:  add     w22, w22, #1
-    cmp     w22, #10
-    b.le    3b
-    add     w21, w21, #1
-    cmp     w21, #10
-    b.le    2b
-    // ---- previa ----
+    ldr     w9, [x28, #G_PLACE]
+    cbz     w9, 50f
+    sub     w26, w9, #1                 // item
     ldr     w9, [x28, #G_FTGOK]
     cbz     w9, 99f
+    cmp     w26, #IT_FENCE
+    b.ne    7f
     ldr     w9, [x28, #G_FDRAG]
     cbz     w9, 7f
-    bl      fence_plan                  // arrastando: a fileira
+    bl      fence_plan                  // arrastando cercas: a fileira
     b       8f
-7:  LA      x9, fplan                   // so a celula sob o mouse
+7:  LA      x9, fplan                   // so o quadrado sob o mouse
     ldr     w10, [x28, #G_FTGU]
     strh    w10, [x9]
     ldr     w10, [x28, #G_FTGV]
     strh    w10, [x9, #2]
     mov     w0, #1
-8:  mov     w19, w0                     // celulas
+8:  mov     w19, w0                     // quadrados
     add     x9, x28, #G_INV
     ldr     w21, [x9, x26, lsl #2]      // itens que sobram
     mov     w20, #0
@@ -825,7 +947,7 @@ fence_overlay:
     fmov    s2, #0.5
     fadd    s0, s0, s2
     fadd    s1, s1, s2
-    bl      fence_check
+    bl      build_check
     cbnz    x0, 13f
     MOVI32  w24, 0xFF40E060             // verde
     sub     w21, w21, #1
@@ -833,8 +955,49 @@ fence_overlay:
     mov     w1, w23
     mov     w2, w24
     bl      ovl_cell
-    add     w20, w20, #1
+    cmp     w26, #IT_SHELTER            // abrigo: bloco 2 x 2
+    b.ne    15f
+    add     w0, w22, #1
+    mov     w1, w23
+    mov     w2, w24
+    bl      ovl_cell
+    mov     w0, w22
+    add     w1, w23, #1
+    mov     w2, w24
+    bl      ovl_cell
+    add     w0, w22, #1
+    add     w1, w23, #1
+    mov     w2, w24
+    bl      ovl_cell
+15: add     w20, w20, #1
     b       10b
+    // ---- enxada e sementes: o quadrado sob o mouse ----
+50: ldr     w9, [x28, #G_HAND]
+    cmp     w9, #(IT_HOE + 1)
+    b.lo    99f
+    cmp     w9, #(IT_SEED + 1)
+    b.hi    99f
+    ldr     w9, [x28, #G_HOVOK]
+    cbz     w9, 99f
+    ldr     w22, [x28, #G_HOVU]
+    lsr     w22, w22, #6
+    ldr     w23, [x28, #G_HOVV]
+    lsr     w23, w23, #6
+    cmp     w22, #2
+    b.lt    99f
+    cmp     w23, #2
+    b.lt    99f
+    cmp     w22, #509
+    b.gt    99f
+    cmp     w23, #509
+    b.gt    99f
+    add     w0, w22, w23, lsl #9
+    bl      farm_tint
+    cbz     w0, 99f
+    mov     w2, w0
+    mov     w0, w22
+    mov     w1, w23
+    bl      ovl_cell
 99: ldp     x25, x26, [sp, #64]
     ldp     x23, x24, [sp, #48]
     ldp     x21, x22, [sp, #32]
@@ -854,6 +1017,8 @@ ovl_inrange:
     .data
 m_onplayer: .asciz "Voce esta ai: saia da celula primeiro"
 m_hasfence: .asciz "Ja tem cerca aqui"
+m_occupied: .asciz "Ocupado: tem algo nesse quadrado"
+m_farmland: .asciz "Terra arada (a enxada desfaz)"
 m_row1:     .asciz "Fileira: "
 m_row2:     .asciz " cercas (voce tem "
 m_row3:     .asciz ")"
@@ -864,3 +1029,4 @@ fmsgbuf:    .space 64
 GBSS fplan, 512                         // fileira: ate 128 celulas (u16 u, u16 v)
 
 GBSS fencegrid, 262144                  // 0 nada, 1 cerca, 2 portao (por celula)
+GBSS occgrid, 262144                    // 1 = tem algo em cima (para construir)

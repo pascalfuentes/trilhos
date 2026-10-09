@@ -236,13 +236,28 @@ gr_bush:
     mov     w9, #6                      // dentro da floresta
 3:  lsr     w10, w21, #22
     cmp     w10, w9
-    b.hs    gr_next
+    b.hs    gr_wheat
     lsr     w0, w21, #4
     and     w0, w0, #63
     lsr     w1, w21, #12
     and     w1, w1, #63
     mov     w2, #O_BUSH
     mov     w3, #3                      // 3 frutas
+    b       gr_place
+gr_wheat:                               // trigo selvagem: campo aberto
+    cmp     w24, #70
+    b.lo    gr_next
+    cmp     w24, #150
+    b.hs    gr_next
+    sub     w10, w10, w9
+    cmp     w10, #5
+    b.hs    gr_next
+    lsr     w0, w21, #4
+    and     w0, w0, #63
+    lsr     w1, w21, #12
+    and     w1, w1, #63
+    mov     w2, #O_WHEAT
+    mov     w3, #1
 gr_place:
     lsl     w9, w22, #6
     add     w0, w0, w9
@@ -320,6 +335,7 @@ surv_reset:
     str     w9, [x28, #G_HOVANIM]
     bl      animals_reset               // sem animais nem flechas
     bl      fences_reset                // sem cercas
+    bl      farm_reset                  // lista das plantas
     LA      x9, chestused               // nenhum bau no mundo
     stp     xzr, xzr, [x9]
     stp     xzr, xzr, [x9, #16]
@@ -390,6 +406,7 @@ sr_found:
     bl      follow_camera
     LA      x0, m_start
     bl      set_msg
+    bl      people_reset                // 3 familias e o bau da vila
     ldp     d10, d11, [sp, #48]
     ldp     d8, d9, [sp, #32]
     ldp     x19, x20, [sp, #16]
@@ -546,6 +563,14 @@ harvest:
     LA      x19, objs
     add     x19, x19, x0, lsl #3
     ldrb    w20, [x19, #6]              // tipo
+    cmp     w20, #O_CROP                // trigo plantado ou selvagem
+    b.eq    46f
+    cmp     w20, #O_WHEAT
+    b.ne    47f
+46: ldr     x0, [sp, #40]
+    bl      crop_harvest
+    b       6f
+47:
     // cerca e portao: desmonta e volta para a mochila
     mov     w21, #IT_FENCE
     cmp     w20, #O_FENCE
@@ -582,7 +607,10 @@ harvest:
     b       6f
     // qual item: pilha largada, pedra, arbusto ou arvore
 0:  sub     w9, w20, #O_LOGS
-    cmp     w20, #O_LOGS
+    cmp     w20, #O_PILE2               // pilhas dos itens novos
+    b.lo    48f
+    sub     w9, w20, #(O_PILE2 - IT_SEED)
+48: cmp     w20, #O_LOGS
     b.hs    1f
     mov     w9, #1
     cmp     w20, #O_ROCK
@@ -657,12 +685,16 @@ inv_add:
     b.ne    1f
     str     w12, [x28, #G_AXEDUR]
 1:  cmp     w0, #IT_PICK
-    b.ne    9f
+    b.ne    2f
     str     w12, [x28, #G_PICKDUR]
+2:  cmp     w0, #IT_HOE
+    b.ne    9f
+    str     w12, [x28, #G_HOEDUR]
 9:  ret
 
 // tool_use(w0 = IT_AXE ou IT_PICK): gasta 1 uso; quando acaba, quebra
 // e a proxima (se tiver) entra nova
+    .globl tool_use
 tool_use:
     stp     x29, x30, [sp, #-16]!
     mov     x29, sp
@@ -679,6 +711,10 @@ tool_use:
     b.eq    1f
     add     x11, x28, #G_PICKDUR
     LA      x13, m_pickbroke
+    cmp     w0, #IT_PICK
+    b.eq    1f
+    add     x11, x28, #G_HOEDUR
+    LA      x13, m_hoebroke
 1:  ldr     w12, [x11]
     subs    w12, w12, #1
     b.gt    2f
@@ -867,7 +903,18 @@ surv_update:
     b.le    95f
     FC      s1, F_HEAVY
     fmul    s0, s0, s1
-95: fmul    s11, s11, s0
+95: ldr     s1, [x28, #G_PU]            // caminho de terra batida: mais rapido
+    fcvtzs  w9, s1
+    ldr     s1, [x28, #G_PV]
+    fcvtzs  w10, s1
+    add     w9, w9, w10, lsl #9
+    LA      x10, overlay
+    ldrb    w9, [x10, w9, uxtw]
+    cmp     w9, #1
+    b.ne    951f
+    fmov    s1, #1.25
+    fmul    s0, s0, s1
+951: fmul   s11, s11, s0
     fmul    s8, s8, s11
     fmul    s9, s9, s11
     mov     w9, #1
@@ -947,6 +994,7 @@ su_after_move:
     str     w9, [x28, #G_HOVOBJ]
     str     w9, [x28, #G_HOVFIRE]
     str     w9, [x28, #G_HOVANIM]
+    str     w9, [x28, #G_HOVPERS]
     ldr     w9, [x28, #G_HOVOK]
     cbz     w9, 11f
     bl      mouse_ui                    // mouse em cima de botao ou janela?
@@ -956,6 +1004,10 @@ su_after_move:
     ldr     w1, [x28, #G_HOVV]
     bl      animal_at
     str     w0, [x28, #G_HOVANIM]
+    ldr     w0, [x28, #G_HOVU]          // uma pessoa?
+    ldr     w1, [x28, #G_HOVV]
+    bl      person_at
+    str     w0, [x28, #G_HOVPERS]
     ldr     w0, [x28, #G_HOVU]
     ldr     w1, [x28, #G_HOVV]
     bl      find_obj_near
@@ -981,13 +1033,31 @@ su_after_move:
     // ---- coleta (segurando o botao esquerdo) ----
 11: ldr     w9, [x28, #G_LMB]
     cbz     w9, su_nomine
-    ldr     w19, [x28, #G_HOVOBJ]
+    ldr     w9, [x28, #G_HAND]          // enxada ou sementes: ara / planta
+    cmp     w9, #(IT_HOE + 1)
+    b.lo    12f
+    cmp     w9, #(IT_SEED + 1)
+    b.hi    12f
+    bl      mouse_ui
+    bl      ui_hit
+    cbnz    w0, 12f
+    bl      farm_act
+    cbnz    w0, su_nomine
+12: ldr     w19, [x28, #G_HOVOBJ]
     tbnz    w19, #31, su_nomine
     LA      x9, objs
     add     x9, x9, x19, lsl #3
     ldrb    w20, [x9, #6]
     cmp     w20, #O_BUSHE
     b.eq    su_nomine
+    cmp     w20, #O_SAPLING             // muda: deixe crescer
+    b.eq    su_nomine
+    cmp     w20, #O_CROP                // trigo verde nao sai: espere
+    b.ne    14f
+    ldrb    w10, [x9, #7]
+    cmp     w10, #CROPRIPE
+    b.lo    su_nomine
+14:
     mov     w0, w19
     bl      obj_dist2
     FC      s1, F_REACH2
@@ -1187,8 +1257,10 @@ su_food:
     // ---- animais e flechas ----
     bl      animals_update
     bl      arrows_update
+    bl      people_update               // a vila (pessoas.S)
     bl      fence_drag                  // fileira de cercas seguindo o mouse
     bl      fish_update                 // boia, mordida
+    bl      crop_update                 // a plantacao cresce
     ldr     w9, [x28, #G_DEAD]          // um animal pode ter matado
     cbnz    w9, su_cam
     // ---- tocha: na mao, acende sozinha quando escurece ----
@@ -1445,7 +1517,11 @@ surv_key:
     LA      x0, m_wokeup
     bl      set_msg
     b       9f
-0:
+0:  str     w0, [sp, #-16]!
+    bl      people_key                  // P: pessoas, Z: zonas
+    mov     w9, w0
+    ldr     w0, [sp], #16
+    cbnz    w9, 9f
     cmp     w0, #8                      // E
     b.ne    1f
     bl      eat_best
@@ -1489,7 +1565,13 @@ surv_key:
 // fecha as janelas); 0 = pode voltar ao menu
     .globl surv_esc
 surv_esc:
-    ldr     w9, [x28, #G_PLACE]
+    stp     x29, x30, [sp, #-16]!
+    mov     x29, sp
+    bl      people_esc                  // zonas, painel, selecao
+    ldp     x29, x30, [sp], #16
+    cbz     w0, 0f
+    ret
+0:  ldr     w9, [x28, #G_PLACE]
     cbz     w9, 1f
     str     wzr, [x28, #G_PLACE]
     mov     w0, #1
@@ -1520,7 +1602,7 @@ eat_best:
     ldr     w12, [x10, x0, lsl #2]
     cbnz    w12, eat_item
     add     x11, x11, #1
-    cmp     x11, #6
+    cmp     x11, #7
     b.lt    1b
     LA      x0, m_noberry
     b       set_msg
@@ -1607,6 +1689,12 @@ fire_key:
 // start_place(w0 = item): proximo clique no mapa coloca a construcao.
 // Fecha fabricar/bau (ficam no meio da tela, onde se clica para colocar).
 start_place:
+    stp     x29, x30, [sp, #-16]!
+    mov     x29, sp
+    str     w0, [sp, #-16]!
+    bl      occ_build                   // o que ocupa cada quadrado
+    ldr     w0, [sp], #16
+    ldp     x29, x30, [sp], #16
     add     w9, w0, #1
     str     w9, [x28, #G_PLACE]
     str     wzr, [x28, #G_LMB]
@@ -1646,6 +1734,7 @@ can_craft:
 
 // craft(w0 = receita) -> w0 = 1 fabricou / 0 faltou algo (com mensagem).
 // Construcoes ja entram no modo de colocar.
+    .globl craft
 craft:
     stp     x29, x30, [sp, #-48]!
     mov     x29, sp
@@ -1778,64 +1867,22 @@ cost_str:
 // place_check -> x0 = 0 se pode colocar ali (senao o motivo),
 // s0/s1 = ponto (celulas), w1 = elevacao
 place_check:
-    stp     x29, x30, [sp, #-32]!
+    stp     x29, x30, [sp, #-16]!
     mov     x29, sp
-    stp     d8, d9, [sp, #16]
-    fmov    s8, wzr
-    fmov    s9, wzr
+    fmov    s0, wzr
+    fmov    s1, wzr
     LA      x0, m_nopoint
     ldr     w9, [x28, #G_HOVOK]
     cbz     w9, 9f
     ldr     w9, [x28, #G_HOVU]
-    scvtf   s8, w9
+    scvtf   s0, w9
     ldr     w9, [x28, #G_HOVV]
-    scvtf   s9, w9
+    scvtf   s1, w9
     FC      s2, F_INV64
-    fmul    s8, s8, s2
-    fmul    s9, s9, s2
-    ldr     w9, [x28, #G_PLACE]         // cerca e portao: regras proprias
-    sub     w9, w9, #1
-    cmp     w9, #IT_FENCE
-    b.eq    51f
-    cmp     w9, #IT_GATE
-    b.ne    52f
-51: fmov    s0, s8
-    fmov    s1, s9
-    bl      fence_check
-    fmov    s8, s0
-    fmov    s9, s1
-    b       9f
-52: ldr     s2, [x28, #G_PU]            // ate 5 celulas do personagem
-    ldr     s3, [x28, #G_PV]
-    fsub    s2, s8, s2
-    fsub    s3, s9, s3
-    fmul    s2, s2, s2
-    fmadd   s2, s3, s3, s2
-    FC      s3, F_FIRE2
-    LA      x0, m_far
-    fcmp    s2, s3
-    b.gt    9f
-    fmov    s0, s8
-    fmov    s1, s9
-    bl      elev_at
-    mov     w1, w0
-    LA      x0, m_water
-    ldr     w9, [x28, #G_FLOOD]         // agua (ou enchente)
-    cmp     w1, w9
-    b.lt    9f
-    ldr     w9, [x28, #G_PLACE]
-    sub     w9, w9, #1
-    cmp     w9, #IT_FIRE
-    b.ne    1f
-    ldr     w10, [x28, #G_NFIRE]
-    LA      x0, m_toomanyfires
-    cmp     w10, #MAXFIRE
-    b.hs    9f
-1:  mov     x0, #0
-9:  fmov    s0, s8
-    fmov    s1, s9
-    ldp     d8, d9, [sp, #16]
-    ldp     x29, x30, [sp], #32
+    fmul    s0, s0, s2
+    fmul    s1, s1, s2
+    bl      build_check                 // cercas.S: quadrado livre, alcance...
+9:  ldp     x29, x30, [sp], #16
     ret
 
 // place_try: clique no mapa com uma construcao na mao
@@ -1968,6 +2015,7 @@ place_try:
     cbnz    w10, 81f
     str     wzr, [x28, #G_PLACE]
 81: bl      calc_stats
+    bl      occ_build                   // o quadrado agora esta ocupado
     mov     x0, x21
     bl      set_msg
 9:  ldp     d8, d9, [sp, #48]
@@ -1992,7 +2040,7 @@ in_shelter:
     b.ne    2f
     mov     w0, w20
     bl      obj_dist2
-    fmov    s1, #4.0                    // 2 celulas (a cabana e grande)
+    fmov    s1, #2.0                    // dentro do bloco 2 x 2 da cabana
     fcmp    s0, s1
     b.gt    2f
     mov     w0, #1
@@ -2006,7 +2054,7 @@ in_shelter:
     ret
 
 // try_sleep(w0 = abrigo): deita na cabana (so a partir das 18h) e dorme
-// ate amanhecer; a noite passa depressa (veja update em trilhos.S)
+// ate amanhecer; a noite passa depressa (veja update em ermo.S)
 try_sleep:
     stp     x29, x30, [sp, #-32]!
     mov     x29, sp
@@ -2135,13 +2183,25 @@ surv_mouse:
     cmp     w19, #1                     // soltou o esquerdo: para de coletar
     b.ne    sm_ret
     str     wzr, [x28, #G_LMB]
+    str     wzr, [x28, #G_FARMLAST]     // enxada/sementes: de novo em qualquer celula
+    str     wzr, [x28, #G_FARMMODE]
     bl      fence_commit                // soltou uma fileira de cercas
+    bl      zone_release                // soltou o retangulo da zona
     b       sm_ret
     // apertou: primeiro os botoes e janelas da interface
 1:  bl      mouse_ui
     bl      ui_hit
     mov     w21, w1                     // quadrado / receita
-    cmp     w0, #1                      // botao Mochila
+    cmp     w0, #9                      // painel de pessoas / paleta de zonas
+    b.lo    291f
+    cmp     w0, #10
+    b.hi    291f
+    mov     w2, w0
+    mov     w0, w19
+    mov     w1, w21
+    bl      people_ui_click
+    b       sm_ret
+291: cmp    w0, #1                      // botao Mochila
     b.ne    2f
     ldr     w9, [x28, #G_INVOPEN]
     eor     w9, w9, #1
@@ -2252,6 +2312,9 @@ surv_mouse:
     bl      equip
     b       sm_ret
 62: cbnz    w0, sm_ret                  // janela do personagem: nada
+    mov     w0, w19                     // pessoas: selecionar, mandar; zonas
+    bl      people_world_click
+    cbnz    w0, sm_ret
     // ---- no mundo ----
     ldr     w9, [x28, #G_PLACE]         // colocando uma construcao?
     cbz     w9, 7f
@@ -2400,6 +2463,8 @@ surv_draw:
     bl      arrows_draw
     mov     w0, w21
     bl      fish_draw
+    mov     w0, w21
+    bl      people_draw                 // a vila
     ldr     w9, [x28, #G_SLEEP]         // dormindo: esta dentro da cabana
     cbnz    w9, 50f
     // personagem
@@ -3342,7 +3407,13 @@ ui_tip:
     bl      place_tip
     b       ui_pop
 ui_tip2:
-    ldr     w1, [x28, #G_HOVANIM]       // um animal sob o mouse
+    ldr     w1, [x28, #G_HOVPERS]       // uma pessoa sob o mouse
+    tbnz    w1, #31, 291f
+    LA      x0, lbuf
+    bl      person_desc
+    mov     w22, #1
+    b       1f
+291: ldr    w1, [x28, #G_HOVANIM]       // um animal sob o mouse
     tbnz    w1, #31, ui_tip3
     LA      x0, lbuf
     bl      animal_desc
@@ -3375,6 +3446,14 @@ ui_tip3:
     LA      x1, objnames
     add     x1, x1, x10, lsl #5
     bl      strcat_cur
+    LA      x9, objs                    // trigo plantado: quanto cresceu
+    add     x9, x9, x21, lsl #3
+    ldrb    w10, [x9, #6]
+    cmp     w10, #O_CROP
+    b.ne    13f
+    mov     w1, w21
+    bl      crop_tipcat
+13:
     LA      x9, objs
     add     x9, x9, x21, lsl #3
     ldrb    w10, [x9, #6]
@@ -3805,6 +3884,12 @@ mouse_ui:
 ui_hit:
     stp     x29, x30, [sp, #-16]!
     mov     x29, sp
+    mov     w4, w0
+    mov     w5, w1
+    bl      people_ui_hit               // painel de pessoas / paleta de zonas
+    cbnz    w0, 9f
+    mov     w0, w4
+    mov     w1, w5
     mov     w2, w0
     mov     w3, w1
     mov     w1, #-1
@@ -3967,6 +4052,9 @@ drop_item:
     fmul    s0, s9, s2
     fcvtzs  w23, s0
     add     w24, w19, #O_LOGS
+    add     w9, w19, #(O_PILE2 - IT_SEED)
+    cmp     w19, #IT_SEED
+    csel    w24, w9, w24, hs
     ldr     w9, [x28, #G_NOBJ]
     LA      x10, objs
     mov     w11, #0
@@ -4045,6 +4133,9 @@ pile_at:
     fmul    s0, s9, s2
     fcvtzs  w23, s0
     add     w24, w19, #O_LOGS
+    add     w9, w19, #(O_PILE2 - IT_SEED)
+    cmp     w19, #IT_SEED
+    csel    w24, w9, w24, hs
     ldr     w9, [x28, #G_NOBJ]
     LA      x10, objs
     mov     w11, #0
@@ -4128,6 +4219,7 @@ ui_frame:
     ret
 
 // ui_panel(w0 x, w1 y, w2 larg., w3 alt., x4 titulo): janela com titulo
+    .globl ui_panel
 ui_panel:
     stp     x29, x30, [sp, #-64]!
     mov     x29, sp
@@ -4295,7 +4387,8 @@ ui_windows:
     ldr     w9, [x28, #G_INVOPEN]
     cbz     w9, 2f
     bl      draw_inv
-2:  ldp     x29, x30, [sp], #16
+2:  bl      people_ui_draw              // painel, zonas, nome do selecionado
+    ldp     x29, x30, [sp], #16
     ret
 
 // icon_fit(x0 sprite, w1 y, w2 x, w3 lado do quadrado): desenha o icone
@@ -4426,6 +4519,9 @@ draw_grid:
     b.eq    4f
     ldr     w10, [x28, #G_PICKDUR]
     cmp     w9, #IT_PICK
+    b.eq    4f
+    ldr     w10, [x28, #G_HOEDUR]
+    cmp     w9, #IT_HOE
     b.eq    4f
     cmp     w9, #IT_TORCH
     b.ne    8f
@@ -4862,10 +4958,15 @@ draw_hotbar:
     LA      x2, hbkeys
     add     x2, x2, x19, lsl #1
     bl      text
-    cmp     w21, #IT_BOW                // arco: quantas flechas
+    mov     w9, #IT_ARROW               // arco: quantas flechas
+    cmp     w21, #IT_BOW
+    b.eq    51f
+    mov     w9, #IT_SEED                // sementes: quantas
+    cmp     w21, #IT_SEED
     b.ne    6f
+51: add     x10, x28, #G_INV
+    ldr     w1, [x10, x9, lsl #2]
     LA      x0, lbuf
-    ldr     w1, [x28, #(G_INV + 4 * IT_ARROW)]
     bl      numcat
     LA      x0, lbuf
     bl      mystrlen
@@ -4900,7 +5001,7 @@ draw_char:
     mov     w19, #0
 1:  cmp     w19, #NSKILL
     b.ge    5f
-    mov     w9, #26
+    mov     w9, #23
     mov     w10, #(CHR_Y + 22)
     madd    w20, w19, w9, w10           // y da linha
     add     x9, x28, #G_SKILL
@@ -5089,7 +5190,7 @@ tooltip_box:
     ret
 
 // =====================================================================
-//  Teste automatico (./trilhos --shot): coleta, fogueira e noite
+//  Teste automatico (./ermo --shot): coleta, fogueira e noite
 // =====================================================================
 
 // nearest_obj(w0 = tipo a, w1 = tipo b) -> w0 objeto mais perto (-1)
@@ -5209,12 +5310,11 @@ surv_selftest:
     str     w9, [x28, #G_HOVOK]
     mov     w0, #9                      // F: fabrica a fogueira...
     bl      surv_key
-    mov     w0, #1                      // ... e clica no mapa para montar
-    mov     w1, #1
-    bl      surv_mouse
-    mov     w0, #1
-    mov     w1, #0
-    bl      surv_mouse
+    ldr     s0, [x28, #G_PU]            // ... e clica num quadrado livre ao lado
+    fmov    s1, #1.0
+    fadd    s0, s0, s1
+    ldr     s1, [x28, #G_PV]
+    bl      ct_click
     mov     w0, #8                      // E
     bl      surv_key
     // vai para a noite e deixa o tempo passar
@@ -5506,6 +5606,7 @@ sk_ret:
     ret
 
 // sk_write(x0 = fim do texto em txt): imprime txt
+    .globl sk_write
 sk_write:
     LA      x9, txt
     sub     x2, x0, x9
@@ -5513,11 +5614,68 @@ sk_write:
     mov     w0, #1
     b       F(write)
 
-// ct_click(s0 = u, s1 = v): clique esquerdo nesse ponto do mapa (teste)
+// ts_free(s0 = u, s1 = v) -> s0/s1 = meio do quadrado livre mais perto
+// (onde a construcao da mao cabe; ate 4 celulas em volta)   (teste)
+ts_free:
+    stp     x29, x30, [sp, #-80]!
+    mov     x29, sp
+    stp     x19, x20, [sp, #16]
+    stp     x21, x22, [sp, #32]
+    stp     d8, d9, [sp, #48]
+    str     x23, [sp, #64]
+    fmov    s8, s0
+    fmov    s9, s1
+    fcvtzs  w19, s0
+    fcvtzs  w20, s1
+    mov     w21, #0                     // raio
+1:  neg     w22, w21                    // dv
+2:  neg     w23, w21                    // du
+3:  cmp     w23, #0                     // so a borda do quadrado de raio r
+    cneg    w9, w23, lt
+    cmp     w22, #0
+    cneg    w10, w22, lt
+    cmp     w9, w10
+    csel    w9, w9, w10, gt
+    cmp     w9, w21
+    b.ne    4f
+    add     w9, w19, w23
+    add     w10, w20, w22
+    scvtf   s0, w9
+    scvtf   s1, w10
+    fmov    s2, #0.5
+    fadd    s0, s0, s2
+    fadd    s1, s1, s2
+    stp     s0, s1, [sp, #-16]!
+    bl      build_check
+    ldp     s0, s1, [sp], #16
+    cbz     x0, 9f
+4:  add     w23, w23, #1
+    cmp     w23, w21
+    b.le    3b
+    add     w22, w22, #1
+    cmp     w22, w21
+    b.le    2b
+    add     w21, w21, #1
+    cmp     w21, #4
+    b.le    1b
+    fmov    s0, s8                      // nao achou: o ponto pedido
+    fmov    s1, s9
+9:  ldr     x23, [sp, #64]
+    ldp     d8, d9, [sp, #48]
+    ldp     x21, x22, [sp, #32]
+    ldp     x19, x20, [sp, #16]
+    ldp     x29, x30, [sp], #80
+    ret
+
+// ct_click(s0 = u, s1 = v): clique esquerdo nesse ponto do mapa (teste);
+// com uma construcao na mao, no quadrado livre mais perto
 ct_click:
     stp     x29, x30, [sp, #-16]!
     mov     x29, sp
-    FC      s2, F_64
+    ldr     w9, [x28, #G_PLACE]
+    cbz     w9, 1f
+    bl      ts_free
+1:    FC      s2, F_64
     fmul    s0, s0, s2
     fcvtzs  w9, s0
     str     w9, [x28, #G_HOVU]
@@ -6341,7 +6499,7 @@ bt_hov:
     str     w10, [x28, #G_HOVOK]
     ret
 
-// bt_land(w0 = u, w1 = v) -> w0 = 1 se a celula e terra firme
+// bt_land(w0 = u, w1 = v) -> w0 = 1 se a celula e terra firme e livre
 bt_land:
     stp     x29, x30, [sp, #-16]!
     mov     x29, sp
@@ -6350,11 +6508,18 @@ bt_land:
     fmov    s2, #0.5
     fadd    s0, s0, s2
     fadd    s1, s1, s2
+    stp     w0, w1, [sp, #-16]!
     bl      elev_at
+    ldp     w10, w11, [sp], #16
     ldr     w9, [x28, #G_FLOOD]
     add     w9, w9, #20
     cmp     w0, w9
     cset    w0, ge
+    add     w10, w10, w11, lsl #9       // e sem nada em cima (arvore, pedra...)
+    LA      x9, occgrid
+    ldrb    w9, [x9, w10, uxtw]
+    cmp     w9, #0
+    csel    w0, w0, wzr, eq
     ldp     x29, x30, [sp], #16
     ret
 
@@ -6383,10 +6548,11 @@ surv_selftest_build:
     cmp     w19, #2
     b.eq    bt_stage2
     b.gt    bt_stage3
-    // ---- etapa 0: procura um quadrado de terra (anel de raio 3) ----
+    // ---- etapa 0: procura um quadrado de terra livre (anel de raio 3) ----
     mov     w9, #6000
     str     w9, [x28, #G_TIME]
     bl      animals_reset
+    bl      occ_build
     LA      x9, fires
     ldr     s0, [x9]
     fcvtzs  w20, s0                     // centro inicial: a fogueira
@@ -6973,58 +7139,68 @@ dirtab:
     .hword 0, -64,   24, -59,  45, -45,  59, -24
 
 // quadros para coletar 1 unidade, por tipo de objeto: arvore, pinheiro,
-// pedra, arbusto, pilhas (12..34), bau (20), abrigo (21), cerca, portao
+// pedra, arbusto, pilhas (12..35), bau (20), abrigo (21), cerca, portao,
+// trigo selvagem (38), trigo plantado (39), pilhas 40..42
 minetime:
     .byte 45, 45, 70, 25, 0, 0, 0, 0, 0, 0, 0, 0, 6, 6, 6, 6
     .byte 6, 6, 6, 6, 40, 40, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6
-    .byte 6, 6, 6, 0, 20, 20, 0, 0
+    .byte 6, 6, 6, 6, 20, 20, 15, 12, 6, 6, 6, 0
 
 // sprite de cada tipo de objeto (as pilhas usam o icone do item)
     .globl objsprite
 objsprite:
     .byte 0, 1, 2, 3, 4, 0, 0, 0, 0, 0, 0, 0, 12, 13, 14, 15
     .byte 16, 17, 18, 19, 20, 21, 21, 23, 24, 25, 26, 27, 28, 29, 48, 49
-    .byte 42, 43, 44, 0, 45, 49
+    .byte 42, 43, 44, SPR_HOE, 45, 49, SPR_WILD, SPR_CROP, SPR_SEED, SPR_WHEAT, SPR_BREAD
+    .byte SPR_SAPLING
 
 // peso de cada item (decimos de kg)
     .p2align 1
 itemweight:
     .hword 15, 20, 1, 20, 25, 5, 3, 10, 100, 120, 200, 15, 1, 5, 4, 10, 30, 20, 10, 30, 10, 5, 4
+    .hword 15, 1, 3, 4
 
 // construcoes (vao para o mapa e nao se largam)
 itembuild:
-    .byte 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0
+    .byte 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0
 
 // texto que sobe ao coletar cada item
     .p2align 3
 popitem:
     .quad p_wood, p_stone, p_berry, p_axe, p_pick, p_torch, p_cooked, p_basket
     .quad p_wood, p_wood, p_wood, p_bow, p_arrow, p_meat, p_cmeat, p_hide
-    .quad p_coat, p_lbag, p_wood, p_wood, p_rod, p_fish, p_cfish
+    .quad p_coat, p_lbag, p_wood, p_wood, p_rod, p_fish, p_cfish, p_hoe
+    .quad p_seed, p_wheat, p_bread
 
 // sprite de cada item (icone na mochila e na pilha)
 itemicon:
     .byte 12, 13, 14, 15, 16, 17, 18, 19, SPR_FIRE, 20, 21, 23, 24, 25, 26, 27, 28, 29, 48, 49, 42, 43, 44
+    .byte SPR_HOE, SPR_SEED, SPR_WHEAT, SPR_BREAD
 
-// barra "na mao": teclas 1-5
+// barra "na mao": teclas 1-7
 hotbar:
-    .byte IT_AXE, IT_PICK, IT_BOW, IT_TORCH, IT_ROD
+    .byte IT_AXE, IT_PICK, IT_BOW, IT_TORCH, IT_ROD, IT_HOE, IT_SEED
 hbkeys:
-    .asciz "1", "2", "3", "4", "5"
+    .asciz "1", "2", "3", "4", "5", "6", "7"
 
 // comida: quanto enche (0 = nao se come) e a ordem do E
     .p2align 2
+    .globl eatvalue, eatorder
 eatvalue:
     .float 0, 0, 15, 0, 0, 0, 50, 0, 0, 0, 0, 0, 0, 10, 60, 0, 0, 0, 0, 0, 0, 8, 40
+    .float 0, 0, 0, 45
 eatorder:
-    .byte IT_CMEAT, IT_COOKED, IT_CFISH, IT_BERRY, IT_MEAT, IT_FISH
+    .byte IT_CMEAT, IT_BREAD, IT_COOKED, IT_CFISH, IT_BERRY, IT_MEAT, IT_FISH
     .p2align 3
 eatpop:
     .quad 0, 0, p_eat, 0, 0, 0, p_eatc, 0, 0, 0, 0, 0, 0, p_eatraw, p_eatm, 0, 0, 0, 0, 0, 0, p_eatfish, p_eatcf
+    .quad 0, 0, 0, p_eatbread
 handpop:
     .quad 0, 0, 0, p_haxe, p_hpick, 0, 0, 0, 0, 0, 0, p_hbow, 0, 0, 0, 0, 0, 0, 0, 0, p_hrod, 0, 0
+    .quad p_hhoe, p_hseed, 0, 0
 nohave:
     .quad 0, 0, 0, m_noaxe, m_nopick, 0, 0, 0, 0, 0, 0, m_nobow, 0, 0, 0, 0, 0, 0, 0, 0, m_norod, 0, 0
+    .quad m_nohoe, m_noseed, 0, 0
 
 // receitas (16 bytes): resultado, quantos, precisa de fogo, 0, e ate 4
 // pares (item, quantos)
@@ -7047,6 +7223,8 @@ recipes:
     .byte IT_GATE, 1, 0, 0, IT_WOOD, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
     .byte IT_ROD, 1, 0, 0, IT_WOOD, 3, IT_BERRY, 2, 0, 0, 0, 0, 0, 0, 0, 0
     .byte IT_CFISH, 1, 1, 0, IT_FISH, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    .byte IT_HOE, 1, 0, 0, IT_WOOD, 2, IT_STONE, 1, 0, 0, 0, 0, 0, 0, 0, 0
+    .byte IT_BREAD, 1, 1, 0, IT_WHEAT, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 
 // o que cada receita faz (2 linhas de 32 bytes)
     .p2align 5
@@ -7119,6 +7297,14 @@ recdesc:
     .p2align 5
     .asciz "Perto de uma fogueira."
     .p2align 5
+    .asciz "Na mao: segure e passe"
+    .p2align 5
+    .asciz "na grama: ara. [6]"
+    .p2align 5
+    .asciz "Enche 45 de fome."
+    .p2align 5
+    .asciz "Perto de uma fogueira."
+    .p2align 5
 
 // nomes curtos para o custo (16 bytes)
     .p2align 4
@@ -7168,6 +7354,14 @@ costnames:
     .asciz "peixe"
     .p2align 4
     .asciz "peixe ass."
+    .p2align 4
+    .asciz "enxada"
+    .p2align 4
+    .asciz "sementes"
+    .p2align 4
+    .asciz "trigo"
+    .p2align 4
+    .asciz "pao"
     .p2align 4
 
 // nomes (16 bytes cada)
@@ -7219,6 +7413,14 @@ itemnames:
     .p2align 4
     .asciz "Peixe assado"
     .p2align 4
+    .asciz "Enxada"
+    .p2align 4
+    .asciz "Sementes"
+    .p2align 4
+    .asciz "Trigo"
+    .p2align 4
+    .asciz "Pao"
+    .p2align 4
 skillnames:
     .asciz "Natacao"
     .p2align 4
@@ -7232,10 +7434,12 @@ skillnames:
     .p2align 4
     .asciz "Pesca"
     .p2align 4
+    .asciz "Agricultura"
+    .p2align 4
 
 // cor da barra de cada skill (0x00RRGGBB)
 skcolors:
-    .word 0x0050B4F0, 0x00F0D050, 0x00B47A44, 0x00A8B0BC, 0x00E05A46, 0x0040D0C0
+    .word 0x0050B4F0, 0x00F0D050, 0x00B47A44, 0x00A8B0BC, 0x00E05A46, 0x0040D0C0, 0x00D8B040
 
 // nomes dos objetos (32 bytes cada)
     .p2align 5
@@ -7310,11 +7514,23 @@ objnames:
     .p2align 5
     .asciz "Peixe assado"
     .p2align 5
-    .asciz ""
+    .asciz "Enxada largada"
     .p2align 5
     .asciz "Cerca"
     .p2align 5
     .asciz "Portao (so bichos nao passam)"
+    .p2align 5
+    .asciz "Trigo selvagem"
+    .p2align 5
+    .asciz "Trigo plantado"
+    .p2align 5
+    .asciz "Sementes largadas"
+    .p2align 5
+    .asciz "Trigo largado"
+    .p2align 5
+    .asciz "Pao largado"
+    .p2align 5
+    .asciz "Muda (vira arvore)"
     .p2align 5
 
 m_start:        .asciz "Colete madeira e pedra. Faca uma fogueira (F) antes da noite!"
@@ -7322,6 +7538,7 @@ m_dusk:         .asciz "Esta escurecendo... prepare uma fogueira (F)"
 m_dead:         .asciz "Voce nao sobreviveu"
 m_noberry:      .asciz "Sem frutas. Colete nos arbustos"
 m_needres:      .asciz "Fogueira precisa de 5 madeiras e 3 pedras"
+    .globl m_toomanyfires
 m_toomanyfires: .asciz "Fogueiras demais"
     .globl m_water, m_far
 m_water:        .asciz "Nao da para colocar na agua"
@@ -7359,7 +7576,7 @@ s_paren2:       .asciz ")"
 s_far:          .asciz " - longe"
 s_fire:         .asciz "Fogueira: "
 s_firehint:     .asciz " s (botao direito: +lenha)"
-s_hint:         .asciz "WASD: andar  Shift: correr  E: comer  F: fogo  Tab: fabricar  I/C: janelas"
+s_hint:         .asciz "WASD/Shift andar  E comer  F fogo  Tab fabricar  I/C/P janelas  Z zonas"
 s_dead1:        .asciz "FIM DE JOGO"
 s_dead2:        .asciz "Voce sobreviveu "
 s_dead3:        .asciz " noite(s)"
@@ -7435,6 +7652,16 @@ p_cfish:        .asciz "+1 peixe assado"
 p_eatfish:      .asciz "Peixe cru... +8"
 p_eatcf:        .asciz "Peixe assado! +40"
 p_hrod:         .asciz "Vara na mao"
+p_hoe:          .asciz "+1 enxada"
+p_seed:         .asciz "+1 semente"
+p_wheat:        .asciz "+1 trigo"
+p_bread:        .asciz "+1 pao"
+p_eatbread:     .asciz "Pao! +45"
+p_hhoe:         .asciz "Enxada na mao"
+p_hseed:        .asciz "Sementes na mao"
+m_nohoe:        .asciz "Voce nao tem enxada (fabrique: Tab)"
+m_noseed:       .asciz "Sem sementes: colha trigo selvagem no campo"
+m_hoebroke:     .asciz "A enxada quebrou!"
 m_norod:        .asciz "Voce nao tem vara de pesca (fabrique: Tab)"
 m_toheavy:      .asciz "Pesado demais! Largue algo na mochila (I)"
 m_dropwater:    .asciz "Nao da para largar na agua"
@@ -7461,7 +7688,7 @@ t_13:           .asciz "skills: correu="
 t_14:           .asciz " stamina="
 t_15:           .asciz " peso="
 t_16:           .asciz " kg pilha="
-t_17:           .asciz " | nado/corrida/lenha/minerio/forca/pesca="
+t_17:           .asciz " | nado/corrida/lenha/minerio/forca/pesca/agri="
 t_18:           .asciz "skills: corrida sem treino "
 t_19:           .asciz " -> "
 t_20:           .asciz " | recolheu pedras="

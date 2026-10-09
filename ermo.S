@@ -1,5 +1,5 @@
 // =====================================================================
-//  TRILHOS - um jogo de sobrevivencia (estilo Factorio), todo escrito em
+//  ERMO - um jogo de sobrevivencia (estilo Factorio), todo escrito em
 //  assembly ARM64 (AArch64). Roda no macOS (Apple Silicon) e no Linux ARM64.
 //  (sprites 15-21: ferramentas, tocha, comida, cesto, bau e abrigo;
 //  23-29: arco, flechas, carne, couro, roupa e mochila; 30-41: animais;
@@ -14,8 +14,8 @@
 //  interface basica). O personagem fica em sobrevivencia.S. A SDL3 so
 //  abre a janela, le teclado/mouse e mostra o framebuffer.
 //
-//  Compilar:  make   (junta trilhos.S + sobrevivencia.S, com comum.h)
-//  Testar sem tela:  ./trilhos --shot  (salva screenshots e mede o tempo)
+//  Compilar:  make   (junta ermo.S + sobrevivencia.S e os outros, com comum.h)
+//  Testar sem tela:  ./ermo --shot  (salva screenshots e mede o tempo)
 // =====================================================================
 
 #include "comum.h"
@@ -341,6 +341,48 @@ shot_mode:
     bl      F(SDL_RenderPresent)
     mov     w0, #3
     bl      surv_selftest_build
+
+    // plantacao: ara, planta (foto de perto), colhe, pao, crescimento, coelho
+    mov     w0, #0
+    bl      farm_selftest
+    ldr     w19, [x28, #G_ZOOM]
+    mov     w0, #3
+    bl      set_zoom
+    bl      draw_all
+    LA      x0, s_shot_farm
+    bl      save_bmp
+    ldr     x0, [x28, #G_REN]
+    bl      F(SDL_RenderPresent)
+    mov     w0, w19
+    bl      set_zoom
+    mov     w0, #1
+    bl      farm_selftest
+
+    // pessoas: a vila trabalhando 1 hora (foto pintando zonas), o painel
+    // (foto), mais 2 horas, a noite, 12 dias e um lobo
+    mov     w0, #0
+    bl      people_selftest
+    ldr     w19, [x28, #G_ZOOM]
+    mov     w0, #3
+    bl      set_zoom
+    bl      draw_all
+    LA      x0, s_shot_people
+    bl      save_bmp
+    ldr     x0, [x28, #G_REN]
+    bl      F(SDL_RenderPresent)
+    mov     w0, #2
+    bl      people_selftest
+    bl      draw_all
+    LA      x0, s_shot_panel
+    bl      save_bmp
+    ldr     x0, [x28, #G_REN]
+    bl      F(SDL_RenderPresent)
+    mov     w0, w19
+    bl      set_zoom
+    mov     w0, #1
+    bl      people_selftest
+    mov     w9, #1                      // o resto do teste sem a vila
+    str     w9, [x28, #G_NOPEOPLE]
 
     // agua: nadando, tubarao chegando e o fim
     mov     w0, #0
@@ -1065,7 +1107,17 @@ he_key_game:
 11: bl      new_world
     bl      start_game
     b       he_loop
-2:  cmp     w20, #10                    // G: curvas de nivel
+2:  cmp     w20, #10                    // G: grade liga/desliga
+    b.ne    21f
+    ldr     w9, [x28, #G_GRIDON]
+    eor     w9, w9, #1
+    str     w9, [x28, #G_GRIDON]
+    LA      x0, m_gridoff
+    cbz     w9, 20f
+    LA      x0, m_gridon
+20: bl      set_msg
+    b       he_loop
+21: cmp     w20, #17                    // N: curvas de nivel
     b.ne    3f
     ldr     w9, [x28, #G_CONTOUR]
     eor     w9, w9, #1
@@ -1488,9 +1540,24 @@ terrain_color:
     add     w15, w1, w2, lsl #9         // celula
     LA      x9, overlay
     ldrb    w9, [x9, w15, uxtw]
+    cbz     w9, 1f
     cmp     w9, #1
-    b.ne    1f
-    MOVI32  w0, 0xFF8C8A84              // rua
+    b.ne    11f
+    MOVI32  w0, 0xFF9A7A52              // caminho de terra batida
+    ubfx    w1, w10, #14, #2
+    cbnz    w1, tc_light
+    MOVI32  w0, 0xFF8C6E48
+    b       tc_light
+11: ubfx    w1, w10, #13, #2            // terra arada: com sulcos
+    cmp     w9, #3
+    b.eq    12f
+    MOVI32  w0, 0xFF8E6438              // seca
+    cbnz    w1, tc_light
+    MOVI32  w0, 0xFF6E4A28
+    b       tc_light
+12: MOVI32  w0, 0xFF5C3C20              // molhada (agua a ate 4 quadrados)
+    cbnz    w1, tc_light
+    MOVI32  w0, 0xFF46301A
     b       tc_light
 1:  LA      x9, moist                   // umidade interpolada + ruido
     add     x9, x9, w15, uxtw
@@ -1580,7 +1647,106 @@ tc_light:
     orr     w0, w6, w5, lsl #8
     orr     w0, w0, w4, lsl #16
     orr     w0, w0, #0xFF000000
-    ldp     x29, x30, [sp], #16
+    // zonas de trabalho (pintando, ou com o painel de pessoas aberto):
+    // cor de cada tipo; o retangulo sendo arrastado aparece mais forte
+    ldr     w9, [x28, #G_ZONESHOW]
+    cbz     w9, 69f
+    LA      x9, zonegrid
+    ldrb    w1, [x9, w15, uxtw]
+    mov     w4, #110
+    ldr     w9, [x28, #G_ZDRAG]
+    cbz     w9, 62f
+    asr     w2, w10, #16
+    asr     w3, w11, #16
+    ldr     w5, [x28, #G_ZAU]
+    ldr     w6, [x28, #G_ZBU]
+    cmp     w5, w6
+    csel    w7, w5, w6, lt
+    csel    w6, w6, w5, lt
+    cmp     w2, w7
+    b.lt    62f
+    cmp     w2, w6
+    b.gt    62f
+    ldr     w5, [x28, #G_ZAV]
+    ldr     w6, [x28, #G_ZBV]
+    cmp     w5, w6
+    csel    w7, w5, w6, lt
+    csel    w6, w6, w5, lt
+    cmp     w3, w7
+    b.lt    62f
+    cmp     w3, w6
+    b.gt    62f
+    ldr     w1, [x28, #G_ZONEMODE]
+    mov     w4, #170
+62: cbz     w1, 69f
+    LA      x9, zonecolors
+    ldr     w9, [x9, w1, uxtw #2]
+    ubfx    w5, w0, #16, #8
+    ubfx    w6, w9, #16, #8
+    sub     w6, w6, w5
+    mul     w6, w6, w4
+    add     w5, w5, w6, asr #8
+    ubfx    w2, w0, #8, #8
+    ubfx    w6, w9, #8, #8
+    sub     w6, w6, w2
+    mul     w6, w6, w4
+    add     w2, w2, w6, asr #8
+    and     w3, w0, #255
+    and     w6, w9, #255
+    sub     w6, w6, w3
+    mul     w6, w6, w4
+    add     w3, w3, w6, asr #8
+    orr     w0, w3, w2, lsl #8
+    orr     w0, w0, w5, lsl #16
+    orr     w0, w0, #0xFF000000
+69:
+    // grade: linha clara na borda de cada quadrado perto do personagem
+    // (mais forte no alcance; some aos poucos ate 20 celulas)
+    ldr     w9, [x28, #G_GRIDSHOW]
+    cbz     w9, 79f
+    ldr     w9, [x28, #G_GRIDW]
+    and     w1, w10, #0xFFFF
+    cmp     w1, w9
+    b.lo    71f
+    and     w1, w11, #0xFFFF
+    cmp     w1, w9
+    b.hs    79f
+71: asr     w1, w10, #16
+    ldr     w2, [x28, #G_GRIDPU]
+    sub     w1, w1, w2
+    asr     w2, w11, #16
+    ldr     w3, [x28, #G_GRIDPV]
+    sub     w2, w2, w3
+    mul     w1, w1, w1
+    madd    w1, w2, w2, w1              // distancia^2
+    mov     w2, #GRIDR2
+    cmp     w1, w2
+    b.hs    79f
+    ldr     w3, [x28, #G_GRIDREACH]
+    mov     w4, #110
+    cmp     w1, w3
+    b.le    72f
+    sub     w4, w2, w1                  // fora do alcance: 70 -> 0
+    mov     w5, #70
+    mul     w4, w4, w5
+    udiv    w4, w4, w2
+72: mov     w7, #255                    // mistura com branco (w4 / 256)
+    ubfx    w5, w0, #16, #8
+    sub     w6, w7, w5
+    mul     w6, w6, w4
+    add     w5, w5, w6, lsr #8
+    ubfx    w1, w0, #8, #8
+    sub     w6, w7, w1
+    mul     w6, w6, w4
+    add     w1, w1, w6, lsr #8
+    and     w2, w0, #255
+    sub     w6, w7, w2
+    mul     w6, w6, w4
+    add     w2, w2, w6, lsr #8
+    orr     w0, w2, w1, lsl #8
+    orr     w0, w0, w5, lsl #16
+    orr     w0, w0, #0xFF000000
+79: ldp     x29, x30, [sp], #16
     ret
 
 tc_water:
@@ -1694,7 +1860,15 @@ do_loop:
     add     w4, w10, w11                // profundidade
     LA      x9, objsprite               // sprite do tipo de objeto
     ldrb    w15, [x9, x13]
-    cmp     w13, #O_FENCE               // cerca: trilhos para os vizinhos
+    cmp     w13, #O_CROP                // trigo plantado: estagio 0..3
+    b.ne    60f
+    lsr     w16, w14, #6
+    mov     w9, #3
+    cmp     w16, #3
+    csel    w16, w16, w9, lo
+    add     w15, w15, w16
+    b       63f
+60: cmp     w13, #O_FENCE               // cerca: trilhos para os vizinhos
     b.eq    61f
     cmp     w13, #O_GATE
     b.ne    63f
@@ -1819,6 +1993,7 @@ b_next:
 draw_all:
     stp     x29, x30, [sp, #-16]!
     mov     x29, sp
+    bl      grid_prep                   // grade no chao? (cercas.S)
     bl      draw_terrain
     bl      draw_objects
     ldr     w9, [x28, #G_STATE]
@@ -2087,6 +2262,7 @@ palette:
     .word 0xFF2F6FB5, 0xFF4A3A2A, 0xFF3A2A1A, 0xFF7A4A24  // 28-31 roupa, cabelo, lenha
     .word 0xFFCDEBF7, 0xFF6E7C86, 0xFF4A555D, 0xFFB07A48  // 32-35 espuma, tubarao, cervo
     .word 0xFF8C5A30, 0xFFF2F2F2, 0xFFE05030, 0xFF6A6A70  // 36-39 couro, branco, caranguejo, lobo
+    .word 0xFFD8B040, 0xFFA8862A, 0xFF9CC04A, 0xFFC8904A  // 40-43 trigo, trigo escuro, broto, pao
 
 roofc:
     .word 0xFFB5443A, 0xFF8C3029
@@ -2582,9 +2758,169 @@ sprites:
     .byte 37,37,37
     .byte 0,37,0
     .p2align 7
+// 52: trigo selvagem
+    .byte 7, 8, 3, 0
+    .byte 0,40,0,0,0,40,0
+    .byte 40,41,0,40,0,41,40
+    .byte 0,40,0,41,0,40,0
+    .byte 0,41,40,40,40,41,0
+    .byte 0,0,41,42,41,0,0
+    .byte 0,42,0,42,0,42,0
+    .byte 0,42,0,42,0,42,0
+    .byte 0,0,42,42,42,0,0
+    .p2align 7
+// 53: trigo plantado: broto
+    .byte 7, 2, 3, 0
+    .byte 0,16,0,0,0,16,0
+    .byte 0,3,0,16,0,3,0
+    .p2align 7
+// 54: trigo plantado: crescendo
+    .byte 7, 4, 3, 0
+    .byte 0,16,0,0,0,16,0
+    .byte 16,3,0,16,0,3,16
+    .byte 0,3,0,3,0,3,0
+    .byte 0,3,0,3,0,3,0
+    .p2align 7
+// 55: trigo plantado: quase
+    .byte 7, 6, 3, 0
+    .byte 0,42,0,0,0,42,0
+    .byte 0,3,0,42,0,3,0
+    .byte 42,3,0,3,0,3,42
+    .byte 3,0,3,3,3,0,3
+    .byte 0,3,2,0,2,3,0
+    .byte 0,3,0,3,0,3,0
+    .p2align 7
+// 56: trigo plantado: maduro
+    .byte 7, 8, 3, 0
+    .byte 0,40,0,0,0,40,0
+    .byte 40,41,0,40,0,41,40
+    .byte 0,40,0,41,0,40,0
+    .byte 0,41,40,40,40,41,0
+    .byte 40,0,41,41,41,0,40
+    .byte 0,42,0,42,0,42,0
+    .byte 0,42,0,42,0,42,0
+    .byte 0,0,42,42,42,0,0
+    .p2align 7
+// 57: enxada
+    .byte 7, 8, 3, 0
+    .byte 0,12,12,12,0,0,0
+    .byte 0,13,13,31,0,0,0
+    .byte 0,0,0,31,0,0,0
+    .byte 0,0,0,0,31,0,0
+    .byte 0,0,0,0,31,0,0
+    .byte 0,0,0,0,0,31,0
+    .byte 0,0,0,0,0,31,0
+    .byte 0,0,0,0,0,0,1
+    .p2align 7
+// 58: sementes
+    .byte 6, 4, 3, 0
+    .byte 0,7,0,0,35,0
+    .byte 35,0,0,7,0,0
+    .byte 0,0,7,0,0,35
+    .byte 0,35,0,0,7,0
+    .p2align 7
+// 59: trigo (feixe)
+    .byte 7, 8, 3, 0
+    .byte 0,40,0,40,0,40,0
+    .byte 40,41,40,41,40,41,40
+    .byte 0,40,41,40,41,40,0
+    .byte 0,0,40,40,40,0,0
+    .byte 0,0,31,31,31,0,0
+    .byte 0,0,42,40,42,0,0
+    .byte 0,42,0,40,0,42,0
+    .byte 42,0,0,40,0,0,42
+    .p2align 7
+// 60: pao
+    .byte 7, 4, 3, 0
+    .byte 0,0,43,43,43,0,0
+    .byte 0,43,6,43,6,43,0
+    .byte 43,43,43,43,43,43,43
+    .byte 0,36,36,36,36,36,0
+    .p2align 7
+// 61: muda
+    .byte 3, 4, 1, 0
+    .byte 0,42,0
+    .byte 42,3,42
+    .byte 0,3,0
+    .byte 0,1,0
+    .p2align 7
+// 62: setinha (pessoa selecionada)
+    .byte 5, 3, 2, 0
+    .byte 24,24,24,24,24
+    .byte 0,24,24,24,0
+    .byte 0,0,24,0,0
+    .p2align 7
+// 63: homem (roupa: cor da familia)
+    .byte 5, 9, 2, 0
+    .byte 0,30,30,30,0
+    .byte 0,27,27,27,0
+    .byte 0,8,8,8,0
+    .byte 8,8,8,8,8
+    .byte 27,8,8,8,27
+    .byte 0,9,9,9,0
+    .byte 0,29,0,29,0
+    .byte 0,29,0,29,0
+    .byte 0,18,0,18,0
+    .p2align 7
+// 64: homem passo 2
+    .byte 5, 9, 2, 0
+    .byte 0,30,30,30,0
+    .byte 0,27,27,27,0
+    .byte 0,8,8,8,0
+    .byte 8,8,8,8,8
+    .byte 27,8,8,8,27
+    .byte 0,9,9,9,0
+    .byte 0,29,0,29,0
+    .byte 29,0,0,0,29
+    .byte 18,0,0,0,18
+    .p2align 7
+// 65: crianca
+    .byte 5, 6, 2, 0
+    .byte 0,30,30,30,0
+    .byte 0,27,27,27,0
+    .byte 27,8,8,8,27
+    .byte 0,8,8,8,0
+    .byte 0,29,0,29,0
+    .byte 0,18,0,18,0
+    .p2align 7
+// 66: crianca passo 2
+    .byte 5, 6, 2, 0
+    .byte 0,30,30,30,0
+    .byte 0,27,27,27,0
+    .byte 27,8,8,8,27
+    .byte 0,8,8,8,0
+    .byte 29,0,0,0,29
+    .byte 18,0,0,0,18
+    .p2align 7
+// 67: mulher (cabelo comprido, vestido)
+    .byte 5, 9, 2, 0
+    .byte 0,30,30,30,0
+    .byte 30,27,27,27,30
+    .byte 30,8,8,8,30
+    .byte 8,8,8,8,8
+    .byte 27,8,8,8,27
+    .byte 0,8,8,8,0
+    .byte 8,9,9,9,8
+    .byte 0,27,0,27,0
+    .byte 0,18,0,18,0
+    .p2align 7
+// 68: mulher passo 2
+    .byte 5, 9, 2, 0
+    .byte 0,30,30,30,0
+    .byte 30,27,27,27,30
+    .byte 30,8,8,8,30
+    .byte 8,8,8,8,8
+    .byte 27,8,8,8,27
+    .byte 0,8,8,8,0
+    .byte 8,9,9,9,8
+    .byte 27,0,0,0,27
+    .byte 18,0,0,0,18
+    .p2align 7
 
-s_wintitle:     .asciz "Trilhos - jogo de trens em Assembly ARM64"
-s_title:        .asciz "TRILHOS"
+m_gridon:       .asciz "Grade ligada (G desliga)"
+m_gridoff:      .asciz "Grade desligada"
+s_wintitle:     .asciz "Ermo - sobrevivencia em Assembly ARM64"
+s_title:        .asciz "ERMO"
 s_sub:          .asciz "um jogo de sobrevivencia escrito em assembly ARM64"
 s_world:        .asciz "Mundo #"
 s_enter:        .asciz "Pressione ENTER para jogar"
@@ -2601,7 +2937,7 @@ s_hab:          .asciz " hab."
 s_nl:           .asciz "\n"
 s_bench:        .asciz "tempo por quadro: "
 s_bench2:       .asciz " us\n"
-s_shot_f12:     .asciz "trilhos.bmp"
+s_shot_f12:     .asciz "ermo.bmp"
 s_shot_title:   .asciz "shot_titulo.bmp"
 s_shot_game:    .asciz "shot_jogo.bmp"
 s_shot_far:     .asciz "shot_longe.bmp"
@@ -2615,6 +2951,9 @@ s_shot_torch:   .asciz "shot_tocha.bmp"
 s_shot_clima:   .asciz "shot_clima0.bmp"
 s_shot_anim:    .asciz "shot_animais.bmp"
 s_shot_fence:   .asciz "shot_cerca.bmp"
+s_shot_farm:    .asciz "shot_plantacao.bmp"
+s_shot_people:  .asciz "shot_pessoas.bmp"
+s_shot_panel:   .asciz "shot_painel.bmp"
 s_shot_fish:    .asciz "shot_pesca.bmp"
 s_shot_hut:     .asciz "shot_abrigo.bmp"
 s_shot_sleep:   .asciz "shot_dormindo.bmp"

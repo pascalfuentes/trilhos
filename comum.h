@@ -199,9 +199,9 @@
 .equ G_WOOD,     (G_INV + 0)
 .equ G_STONE,    (G_INV + 4)
 .equ G_BERRY,    (G_INV + 8)
-.equ G_SKILL,    704         // 6 skills (float 0..100)
-.equ G_SKIDLE,   728         // 6 x u16: quadros sem treinar cada skill
-.equ G_SKLAST,   740         // 6 x u8: ultimo nivel anunciado
+.equ G_SKILL,    704         // 7 skills (float 0..100)
+.equ G_SKIDLE,   800         // 7 x u16: quadros sem treinar cada skill
+.equ G_SKLAST,   816         // 7 x u8: ultimo nivel anunciado
 // cercas e pesca
 .equ G_FDRAG,    748         // arrastando uma fileira de cercas
 .equ G_FLASTU,   752         // ultima celula com cerca na fileira
@@ -214,7 +214,39 @@
 .equ G_FTGV,     780
 .equ G_FTGOK,    784
 .equ G_FPLANN,   788         // celulas na previa da fileira
-.equ GSIZE,      832
+// plantacao
+.equ G_FARMLAST, 824         // celula + 1 onde a enxada/semente ja agiu
+.equ G_HOEDUR,   828         // usos que restam na enxada
+.equ G_CROPT,    832         // conta quadros ate o proximo passo das plantas
+.equ G_NCROP,    836         // plantas na lista
+.equ G_GRIDON,   844         // grade ligada pela tecla G
+.equ G_GRIDSHOW, 848         // grade no chao neste quadro (calculado em grid_prep)
+.equ G_GRIDPU,   852         // celula do personagem (centro da grade)
+.equ G_GRIDPV,   856
+.equ G_GRIDW,    860         // largura da linha (16.16 = um passo do terreno)
+.equ G_GRIDREACH, 864        // alcance^2 (linhas mais fortes); -1 = so a grade
+.equ GRIDR2,     400         // a grade aparece ate 20 celulas (some aos poucos)
+.equ G_FARMMODE, 840         // nesta segurada a enxada: 0 nada, 1 ara, 2 desfaz, 3 colhe
+// pessoas (pessoas.S)
+.equ G_HOVPERS,  868         // pessoa sob o mouse (-1)
+.equ G_SELPERS,  872         // pessoa selecionada (-1)
+.equ G_PEOPLEOPEN, 876       // painel de pessoas aberto (P)
+.equ G_ZONEMODE, 880         // pintando zonas (Z): tipo 1..4, 5 apaga; 0 = nao
+.equ G_ZDRAG,    884         // arrastando o retangulo da zona
+.equ G_ZAU,      888         // retangulo: celula onde comecou
+.equ G_ZAV,      892
+.equ G_ZBU,      896         // ... e onde esta o mouse
+.equ G_ZBV,      900
+.equ G_PLASTDAY, 904         // ultimo dia contado (aniversarios)
+.equ G_NOPEOPLE, 908         // teste: sem a vila
+.equ G_OCCFRAME, 912         // quadro em que a ocupacao foi refeita
+.equ G_PPLFRAME, 916         // quadros da vila
+.equ G_SAPT,     920         // conta quadros ate as mudas crescerem
+.equ G_PNOCHEST, 924         // quando avisou que falta bau
+.equ G_PEOPLEN,  928         // pessoas vivas
+.equ G_ZONESHOW, 932         // zonas no chao neste quadro (grid_prep)
+.equ G_PLCELL,   936         // celula do personagem (caminho)
+.equ GSIZE,      960
 
 .equ W_SUN,      0
 .equ W_CLOUDY,   1
@@ -225,7 +257,7 @@
 .equ W_HAIL,     6
 .equ W_FLOOD,    7
 .equ NWEATHER,   8
-.equ SEASONDAYS, 3           // cada estacao dura 3 dias (36 min)
+.equ SEASONDAYS, 4           // cada estacao dura 4 dias (48 min)
 .equ FLOODMAX,   120         // a enchente sobe ate 120 (cobre praias e campos baixos)
 .equ WFADE,      1200        // o clima entra e sai em 20 s
 
@@ -236,7 +268,8 @@
 .equ SK_MINE,    3           // mineracao
 .equ SK_STR,     4           // forca
 .equ SK_FISH,    5           // pesca
-.equ NSKILL,     6
+.equ SK_FARM,    6           // agricultura
+.equ NSKILL,     7
 .equ SATTIME,    14400       // fome cheia segura 4 min antes de cair
 .equ SKREST,     7200        // 2 min sem treinar: a skill comeca a cair
 .equ G_SKSWIM,   (G_SKILL + 4 * SK_SWIM)
@@ -245,6 +278,7 @@
 .equ G_SKMINE,   (G_SKILL + 4 * SK_MINE)
 .equ G_SKSTR,    (G_SKILL + 4 * SK_STR)
 .equ G_SKFISH,   (G_SKILL + 4 * SK_FISH)
+.equ G_SKFARM,   (G_SKILL + 4 * SK_FARM)
 
 // itens da mochila (vetor em G_INV)
 .equ IT_WOOD,    0
@@ -270,7 +304,11 @@
 .equ IT_ROD,     20          // vara de pesca
 .equ IT_FISH,    21          // peixe cru
 .equ IT_CFISH,   22          // peixe assado
-.equ NITEMS,     23
+.equ IT_HOE,     23          // enxada (ara a terra)
+.equ IT_SEED,    24          // sementes de trigo
+.equ IT_WHEAT,   25          // trigo
+.equ IT_BREAD,   26          // pao
+.equ NITEMS,     27
 // construcoes (vao para o mapa, nao se largam): fogueira, bau, abrigo,
 // cerca e portao -> tabela itembuild
 
@@ -282,10 +320,41 @@
 .equ O_SHELTER,  21          // abrigo (sprite 21)
 .equ O_FENCE,    36          // cerca (sprites 45..48 conforme os vizinhos)
 .equ O_GATE,     37          // portao (sprites 49..50)
-.equ O_LAST,     37          // pilhas: 12 + item (ate 34); o sprite vem de objsprite
+.equ O_WHEAT,    38          // trigo selvagem (da sementes)
+.equ O_CROP,     39          // trigo plantado (variante = quanto cresceu)
+.equ O_PILE2,    40          // pilhas dos itens 24.. (sementes, trigo, pao)
+.equ O_SAPLING,  43          // muda de arvore (variante = quanto cresceu)
+.equ O_LAST,     43          // ultimo tipo de objeto (pilhas: 12 + item ate 35 e 40 + item - 24)
 .equ SPR_FENCE,  45
 .equ SPR_GATE,   49
 .equ SPR_BOBBER, 51
+.equ SPR_WILD,   52          // trigo selvagem
+.equ SPR_CROP,   53          // 53..56: trigo plantado (4 estagios)
+.equ SPR_HOE,    57
+.equ SPR_SEED,   58
+.equ SPR_WHEAT,  59
+.equ SPR_BREAD,  60
+.equ SPR_SAPLING, 61         // muda
+.equ SPR_MARK,   62          // setinha em cima de quem esta selecionado
+.equ SPR_MAN,    63          // 63, 64: homem (2 quadros); roupa = cor da familia
+.equ SPR_KID,    65          // 65, 66: crianca
+.equ SPR_WOMAN,  67          // 67, 68: mulher
+// pessoas
+.equ MAXPEOPLE,  32
+.equ PSIZE,      64
+.equ J_WOOD,     1           // tarefas (e tipos de zona)
+.equ J_STONE,    2
+.equ J_FARM,     3
+.equ J_TREES,    4
+.equ NJOBS,      5
+.equ Z_WOOD,     1
+.equ Z_STONE,    2
+.equ Z_FARM,     3
+.equ Z_TREES,    4
+.equ Z_ERASE,    5
+.equ MAXCROP,    512         // plantas
+.equ CROPRIPE,   192         // maduro (a variante vai de 0 a 192)
+.equ CROPP,      71          // chance de crescer por passo (em 1000)
 .equ FENCEREACH, 64          // cercas ate 8 celulas do personagem (8^2)
 .equ FENCEMAXSTEP, 24        // passos numa fileira
 
@@ -300,8 +369,8 @@
 .equ MAXANIM,    48          // vagas na lista
 .equ MAXALIVE,   18          // no maximo vivos ao mesmo tempo
 .equ MAXARROW,   16
-.equ HB_X,       222         // barra "na mao" (5 quadrados) embaixo, no meio
-.equ NHOTBAR,    5
+.equ HB_X,       228         // barra "na mao" (7 quadrados) embaixo, ao lado da janela do personagem
+.equ NHOTBAR,    7
 .equ HB_Y,       306
 
 .equ TOOLDUR,    40          // usos de um machado ou picareta
@@ -311,7 +380,7 @@
 .equ FIREMAX,    43200       // no maximo 12 min
 .equ MAXCHEST,   64          // cada bau: 32 contadores (128 bytes)
 .equ MAXSHELTER, 32
-.equ NRECIPES,   17
+.equ NRECIPES,   19
 
 // interface (coordenadas do espaco de texto 640 x 360)
 .equ BTN_Y,      16
@@ -329,9 +398,9 @@
 .equ SLOT,       36          // lado do quadrado
 .equ SLOTSTEP,   40
 .equ CHR_X,      4           // janela do personagem (embaixo do status)
-.equ CHR_Y,      126
+.equ CHR_Y,      118
 .equ CHR_W,      216
-.equ CHR_H,      212
+.equ CHR_H,      220
 .equ BTNF_X,     284         // botao "Fabricar"
 .equ BTNF_W,     116
 .equ CRF_X,      224         // janela de fabricar (e do bau, no mesmo lugar)

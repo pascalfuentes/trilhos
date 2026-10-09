@@ -1,8 +1,8 @@
-# Trilhos
+# Ermo
 
 Um jogo de sobrevivência no estilo Factorio, escrito em **assembly ARM64** (AArch64).
 
-Você aparece sozinho num mundo gerado aleatoriamente: terreno contínuo, mar, praias, florestas, montanhas com neve. Precisa coletar madeira, pedra e frutas, caçar com arco e flecha, fabricar ferramentas e construções, fugir de lobos e ursos, não morrer de fome e passar a noite perto de uma fogueira (ou dormindo numa cabana), enfrentando as estações e o clima (chuva, tempestade, calorão, neve, granizo, enchente). Quanto mais você faz uma coisa, melhor fica nela, e para se curar precisa estar de barriga cheia.
+Você é uma espécie de profeta que não envelhece, e chega com **3 famílias** num mundo gerado aleatoriamente: terreno contínuo, mar, praias, florestas, montanhas com neve. Precisa coletar madeira, pedra e frutas, caçar com arco e flecha, pescar, plantar trigo, fabricar ferramentas e construções, comandar a vila (cada pessoa com fé, fome, sono e idade), fugir de lobos e ursos, não morrer de fome e passar a noite perto de uma fogueira (ou dormindo numa cabana), enfrentando as estações e o clima (chuva, tempestade, calorão, neve, granizo, enchente). Quanto mais você faz uma coisa, melhor fica nela, e para se curar precisa estar de barriga cheia.
 
 ![Dia](screenshots/jogo.png)
 ![Noite](screenshots/noite.png)
@@ -15,13 +15,16 @@ Você aparece sozinho num mundo gerado aleatoriamente: terreno contínuo, mar, p
 | WASD / setas | andar |
 | Shift (segurando) | correr |
 | segurar o botão esquerdo | coletar a árvore, pedra ou arbusto sob o mouse (até 3 células de distância) |
-| E | comer (o que encher mais primeiro: carne assada, frutas assadas, peixe assado...) |
+| E | comer (o que encher mais primeiro: carne assada, pão, frutas assadas, peixe assado...) |
 | F | fabricar uma fogueira e escolher onde montar |
 | Tab ou botão **Fabricar** | abre a janela de fabricar |
-| clique no mapa (com uma construção na mão) | coloca a construção; botão direito ou ESC cancela |
+| clique no mapa (com uma construção na mão) | coloca a construção num quadrado da grade; botão direito ou ESC cancela |
 | 1 / 2 / 3 | põe na mão o machado, a picareta ou o arco (de novo: mãos vazias) |
 | 4 | põe ou tira a tocha da outra mão |
 | 5 | põe na mão a vara de pesca |
+| 6 / 7 | põe na mão a enxada / as sementes |
+| segurar o botão esquerdo com a enxada | ara a grama sob o mouse (passe por várias células) |
+| segurar o botão esquerdo com sementes | planta na terra arada sob o mouse |
 | arrastar com cercas na mão | prévia da fileira na grade (horizontal, vertical ou diagonal); soltar coloca |
 | clique na água com a vara na mão | lança a linha; quando aparecer "Peixe! Clique!", clique para fisgar |
 | clique com o arco na mão | atira uma flecha onde está o mouse |
@@ -34,8 +37,13 @@ Você aparece sozinho num mundo gerado aleatoriamente: terreno contínuo, mar, p
 | botão direito num item da mochila | larga 1 no chão (com Shift: a pilha toda) |
 | roda do mouse / `+` / `-` | zoom |
 | espaço | pausa |
-| G | curvas de nível |
-| ESC | volta ao menu |
+| P | painel das pessoas: clique na tarefa para trocar (botão direito volta) |
+| Z | pintar zonas de trabalho: 1-4 escolhe o tipo, 0 apaga, arraste no mapa (Z ou ESC sai) |
+| clique numa pessoa | seleciona (setinha e nome em cima) |
+| botão direito no mapa (com alguém selecionado) | a pessoa vai até lá |
+| G | liga/desliga a grade no chão |
+| N | curvas de nível |
+| ESC | sai das zonas, fecha janelas, tira a seleção ou volta ao menu |
 
 **Recursos**
 
@@ -71,8 +79,11 @@ Como no Minecraft e no Factorio, uma grade de ícones mostra tudo o que dá para
 | Portão | 4 madeira | você passa, os animais não (construção; pode trocar uma cerca) |
 | Vara de pesca | 3 madeira, 2 frutas | na mão: pesca na água |
 | Peixe assado | 1 peixe, perto de uma fogueira | enche 40 de fome (cru: só 8) |
+| Enxada | 2 madeira, 1 pedra | na mão: ara a terra para plantar; dura 40 usos |
+| Pão | 3 trigo, perto de uma fogueira | enche 45 de fome |
 
 - O desgaste das ferramentas e o tempo da tocha acesa aparecem como uma barrinha embaixo do ícone na mochila. Quando o machado ou a picareta quebra, o próximo (se você tiver) entra novo.
+- **Grade:** toda construção fica presa num quadrado da grade (o abrigo ocupa 2 x 2) e só vai num quadrado **livre**: sem nada em cima (árvore, pedra, arbusto, trigo, pilha, baú, fogueira), sem cerca, sem terra arada e fora da água. A grade aparece no chão sozinha quando você está com uma construção, a enxada ou as sementes na mão (mais forte até onde você alcança) e pode ficar sempre ligada com a tecla **G**. O quadrado sob o mouse fica verde (dá), vermelho (não dá) ou laranja (a enxada desfaz a terra).
 - Para **desmontar** um baú ou um abrigo, segure o botão esquerdo nele: ele volta para a mochila. O baú precisa estar vazio.
 
 **Dormir**
@@ -92,7 +103,7 @@ A cabana tem uma porta do tamanho do personagem.
 
 **Na mão**
 
-- Embaixo da tela fica a barra **na mão**: 1 machado, 2 picareta, 3 arco, 4 tocha e 5 vara de pesca. O que você segura tem a borda amarela, e o número no arco é quantas flechas sobram.
+- Embaixo da tela fica a barra **na mão**: 1 machado, 2 picareta, 3 arco, 4 tocha, 5 vara de pesca, 6 enxada e 7 sementes. O que você segura tem a borda amarela; o número no arco é quantas flechas sobram, e nas sementes, quantas você tem.
 - Machado e picareta só ajudam (e só gastam) se estiverem na mão.
 - A **tocha** vai na **outra mão**: dá para segurar o arco ou o machado e ainda ter luz à noite. Ela só se gasta quando queima até o fim.
 
@@ -148,6 +159,52 @@ Os animais aparecem longe da vista, cada um no seu terreno, e somem quando ficam
 
 ![Pescando](screenshots/pesca.png)
 
+**Plantação** (como no Minecraft)
+
+- No campo aberto nasce **trigo selvagem** (dourado). Segure o botão esquerdo nele: dá 1 trigo e 1 ou 2 **sementes**.
+- Fabrique uma **enxada** (2 madeira, 1 pedra) e aperte **6**. Segure o botão esquerdo e passe o mouse pela grama: cada célula vira **terra arada**, com sulcos. Não dá para arar areia, rocha, neve, água nem onde tem algo em cima.
+- Aperte **7** (sementes na mão) e passe pela terra arada para **plantar**.
+- O trigo cresce em **4 estágios**, do broto verde até ficar dourado. A dica do mouse mostra quanto já cresceu.
+- Colha segurando o botão esquerdo quando estiver **maduro**: 1 trigo e 1 a 3 sementes. Com sementes na mão, colher e replantar sai num gesto só.
+- Plantou, não tira mais: o trigo **verde** não sai, tem que esperar. Só a **enxada** desfaz: passada na terra arada, ela volta a ser grama e a planta verde que estiver ali se perde (com a semente). Numa mesma segurada do botão a enxada só ara ou só desfaz, conforme o que fez primeiro.
+- **3 trigos** viram **pão** na fogueira (enche 45 de fome).
+
+| O que acontece | Efeito no crescimento |
+|---|---|
+| sem nada | maduro em ~1 dia de jogo (12 min) |
+| água a até 4 quadrados | a terra fica molhada (mais escura) e cresce **2x** mais rápido |
+| chuva ou tempestade | 1,5x |
+| calorão | metade, se a terra estiver seca |
+| neve ou inverno | não cresce |
+
+- **Coelhos, cervos e cabras** enxergam trigo maduro a até 8 células e vão comer. Uma **cerca** em volta protege a plantação.
+- Dormindo, a noite passa depressa e a plantação cresce junto.
+
+![Plantação](screenshots/plantacao.png)
+
+**Pessoas (a vila)**
+
+- O jogo começa com **3 famílias** (Silva, Souza e Lima), cada uma com pai, mãe e 2 filhos, e um **baú** com frutas, pão e sementes. A roupa de cada família tem uma cor.
+- Você **não envelhece**. Eles sim: **1 ano a cada 12 dias** (uma estação dura 4 dias). Com **14 anos** uma criança pode trabalhar; bem velhos (65+) podem morrer.
+- **Fé:** quem fica a até 6 células de você ganha fé (rápido); longe, ela cai devagar. Fé alta = trabalha até **1,5x mais rápido**. Abaixo de 25 (nome em laranja) às vezes enrola e pode **recusar ordens**. Fé zerada: **vai embora**.
+- **Fome:** comem do baú (o que enche mais primeiro) quando a fome passa de 60%; sem nada no baú, colhem frutas nos arbustos. Sem comer, a vida cai até morrer.
+- **Sono:** às 21h vão dormir na **cabana** mais perto (somem lá dentro) ou em volta de uma **fogueira** acesa (até 30 células); senão, deitam onde estão. Em noite de inverno ou de neve, fora da cabana e longe do fogo, passam **frio**.
+- **Lobos e ursos** também atacam as pessoas (cabana e fogueira protegem). Elas fogem quando veem um.
+- **Tarefas** (painel **P**, só adultos): cada uma trabalha **só dentro das zonas** pintadas para ela (**Z**) e leva o que juntou para o baú mais perto:
+
+| Tarefa | O que faz na zona |
+|---|---|
+| Madeira | corta as árvores (leva 4 por viagem) |
+| Pedra | quebra as pedras (3 por viagem) |
+| Plantar | colhe o trigo maduro e replanta, planta na terra arada vazia (pega sementes no baú) e ara o resto |
+| Árvores | planta mudas (um quadrado sim, outro não); viram árvore em ~2 dias (não crescem no inverno) |
+
+- **Caminhos:** onde se anda muito (pessoas e você) o mato vira **terra batida**, e nela se anda 25-30% mais rápido. Caminho pouco usado volta a ser mato aos poucos.
+- Passe o mouse numa pessoa: nome, idade, tarefa, fé e se está com fome ou dormindo.
+
+![A vila trabalhando, com as zonas pintadas](screenshots/pessoas.png)
+![Painel das pessoas](screenshots/painel.png)
+
 **Sobrevivência**
 
 - **Fome:** quando enche (comendo), fica **cheia por 4 minutos** antes de começar a cair. Comer de novo com ela cheia renova esse tempo. Depois cai de cheia a vazia em uns 24 minutos. Sem comida, a vida cai.
@@ -173,6 +230,10 @@ Os animais aparecem longe da vista, cada um no seu terreno, e somem quando ficam
 | Cerca | 1,0 kg |
 | Portão | 3,0 kg |
 | Peixe | 0,5 kg |
+| Enxada | 1,5 kg |
+| Semente | 0,1 kg |
+| Trigo | 0,3 kg |
+| Pão | 0,4 kg |
 
 - O limite começa em **30 kg** e aumenta com a skill Força (até 60 kg).
 - Acima do limite: **anda bem mais devagar**, não corre, e nadar cansa o dobro.
@@ -195,12 +256,13 @@ Cada skill vai de nível 0 a 10.
 | Mineração | quebrando pedras | quebra 2x mais rápido |
 | Força | andando com mais de 60% do limite de peso | carrega até 60 kg |
 | Pesca | pegando peixes | o peixe morde na metade do tempo, mais tempo para fisgar e chance de um peixe a mais |
+| Agricultura | arando e colhendo trigo | 50% de chance de 1 trigo a mais e 1 semente a mais em cada colheita |
 
 ![Mochila e skills](screenshots/mochila.png)
 
 **Estações e clima**
 
-O ano tem 4 estações de 3 dias cada (36 minutos), e o jogo começa na primavera. Dentro de cada estação, o clima muda a cada poucos minutos, sorteado do que é comum naquela época:
+O ano tem 4 estações de 4 dias cada (48 minutos), e o jogo começa na primavera. Dentro de cada estação, o clima muda a cada poucos minutos, sorteado do que é comum naquela época:
 
 | Estação | Clima comum |
 |---|---|
@@ -249,12 +311,14 @@ O **abrigo** protege do frio do clima e do granizo.
 | Arquivo | O que tem |
 |---|---|
 | `comum.h` | macros e constantes compartilhadas |
-| `trilhos.S` | janela, entrada, geração do mundo, terreno, árvores |
+| `ermo.S` | janela, entrada, geração do mundo, terreno (e a terra arada), árvores |
 | `sobrevivencia.S` | personagem, coleta, mochila, skills, fabricar, baús, abrigos, fome, calor, fogueiras, água, noite e interface |
 | `clima.S` | estações, sorteio do clima, efeitos, chuva/neve/granizo, cor do clima e relâmpago |
 | `animais.S` | animais (aparecer pelo terreno, fugir, perseguir, morder), flechas e golpes |
 | `cercas.S` | cercas e portões: grade de colisão, fileira travada em 8 direções, grade e prévia na tela, trocar cerca por portão |
 | `pesca.S` | vara de pesca: lançar, boia, mordida, fisgar, tipo de peixe pela água |
+| `plantacao.S` | trigo selvagem, enxada, sementes, crescimento (água, clima, estação), colheita e bichos que comem a plantação |
+| `pessoas.S` | a vila: famílias, idade, fé, fome e sono, tarefas e zonas, painel, ordens, mudas e caminhos de terra batida |
 
 - **Geração:** ruído fractal num mapa de altura de 512x512, só com aritmética inteira. A mesma semente sempre gera o mesmo mundo.
 - **Terreno contínuo ("voxel space" isométrico):** cada coluna da tela anda pelo mundo de frente para trás e pinta só o que fica visível. As 1280 colunas são divididas entre **8 threads**, uma para cada núcleo.
@@ -280,12 +344,15 @@ sudo apt install libsdl3-dev   # ou compile o SDL3 a partir do código-fonte
 make run
 ```
 
-`./trilhos --shot` roda sem interação: tira screenshots, mede o tempo de cada quadro e faz um teste automático (coleta duas árvores, uma pedra e um arbusto, monta uma fogueira, come e passa a noite; corre, anda carregado, larga e recolhe uma pilha de pedras, vê a skill cair sem treino, confere que a vida só sobe com a fome cheia; fabrica tudo, monta baú e abrigo, gasta o machado, acende a tocha à noite, passa a noite no abrigo e dorme das 22h às 06h; passa 10 s em cada um dos 8 climas (com foto); caça um cervo com o arco, enfrenta um lobo à noite com o machado e vê os animais aparecendo; depois nada num lago e vai para o mar aberto até o tubarão atacar).
+`./ermo --shot` roda sem interação: tira screenshots, mede o tempo de cada quadro e faz um teste automático (coleta duas árvores, uma pedra e um arbusto, monta uma fogueira, come e passa a noite; corre, anda carregado, larga e recolhe uma pilha de pedras, vê a skill cair sem treino, confere que a vida só sobe com a fome cheia; fabrica tudo, monta baú e abrigo, gasta o machado, acende a tocha à noite, passa a noite no abrigo e dorme das 22h às 06h; passa 10 s em cada um dos 8 climas (com foto); caça um cervo com o arco, enfrenta um lobo à noite com o machado e vê os animais aparecendo; faz um cercado e pesca; ara e planta 6 células perto da água, colhe o trigo maduro, confere que o verde não sai e que a enxada desfaz a terra (e perde a semente), faz pão, compara o crescimento com e sem água e no inverno, e solta um coelho perto do trigo sem cerca; monta a vila com zonas de madeira, pedra, plantação e árvores e deixa trabalhar 3 horas (com foto pintando zonas e do painel), confere o baú, a terra arada, o trigo, as mudas e os caminhos, manda todos dormir, passa 12 dias (1 ano) e solta um lobo perto de uma pessoa; depois nada num lago e vai para o mar aberto até o tubarão atacar).
 
 ## Próximos passos
 
 - [x] Fabricar: machado, picareta, tocha, baú, abrigo, cesto, frutas assadas
 - [ ] Minérios (ferro, carvão), fornalha e ferramentas melhores
 - [x] Animais e caça (arco, flechas, carne, couro)
+- [x] Pesca e plantação (trigo, enxada, sementes, pão)
+- [x] Pessoas: famílias, fé, idade, tarefas e zonas
+- [ ] Pessoas caçando e pescando
 - [ ] Mais inimigos de noite
 - [ ] Salvar e carregar o jogo

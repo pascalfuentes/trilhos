@@ -303,6 +303,13 @@ au_loop:
     ldrb    w9, [x22, #AT_HOST]
     cbz     w9, au_passive
     // ---- perigoso ----
+    mov     x0, x20                     // uma pessoa da vila mais perto?
+    mov     x1, x22
+    fmov    s0, s10
+    bl      beast_people
+    cmp     w0, #1
+    b.eq    au_move
+    b.hi    au_next
     ldr     w9, [x28, #G_DEAD]
     cbnz    w9, au_wander
     ldr     w9, [x28, #G_NEARFIRE]      // medo de fogo; nao entra no abrigo
@@ -368,7 +375,15 @@ au_wander:
     ldrh    w9, [x20, #AN_TIMER]
     subs    w9, w9, #1
     b.gt    8f
-    bl      rng
+    cmp     w21, #A_GOAT                // coelho, cervo e cabra: trigo maduro?
+    b.hi    80f
+    mov     x0, x20
+    ldr     s0, [x22, #AT_WALK]
+    fmov    s1, #1.5
+    fmul    s0, s0, s1
+    bl      crop_seek
+    cbnz    w0, au_move
+80: bl      rng
     mov     w24, w0
     and     w9, w0, #127
     add     w9, w9, #60
