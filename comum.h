@@ -210,6 +210,10 @@
 .equ G_FISHT,    764         // quadros ate morder / para fisgar
 .equ G_BOBU,     768         // boia (float, celulas)
 .equ G_BOBV,     772
+.equ G_FTGU,     776         // celula sob o mouse (colocando cerca/portao)
+.equ G_FTGV,     780
+.equ G_FTGOK,    784
+.equ G_FPLANN,   788         // celulas na previa da fileira
 .equ GSIZE,      832
 
 .equ W_SUN,      0
@@ -283,6 +287,7 @@
 .equ SPR_GATE,   49
 .equ SPR_BOBBER, 51
 .equ FENCEREACH, 64          // cercas ate 8 celulas do personagem (8^2)
+.equ FENCEMAXSTEP, 24        // passos numa fileira
 
 // animais (sprites 30..41, dois quadros cada)
 .equ A_RABBIT,   0

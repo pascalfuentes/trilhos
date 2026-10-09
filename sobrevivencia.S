@@ -1612,8 +1612,11 @@ start_place:
     str     wzr, [x28, #G_LMB]
     str     wzr, [x28, #G_CRAFTOPEN]
     str     wzr, [x28, #G_CHESTOPEN]
+    cmp     w0, #IT_FENCE
     LA      x0, m_place
-    b       set_msg
+    b.ne    1f
+    LA      x0, m_placefence
+1:  b       set_msg
 
 // can_craft(w0 = receita) -> w0 = 1 se tem tudo   folha
 // receita (16 bytes): resultado, quantos, precisa de fogo, 0,
@@ -1842,7 +1845,12 @@ place_try:
     stp     x19, x20, [sp, #16]
     stp     x21, x22, [sp, #32]
     stp     d8, d9, [sp, #48]
-    bl      place_check
+    ldr     w9, [x28, #G_PLACE]         // cerca: comeca uma fileira (coloca ao soltar)
+    cmp     w9, #(IT_FENCE + 1)
+    b.ne    10f
+    bl      fence_press
+    b       9f
+10: bl      place_check
     cbz     x0, 1f
     bl      set_msg
     b       9f
@@ -2127,7 +2135,7 @@ surv_mouse:
     cmp     w19, #1                     // soltou o esquerdo: para de coletar
     b.ne    sm_ret
     str     wzr, [x28, #G_LMB]
-    str     wzr, [x28, #G_FDRAG]
+    bl      fence_commit                // soltou uma fileira de cercas
     b       sm_ret
     // apertou: primeiro os botoes e janelas da interface
 1:  bl      mouse_ui
@@ -2253,7 +2261,13 @@ surv_mouse:
     b       sm_ret
 61: cmp     w19, #3
     b.ne    sm_ret
-    str     wzr, [x28, #G_PLACE]
+    ldr     w9, [x28, #G_FDRAG]         // arrastando: cancela so a fileira
+    cbz     w9, 63f
+    str     wzr, [x28, #G_FDRAG]
+    LA      x0, m_rowcancel
+    bl      set_msg
+    b       sm_ret
+63: str     wzr, [x28, #G_PLACE]
     LA      x0, m_placecancel
     bl      set_msg
     b       sm_ret
@@ -2511,6 +2525,8 @@ surv_draw:
     // previa da construcao no mouse (pisca se nao der para colocar)
 50: ldr     w19, [x28, #G_PLACE]
     cbz     w19, 6f
+    cmp     w19, #(IT_FENCE + 1)        // cerca: a grade mostra a previa
+    b.eq    6f
     ldr     w9, [x28, #G_HOVOK]
     cbz     w9, 6f
     bl      place_check
@@ -6439,29 +6455,30 @@ surv_selftest_build:
     mov     w9, #1
     str     w9, [x28, #(G_INV + 4 * IT_GATE)]
     bl      surv_update
-    // arrasta: cantos (-3,-3) -> (3,-3) -> (3,3) -> (-3,3) -> (-3,-3)
+    // 4 fileiras: cantos (-3,-3) -> (3,-3) -> (3,3) -> (-3,3) -> (-3,-3)
     mov     w0, #IT_FENCE
     bl      start_place
-    mov     w0, #-3
-    mov     w1, #-3
-    bl      bt_hov
-    mov     w0, #1
-    mov     w1, #1
-    bl      surv_mouse
     LA      x24, bt_corners
     mov     w23, #0
-6:  ldrsb   w0, [x24, x23]
+6:  ldrsb   w0, [x24, x23]              // aperta num canto
     add     x9, x24, x23
     ldrsb   w1, [x9, #1]
     bl      bt_hov
     bl      surv_update
+    mov     w0, #1
+    mov     w1, #1
+    bl      surv_mouse
+    add     x9, x24, x23                // arrasta ate o proximo e solta
+    ldrsb   w0, [x9, #2]
+    ldrsb   w1, [x9, #3]
+    bl      bt_hov
     bl      surv_update
-    add     w23, w23, #2
-    cmp     w23, #8
-    b.lt    6b
     mov     w0, #1
     mov     w1, #0
     bl      surv_mouse
+    add     w23, w23, #2
+    cmp     w23, #8
+    b.lt    6b
     // portao no meio do lado de baixo (troca a cerca)
     mov     w0, #IT_GATE
     bl      start_place
@@ -6482,10 +6499,45 @@ surv_selftest_build:
     bl      ht_spawn_near
     LA      x9, bt_data
     str     w0, [x9, #8]
+    // foto: arrastando uma fileira na horizontal da tela (escadinha),
+    // de (6, 2) ate (2, 6), ainda sem soltar
+    mov     w0, #IT_FENCE
+    bl      start_place
+    mov     w0, #6
+    mov     w1, #2
+    bl      bt_hov
+    bl      surv_update
+    mov     w0, #1
+    mov     w1, #1
+    bl      surv_mouse
+    mov     w0, #2
+    mov     w1, #6
+    bl      bt_hov
     bl      surv_update
     b       bt_ret
 
 bt_stage1:
+    // ---- solta a fileira da foto ----
+    mov     w0, #O_FENCE
+    bl      ct_count
+    mov     w23, w0                     // cercas do cercado
+    mov     w0, #2                      // o mouse continua no fim da fileira
+    mov     w1, #6
+    bl      bt_hov
+    bl      surv_update
+    bl      fence_plan
+    LA      x9, bt_data
+    str     w0, [x9, #12]               // celulas planejadas
+    mov     w0, #1
+    mov     w1, #0
+    bl      surv_mouse
+    mov     w0, #O_FENCE
+    bl      ct_count
+    sub     w0, w0, w23
+    LA      x9, bt_data
+    str     w0, [x9, #16]               // colocadas
+    str     w23, [x9, #8]
+    str     wzr, [x28, #G_PLACE]
     // ---- de noite: o lobo fica do lado de fora ----
     mov     w9, #28800
     str     w9, [x28, #G_TIME]
@@ -6523,12 +6575,10 @@ bt_stage1:
     csel    w12, w12, w13, gt
     cmp     w12, #3
     cset    w22, lt                     // 1 = ficou dentro
-    mov     w0, #O_FENCE
-    bl      ct_count
-    mov     w23, w0
     LA      x0, txt
     LA      x1, t_b1
-    mov     w2, w23
+    LA      x9, bt_data
+    ldr     w2, [x9, #8]
     bl      ct_num
     mov     x24, x0
     mov     w0, #O_GATE
@@ -6536,6 +6586,14 @@ bt_stage1:
     mov     w2, w0
     mov     x0, x24
     LA      x1, t_b2
+    bl      ct_num
+    LA      x1, t_b9
+    LA      x9, bt_data
+    ldr     w2, [x9, #12]
+    bl      ct_num
+    LA      x1, t_b10
+    LA      x9, bt_data
+    ldr     w2, [x9, #16]
     bl      ct_num
     LA      x1, t_b3
     mov     w2, w21
@@ -7323,6 +7381,8 @@ m_toomanychests: .asciz "Baus demais"
 m_chestok:      .asciz "Bau pronto! Botao direito nele para abrir"
 m_shelterok:    .asciz "Abrigo pronto! Dentro dele nao passa frio"
 m_placecancel:  .asciz "Cancelado"
+m_rowcancel:    .asciz "Fileira cancelada"
+m_placefence:   .asciz "Arraste na grade para a fileira; solte para colocar"
 m_nodrop:       .asciz "Construcoes nao se largam: clique nelas para colocar"
 m_chestfull:    .asciz "Esvazie o bau antes de desmontar"
 m_axebroke:     .asciz "O machado quebrou!"
@@ -7441,8 +7501,10 @@ t_h6:           .asciz " (perto do fogo="
 t_h7:           .asciz ") | machado: lobo abatido="
 t_h8:           .asciz " em golpes="
 t_h9:           .asciz "animais que apareceram em 15 s: "
-t_b1:           .asciz "cercas: colocadas="
+t_b1:           .asciz "cercas: cercado="
 t_b2:           .asciz " portao="
+t_b9:           .asciz " | fileira na horizontal da tela: celulas="
+t_b10:          .asciz " colocadas="
 t_b3:           .asciz " | lobo de noite do lado de fora: vida 100 -> "
 t_b4:           .asciz " | personagem ficou dentro="
 t_b5:           .asciz "pesca: lancou="
@@ -7467,7 +7529,7 @@ t_8:            .asciz " luz="
 // teste de cercas e pesca
     .p2align 2
 bt_data:    .word 0, 0, 0, 0, 0         // centro (u, v), lobo, alvo da linha
-bt_corners: .byte 3, -3,  3, 3,  -3, 3,  -3, -3
+bt_corners: .byte -3, -3,  3, -3,  3, 3,  -3, 3,  -3, -3
 bt_wdir:    .byte 3, 0,  0, 3,  -3, 0,  0, -3
 
 // ---- memoria ------------------------------------------------------------

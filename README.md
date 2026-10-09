@@ -22,7 +22,7 @@ Você aparece sozinho num mundo gerado aleatoriamente: terreno contínuo, mar, p
 | 1 / 2 / 3 | põe na mão o machado, a picareta ou o arco (de novo: mãos vazias) |
 | 4 | põe ou tira a tocha da outra mão |
 | 5 | põe na mão a vara de pesca |
-| arrastar com cercas na mão | faz uma fileira de cercas seguindo o mouse |
+| arrastar com cercas na mão | prévia da fileira na grade (horizontal, vertical ou diagonal); soltar coloca |
 | clique na água com a vara na mão | lança a linha; quando aparecer "Peixe! Clique!", clique para fisgar |
 | clique com o arco na mão | atira uma flecha onde está o mouse |
 | clique num animal perto | golpe (machado tira mais vida) |
@@ -120,13 +120,16 @@ Os animais aparecem longe da vista, cada um no seu terreno, e somem quando ficam
 
 **Cercas e portão**
 
-- Fabrique cercas (4 por 2 madeiras) e clique nelas na mochila (ou fabrique e já saia colocando).
-- **Segure o botão esquerdo e arraste**: a fileira segue o mouse, célula por célula, sem buracos na diagonal (até 8 células de você).
+- Fabrique cercas (4 por 2 madeiras) e clique nelas na mochila para colocar.
+- Com cerca ou portão na mão aparece uma **grade** com as células até onde você alcança (8 células), seguindo o relevo.
+- **Aperte o botão esquerdo no começo da fileira e arraste.** A prévia trava em 8 direções da tela: horizontal, vertical e as duas diagonais. As células ficam **verdes** onde dá, **vermelhas** onde não dá (água, longe, em cima de você ou sem cerca suficiente) e **brancas** onde já tem cerca. Embaixo aparece quantas cercas a fileira gasta.
+- **Solte para colocar** a fileira toda. O botão direito, durante o arraste, cancela só a fileira.
+- Na horizontal e na vertical da tela a fileira vira uma **escadinha fechada** (uma célula a mais por degrau): nada passa pela quina.
 - Cerca não deixa ninguém passar. O **portão** deixa você passar, mas os animais não. Coloque o portão em cima de uma cerca para trocar (a cerca volta para a mochila).
 - Um cercado fechado com você dentro: os lobos ficam do lado de fora a noite toda.
 - Para desmontar, segure o botão esquerdo nela, como numa árvore: volta para a mochila.
 
-![Cercado com portão e um lobo do lado de fora](screenshots/cerca.png)
+![Grade, prévia de uma fileira e um cercado com portão](screenshots/cerca.png)
 
 **Pesca**
 
@@ -250,6 +253,8 @@ O **abrigo** protege do frio do clima e do granizo.
 | `sobrevivencia.S` | personagem, coleta, mochila, skills, fabricar, baús, abrigos, fome, calor, fogueiras, água, noite e interface |
 | `clima.S` | estações, sorteio do clima, efeitos, chuva/neve/granizo, cor do clima e relâmpago |
 | `animais.S` | animais (aparecer pelo terreno, fugir, perseguir, morder), flechas e golpes |
+| `cercas.S` | cercas e portões: grade de colisão, fileira travada em 8 direções, grade e prévia na tela, trocar cerca por portão |
+| `pesca.S` | vara de pesca: lançar, boia, mordida, fisgar, tipo de peixe pela água |
 
 - **Geração:** ruído fractal num mapa de altura de 512x512, só com aritmética inteira. A mesma semente sempre gera o mesmo mundo.
 - **Terreno contínuo ("voxel space" isométrico):** cada coluna da tela anda pelo mundo de frente para trás e pinta só o que fica visível. As 1280 colunas são divididas entre **8 threads**, uma para cada núcleo.

@@ -1830,6 +1830,7 @@ draw_all:
     bl      surv_light                  // escuridao da noite
     bl      weather_tint                // cor do clima (so no mundo)
     bl      weather_fx                  // chuva, neve, granizo
+    bl      fence_overlay               // grade e previa das cercas
 2:  ldr     x0, [x28, #G_TEX]
     mov     x1, #0
     LA      x2, fb
