@@ -1,6 +1,7 @@
 // =====================================================================
 //  TRILHOS - um jogo de sobrevivencia (estilo Factorio), todo escrito em
 //  assembly ARM64 (AArch64). Roda no macOS (Apple Silicon) e no Linux ARM64.
+//  (sprites 15-21: ferramentas, tocha, comida, cesto, bau e abrigo)
 //
 //  Terreno continuo (sem tiles): um mapa de altura 512x512 interpolado
 //  e desenhado coluna por coluna (tecnica "voxel space" com projecao
@@ -250,6 +251,24 @@ shot_mode:
     bl      F(SDL_RenderPresent)
     mov     w0, #1
     bl      surv_selftest_skills
+
+    // fabricar: ferramentas, bau, abrigo, tocha (fotos de dia e de noite)
+    mov     w0, #0
+    bl      surv_selftest_craft
+    bl      draw_all
+    LA      x0, s_shot_craft
+    bl      save_bmp
+    ldr     x0, [x28, #G_REN]
+    bl      F(SDL_RenderPresent)
+    mov     w0, #1
+    bl      surv_selftest_craft
+    bl      draw_all
+    LA      x0, s_shot_torch
+    bl      save_bmp
+    ldr     x0, [x28, #G_REN]
+    bl      F(SDL_RenderPresent)
+    mov     w0, #2
+    bl      surv_selftest_craft
 
     // agua: nadando, tubarao chegando e o fim
     mov     w0, #0
@@ -957,8 +976,10 @@ he_start:
     b       he_loop
 
 he_key_game:
-    cmp     w20, #41                    // ESC: volta ao titulo
-    b.ne    1f
+    cmp     w20, #41                    // ESC: cancela/fecha janelas, ou
+    b.ne    1f                          // volta ao titulo
+    bl      surv_esc
+    cbnz    w0, he_loop
     str     wzr, [x28, #G_STATE]
     mov     w0, #0
     bl      set_zoom
@@ -2110,6 +2131,70 @@ sprites:
     .byte 23,23,23,23,23,23
     .byte 0,23,23,0,23,0
     .p2align 7
+// 15: machado
+    .byte 7, 7, 3, 0
+    .byte 0,0,0,0,13,13,0
+    .byte 0,0,0,13,12,12,13
+    .byte 0,0,0,31,13,12,13
+    .byte 0,0,31,0,0,13,0
+    .byte 0,31,0,0,0,0,0
+    .byte 31,0,0,0,0,0,0
+    .byte 1,0,0,0,0,0,0
+    .p2align 7
+// 16: picareta
+    .byte 7, 6, 3, 0
+    .byte 0,13,13,13,13,13,0
+    .byte 13,12,0,31,0,12,13
+    .byte 13,0,0,31,0,0,13
+    .byte 0,0,0,31,0,0,0
+    .byte 0,0,0,31,0,0,0
+    .byte 0,0,0,1,0,0,0
+    .p2align 7
+// 17: tocha (na mochila e na mao do personagem)
+    .byte 3, 7, 1, 0
+    .byte 0,24,0
+    .byte 25,24,25
+    .byte 26,25,26
+    .byte 0,31,0
+    .byte 0,31,0
+    .byte 0,31,0
+    .byte 0,1,0
+    .p2align 7
+// 18: frutas assadas (no espeto)
+    .byte 9, 3, 4, 0
+    .byte 0,26,26,0,26,26,0,26,26
+    .byte 31,25,26,31,25,26,31,25,26
+    .byte 0,26,10,0,26,10,0,26,10
+    .p2align 7
+// 19: cesto
+    .byte 7, 5, 3, 0
+    .byte 0,0,31,31,31,0,0
+    .byte 0,31,0,0,0,31,0
+    .byte 31,1,31,1,31,1,31
+    .byte 1,31,1,31,1,31,1
+    .byte 0,1,31,1,31,1,0
+    .p2align 7
+// 20: bau
+    .byte 8, 6, 4, 0
+    .byte 0,10,10,10,10,10,10,0
+    .byte 10,31,31,31,31,31,31,10
+    .byte 1,1,1,24,24,1,1,1
+    .byte 31,31,31,24,24,31,31,31
+    .byte 31,31,31,31,31,31,31,31
+    .byte 1,1,1,1,1,1,1,1
+    .p2align 7
+// 21: abrigo (cabana de troncos)
+    .byte 11, 9, 5, 0
+    .byte 0,0,0,0,0,31,0,0,0,0,0
+    .byte 0,0,0,0,31,31,1,0,0,0,0
+    .byte 0,0,0,31,31,1,31,1,0,0,0
+    .byte 0,0,31,31,1,18,1,31,1,0,0
+    .byte 0,31,31,1,18,18,18,1,31,1,0
+    .byte 31,31,1,18,18,18,18,18,1,31,1
+    .byte 31,1,18,18,18,18,18,18,18,1,31
+    .byte 1,31,18,18,18,18,18,18,18,31,1
+    .byte 31,31,1,1,1,1,1,1,1,31,31
+    .p2align 7
 
 s_wintitle:     .asciz "Trilhos - jogo de trens em Assembly ARM64"
 s_title:        .asciz "TRILHOS"
@@ -2138,6 +2223,8 @@ s_shot_contour: .asciz "shot_curvas.bmp"
 s_shot_night:   .asciz "shot_noite.bmp"
 s_shot_swim:    .asciz "shot_nado.bmp"
 s_shot_bag:     .asciz "shot_mochila.bmp"
+s_shot_craft:   .asciz "shot_fabricar.bmp"
+s_shot_torch:   .asciz "shot_tocha.bmp"
 s_shot_shark:   .asciz "shot_tubarao.bmp"
 s_shot_dead:    .asciz "shot_fim.bmp"
 

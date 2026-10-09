@@ -2,7 +2,7 @@
 
 Um jogo de sobrevivência no estilo Factorio, escrito em **assembly ARM64** (AArch64).
 
-Você aparece sozinho num mundo gerado aleatoriamente: terreno contínuo, mar, praias, florestas, montanhas com neve. Precisa coletar madeira, pedra e frutas, não morrer de fome e passar a noite perto de uma fogueira. Quanto mais você faz uma coisa, melhor fica nela, e para se curar precisa estar de barriga cheia.
+Você aparece sozinho num mundo gerado aleatoriamente: terreno contínuo, mar, praias, florestas, montanhas com neve. Precisa coletar madeira, pedra e frutas, fabricar ferramentas e construções, não morrer de fome e passar a noite perto de uma fogueira. Quanto mais você faz uma coisa, melhor fica nela, e para se curar precisa estar de barriga cheia.
 
 ![Dia](screenshots/jogo.png)
 ![Noite](screenshots/noite.png)
@@ -15,10 +15,13 @@ Você aparece sozinho num mundo gerado aleatoriamente: terreno contínuo, mar, p
 | WASD / setas | andar |
 | Shift (segurando) | correr |
 | segurar o botão esquerdo | coletar a árvore, pedra ou arbusto sob o mouse (até 3 células de distância) |
-| E | comer uma fruta (+15 de fome) |
-| F | montar uma fogueira (5 madeiras + 3 pedras) |
+| E | comer (frutas assadas primeiro: +50; frutas: +15) |
+| F | fabricar uma fogueira e escolher onde montar |
+| Tab ou botão **Fabricar** | abre a janela de fabricar |
+| clique no mapa (com uma construção na mão) | coloca a construção; botão direito ou ESC cancela |
+| botão direito num baú | abre o baú (clique num item passa de um lado para o outro) |
 | botão direito numa fogueira | pôr lenha (+30 s de fogo) |
-| I ou botão **Mochila** | abre a mochila |
+| I ou botão **Mochila** | abre a mochila (clique num item: come, coloca ou guarda no baú aberto) |
 | C ou botão **Personagem** | abre as skills |
 | botão direito num item da mochila | larga 1 no chão (com Shift: a pilha toda) |
 | roda do mouse / `+` / `-` | zoom |
@@ -31,6 +34,32 @@ Você aparece sozinho num mundo gerado aleatoriamente: terreno contínuo, mar, p
 - **Árvores e pinheiros:** 4 madeiras cada; somem quando acabam.
 - **Pedras:** 5 pedras cada; muitas nas montanhas, poucas no campo.
 - **Arbustos:** 3 frutas; voltam a dar frutas com o tempo.
+
+**Fabricar (Tab)**
+
+Como no Minecraft e no Factorio, uma janela mostra tudo o que dá para fazer.
+
+- O custo aparece em verde se você tem os materiais e em vermelho se falta algo.
+- Passando o mouse por cima de uma receita, aparece o que ela faz.
+- Fabricar é instantâneo.
+- Construções vão para a mochila e entram direto no modo de colocar: aparece uma prévia no mouse (piscando onde não dá) e você clica no chão, até 5 células do personagem.
+
+| Receita | Custo | O que faz |
+|---|---|---|
+| Machado | 3 madeira, 2 pedra | corta árvores 2x mais rápido; dura 40 madeiras |
+| Picareta | 3 madeira, 3 pedra | quebra pedras 2x mais rápido; dura 40 pedras |
+| Tocha | 2 madeira | acende sozinha quando escurece: luz forte e visão de 10 células por 60 s |
+| Fogueira | 5 madeira, 3 pedra | luz e calor (construção) |
+| Baú | 8 madeira | guarda itens sem pesar na mochila (construção) |
+| Abrigo | 12 madeira, 4 pedra | dentro dele não passa frio à noite (construção) |
+| Frutas assadas | 3 frutas, perto de uma fogueira | enchem 50 de fome |
+| Cesto | 6 madeira | +10 kg no limite da mochila (só um conta) |
+
+- O desgaste das ferramentas e o tempo da tocha acesa aparecem como uma barrinha embaixo do ícone na mochila. Quando o machado ou a picareta quebra, o próximo (se você tiver) entra novo.
+- Para **desmontar** um baú ou um abrigo, segure o botão esquerdo nele: ele volta para a mochila. O baú precisa estar vazio.
+
+![Fabricar](screenshots/fabricar.png)
+![Tocha à noite](screenshots/tocha.png)
 
 **Sobrevivência**
 
@@ -102,7 +131,7 @@ Cada skill vai de nível 0 a 10.
 |---|---|
 | `comum.h` | macros e constantes compartilhadas |
 | `trilhos.S` | janela, entrada, geração do mundo, terreno, árvores |
-| `sobrevivencia.S` | personagem, coleta, mochila, skills, fome, calor, fogueiras, água, noite e interface |
+| `sobrevivencia.S` | personagem, coleta, mochila, skills, fabricar, baús, abrigos, fome, calor, fogueiras, água, noite e interface |
 
 - **Geração:** ruído fractal num mapa de altura de 512x512, só com aritmética inteira. A mesma semente sempre gera o mesmo mundo.
 - **Terreno contínuo ("voxel space" isométrico):** cada coluna da tela anda pelo mundo de frente para trás e pinta só o que fica visível. As 1280 colunas são divididas entre **8 threads**, uma para cada núcleo.
@@ -127,12 +156,12 @@ sudo apt install libsdl3-dev   # ou compile o SDL3 a partir do código-fonte
 make run
 ```
 
-`./trilhos --shot` roda sem interação: tira screenshots, mede o tempo de cada quadro e faz um teste automático (coleta duas árvores, uma pedra e um arbusto, monta uma fogueira, come e passa a noite; corre, anda carregado, larga e recolhe uma pilha de pedras, vê a skill cair sem treino, confere que a vida só sobe com a fome cheia; depois nada num lago e vai para o mar aberto até o tubarão atacar).
+`./trilhos --shot` roda sem interação: tira screenshots, mede o tempo de cada quadro e faz um teste automático (coleta duas árvores, uma pedra e um arbusto, monta uma fogueira, come e passa a noite; corre, anda carregado, larga e recolhe uma pilha de pedras, vê a skill cair sem treino, confere que a vida só sobe com a fome cheia; fabrica tudo, monta baú e abrigo, gasta o machado, acende a tocha à noite e dorme no abrigo; depois nada num lago e vai para o mar aberto até o tubarão atacar).
 
 ## Próximos passos
 
-- [ ] Mesa de trabalho e receitas (machado, picareta, baú)
-- [ ] Minérios (ferro, carvão) e fornalha
+- [x] Fabricar: machado, picareta, tocha, baú, abrigo, cesto, frutas assadas
+- [ ] Minérios (ferro, carvão), fornalha e ferramentas melhores
 - [ ] Animais e caça
 - [ ] Inimigos de noite
 - [ ] Salvar e carregar o jogo

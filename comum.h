@@ -1,6 +1,7 @@
 // =====================================================================
 //  comum.h - macros e constantes compartilhadas por todos os modulos
 //  (incluido com #include no topo de cada arquivo .S)
+//  inclui itens, receitas e a interface de fabricar
 // =====================================================================
 
 // ---- diferencas entre macOS (Mach-O) e Linux (ELF) ------------------
@@ -70,6 +71,7 @@
 .equ SPR_PLAYER, 7           // 7 e 8: personagem (2 quadros)
 .equ SPR_SWIM,  9            // 9 e 10: personagem nadando
 .equ SPR_FIN,   11           // barbatana do tubarao
+.equ SPR_TORCH, 17           // tocha (icone e na mao)
 
 // ---- sobrevivencia ---------------------------------------------------------
 .equ MAXFIRE,   32           // fogueira: 16 bytes (u, v, e, lenha)
@@ -112,9 +114,7 @@
 .equ G_HP,       148         // vida (float 0..100)
 .equ G_FOOD,     152         // fome (float 0..100, 100 = satisfeito)
 .equ G_WARM,     156         // calor (float 0..100)
-.equ G_WOOD,     160         // inventario
-.equ G_STONE,    164
-.equ G_BERRY,    168
+                             // 160-171: livre (o inventario foi para G_INV)
 .equ G_TIME,     172         // quadro dentro do dia
 .equ G_DAY,      176
 .equ G_LMB,      180         // botao esquerdo apertado
@@ -153,7 +153,21 @@
 .equ G_SKLAST,   356         // 5 x u8: ultimo nivel anunciado
 .equ G_STAMAX,   364         // stamina maxima (float; cresce com corrida e natacao)
 .equ G_SATED,    368         // quadros que a fome ainda fica cheia (vida so sobe assim)
-.equ GSIZE,      384
+.equ G_CRAFTOPEN, 372        // janela de fabricar aberta
+.equ G_PLACE,    376         // colocando uma construcao: item + 1 (0 = nao)
+.equ G_CHESTOPEN, 380        // bau aberto: numero do bau + 1 (0 = fechado)
+.equ G_CHESTOBJ, 384         // objeto do bau aberto
+.equ G_AXEDUR,   388         // usos que restam no machado em uso
+.equ G_PICKDUR,  392         // ... e na picareta
+.equ G_TORCHT,   396         // quadros que restam na tocha acesa
+.equ G_TORCHLIT, 400         // tocha acesa agora
+.equ G_HOVREC,   404         // receita sob o mouse (-1)
+.equ G_INSHELTER, 408        // dentro de um abrigo
+.equ G_INV,      416         // mochila: NITEMS contadores (u32)
+.equ G_WOOD,     (G_INV + 0)
+.equ G_STONE,    (G_INV + 4)
+.equ G_BERRY,    (G_INV + 8)
+.equ GSIZE,      512
 
 // skills
 .equ SK_SWIM,    0           // natacao
@@ -170,12 +184,35 @@
 .equ G_SKMINE,   (G_SKILL + 4 * SK_MINE)
 .equ G_SKSTR,    (G_SKILL + 4 * SK_STR)
 
-// itens da mochila (G_WOOD, G_STONE e G_BERRY sao um vetor)
-.equ NITEMS,     3
-.equ O_LOGS,     12          // pilhas largadas no chao (= sprite 12, 13, 14)
+// itens da mochila (vetor em G_INV)
+.equ IT_WOOD,    0
+.equ IT_STONE,   1
+.equ IT_BERRY,   2
+.equ IT_AXE,     3           // machado
+.equ IT_PICK,    4           // picareta
+.equ IT_TORCH,   5           // tocha
+.equ IT_COOKED,  6           // frutas assadas
+.equ IT_BASKET,  7           // cesto (+10 kg)
+.equ IT_FIRE,    8           // fogueira (construcao)
+.equ IT_CHEST,   9           // bau (construcao)
+.equ IT_SHELTER, 10          // abrigo (construcao)
+.equ NITEMS,     11
+.equ NDROP,      8           // itens 0..7 podem ser largados no chao
+.equ IT_FIRSTBUILD, 8        // 8..10 sao colocados no mapa
+
+// objetos que voce cria
+.equ O_LOGS,     12          // pilhas largadas: 12 + item (sprites 12..19)
 .equ O_STONES,   13
 .equ O_BERRIES,  14
-.equ O_LAST,     14          // ultimo tipo de objeto desenhavel
+.equ O_CHEST,    20          // bau (sprite 20)
+.equ O_SHELTER,  21          // abrigo (sprite 21)
+.equ O_LAST,     21          // ultimo tipo de objeto desenhavel
+
+.equ TOOLDUR,    40          // usos de um machado ou picareta
+.equ TORCHTIME,  3600        // uma tocha queima 60 s
+.equ MAXCHEST,   64
+.equ MAXSHELTER, 32
+.equ NRECIPES,   8
 
 // interface (coordenadas do espaco de texto 640 x 360)
 .equ BTN_Y,      16
@@ -193,9 +230,19 @@
 .equ SLOT,       44          // lado do quadrado
 .equ SLOTSTEP,   50
 .equ CHR_X,      4           // janela do personagem (embaixo do status)
-.equ CHR_Y,      114
+.equ CHR_Y,      126
 .equ CHR_W,      216
 .equ CHR_H,      186
+.equ BTNF_X,     284         // botao "Fabricar"
+.equ BTNF_W,     116
+.equ CRF_X,      224         // janela de fabricar (e do bau, no mesmo lugar)
+.equ CRF_Y,      36
+.equ CRF_W,      188
+.equ CRF_H,      246
+.equ CRF_ROW,    24          // altura de cada receita
+.equ CRF_TOP,    (CRF_Y + 18)
+.equ CHS_SLOTX,  (CRF_X + 22) // bau: grade 3 x 4
+.equ CHS_SLOTY,  (CRF_Y + 26)
 
 // agua: 3 niveis (raso, fundo, mar aberto)
 .equ W_SHALLOW,  150         // ate esta profundidade (1/16 px) e raso
@@ -261,3 +308,5 @@
 .equ F_INV100,   204
 .equ F_TENTH,    208
 .equ F_STAMSK,   212
+.equ F_TORCHVIS, 216
+.equ F_EATCOOKED, 220
