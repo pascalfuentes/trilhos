@@ -44,6 +44,7 @@ Você é uma espécie de profeta que não envelhece, e chega com **3 famílias**
 | clique numa pessoa | seleciona (setinha e nome em cima) |
 | botão direito no mapa (com alguém selecionado) | a pessoa vai até lá |
 | F11 | tela cheia (liga/desliga); a janela também pode ser redimensionada |
+| F10 | modo leve: desenha metade das colunas do terreno (para computadores lentos ou emulados) |
 | G | liga/desliga a grade no chão |
 | N | curvas de nível |
 | ESC | sai das zonas, fecha janelas, tira a seleção ou volta ao menu |
@@ -387,6 +388,7 @@ O mundo é difícil de propósito: comida é pouca e estraga, o inverno pesa e a
 | `ferro.S` | fornalha, lampiões, ferreiro, ferramentas de ferro da vila e a visão dos moradores |
 | `desafio.S` | pedreiras e minas, comida que estraga, manadas, alcateias da noite e o soldado |
 | `mochila.S` | a mochila de cada morador (carga, lanche, ferramenta, dar e pegar), o pescador e o pincel de zonas |
+| `intel/instalar.sh` | prepara um Ubuntu x86-64 para rodar o jogo emulado (QEMU) |
 | `vila.S` | casas e terrenos, obras (barraco, casa, cerca), casamentos, nascimentos, árvores que crescem por ano e a árvore genealógica |
 | `pessoas.h` | estruturas da pessoa, do parentesco e da casa |
 
@@ -413,6 +415,24 @@ make run
 sudo apt install libsdl3-dev   # ou compile o SDL3 a partir do código-fonte
 make run
 ```
+
+## Jogar num Mac Intel (ou PC Intel/AMD)
+
+O Ermo é assembly ARM64, então num processador Intel ele roda **emulado**: um Ubuntu numa máquina virtual e, dentro dele, o QEMU traduzindo o ARM64. Fica mais lento que no Mac com chip M; por isso começa no **modo leve** (F10 liga e desliga). Dê à máquina virtual o máximo de núcleos que puder: o jogo desenha em 8 threads.
+
+1. Instale o [UTM](https://mac.getutm.app) (grátis) e baixe o **Ubuntu 24.04 Desktop** (amd64) em [ubuntu.com/download/desktop](https://ubuntu.com/download/desktop).
+2. No UTM: **Create a New Virtual Machine → Virtualize → Linux**, escolha o ISO do Ubuntu, dê **4 GB** de memória ou mais, **todos os núcleos menos 1 ou 2** e uns **25 GB** de disco. Instale o Ubuntu normalmente.
+3. No Ubuntu, abra o Terminal e rode:
+
+```sh
+sudo apt install -y git
+git clone https://github.com/pascalfuentes/trilhos.git ~/trilhos
+bash ~/trilhos/intel/instalar.sh
+```
+
+O script (`intel/instalar.sh`) liga os pacotes arm64 do Ubuntu, instala o QEMU e o compilador ARM64, compila o SDL3 para ARM64 (janela X11) e o jogo, e cria o `~/trilhos/jogar.sh` e o atalho **Ermo** nos aplicativos. Para jogar: `~/trilhos/jogar.sh`. Para atualizar depois: `bash ~/trilhos/intel/instalar.sh --so-jogo`.
+
+O tempo do jogo anda por quadro: se a máquina virtual desenhar menos de 60 quadros por segundo, o dia passa mais devagar.
 
 `./ermo --shot` roda sem interação: tira screenshots, mede o tempo de cada quadro e faz um teste automático (coleta duas árvores, uma pedra e um arbusto, monta uma fogueira, come e passa a noite; corre, anda carregado, larga e recolhe uma pilha de pedras, vê a skill cair sem treino, confere que a vida só sobe com a fome cheia; fabrica tudo, monta baú e abrigo, gasta o machado, acende a tocha à noite, passa a noite no abrigo e dorme das 22h às 06h; passa 10 s em cada um dos 8 climas (com foto); caça um cervo com o arco, enfrenta um lobo à noite com o machado e vê os animais aparecendo; faz um cercado e pesca; ara e planta 6 células perto da água, colhe o trigo maduro, confere que o verde não sai e que a enxada desfaz a terra (e perde a semente), faz pão, compara o crescimento com e sem água e no inverno, e solta um coelho perto do trigo sem cerca; monta a vila (3 barracos) com zonas de floresta, pedra, plantação e moradia e deixa trabalhar 3 horas (com foto pintando zonas e do painel), confere o baú, a terra arada, o trigo, as mudas, os caminhos e as obras (casa e cerca), manda todos dormir, passa 24 dias (as mudas viram jovens e depois adultas, casamentos e nascimentos), deixa as obras fazerem o barraco do casal novo (foto da vila e da árvore genealógica) e solta um lobo perto de uma pessoa; tenta quebrar um veio sem picareta, minera ferro e carvão, monta a fornalha, faz 18 barras, carvão de madeira, ferramentas, espada, armadura e um lampião, compara o machado de pedra com o de ferro, deixa um lobo morder com armadura (foto de noite na fornalha) e põe um ferreiro, um veio e um machado de ferro na vila; pinta e apaga com o pincel, pinta uma zona de Pesca perto do baú, põe uma vara no baú e uma pescadora para trabalhar 2 horas, confere o lanche nas mochilas e dá e pega pão da mochila de uma pessoa (fotos do pincel e da mochila dela); conta pedreiras, minas, arbustos e trigo, esgota uma pedreira (foto), deixa 8 carnes cruas 1 dia na mochila e no baú, passa 10 s de sol no inverno, solta uma manada de cervos e confere que fica junta e, de noite, solta uma alcateia de 4 lobos na vila com um soldado de espada (foto); depois nada num lago e vai para o mar aberto até o tubarão atacar).
 

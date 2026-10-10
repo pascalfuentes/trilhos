@@ -46,6 +46,15 @@ F(main):
     cmp     w0, #1
     cset    w9, gt
     str     w9, [x28, #G_SHOT]
+    LA      x0, s_leveenv               // ERMO_LEVE=1: modo leve
+    bl      F(getenv)
+    cbz     x0, 1f
+    ldrb    w9, [x0]
+    cmp     w9, #'1'
+    cset    w9, eq
+    LA      x10, leve
+    str     w9, [x10]
+1:
 
     mov     w0, #SDL_INIT_VIDEO
     bl      F(SDL_Init)
@@ -1148,7 +1157,18 @@ he_key:
     mov     w1, w9
     bl      F(SDL_SetWindowFullscreen)
     b       he_loop
-1:  ldr     w9, [x28, #G_STATE]
+1:  cmp     w20, #67                    // F10: modo leve
+    b.ne    2f
+    LA      x10, leve
+    ldr     w9, [x10]
+    eor     w9, w9, #1
+    str     w9, [x10]
+    LA      x0, m_leve0
+    cbz     w9, 11f
+    LA      x0, m_leve1
+11: bl      set_msg
+    b       he_loop
+2:  ldr     w9, [x28, #G_STATE]
     cbnz    w9, he_key_game
     // --- tela de titulo ---
     cmp     w20, #41                    // ESC
@@ -1492,6 +1512,10 @@ draw_cols:
     str     w9, [sp, #104]
     ldr     w9, [x28, #G_FLOOD]         // enchente: nivel da agua
     str     w9, [sp, #112]
+    LA      x9, leve                    // modo leve: uma coluna sim, outra
+    ldr     w9, [x9]                    // nao (a de cada lado e copiada)
+    add     w9, w9, #1
+    str     w9, [sp, #116]
 dt_col:
     ldr     w9, [sp, #88]
     sub     w10, w26, #640
@@ -1575,12 +1599,24 @@ dt_proj:
     LA      x6, fb
     LA      x7, zb
     sub     w8, w25, w1
+    ldr     w9, [sp, #116]
+    cmp     w9, #1
+    b.eq    2f
+21: add     w10, w5, #1                 // modo leve: pinta as duas colunas
+    str     w0, [x6, w5, uxtw #2]
+    str     w0, [x6, w10, uxtw #2]
+    strh    w2, [x7, w5, uxtw #1]
+    strh    w2, [x7, w10, uxtw #1]
+    add     w5, w5, w4
+    subs    w8, w8, #1
+    b.ne    21b
+    b       22f
 2:  str     w0, [x6, w5, uxtw #2]
     strh    w2, [x7, w5, uxtw #1]
     add     w5, w5, w4
     subs    w8, w8, #1
     b.ne    2b
-    mov     w25, w1
+22: mov     w25, w1
     cbz     w25, dt_coldone
 dt_next:
     sub     w21, w21, w23
@@ -1589,7 +1625,8 @@ dt_next:
     cmp     w24, w27
     b.gt    dt_row
 dt_coldone:
-    add     w26, w26, #1
+    ldr     w9, [sp, #116]
+    add     w26, w26, w9
     ldr     w9, [sp, #108]
     cmp     w26, w9
     b.lt    dt_col
@@ -3204,6 +3241,9 @@ s_sep:          .asciz "   -   "
 s_dash:         .asciz ", "
 s_hab:          .asciz " hab."
 s_nl:           .asciz "\n"
+s_leveenv:      .asciz "ERMO_LEVE"
+m_leve1:        .asciz "Modo leve: ligado (F10 desliga)"
+m_leve0:        .asciz "Modo leve: desligado (F10 liga)"
 s_bench:        .asciz "tempo por quadro: "
 s_bench2:       .asciz " us\n"
 s_shot_f12:     .asciz "ermo.bmp"
@@ -3258,3 +3298,4 @@ GBSS tids, 64
 GBSS parfunc, 16
 GBSS zb, 1843200
 GBSS fb, 3686400
+GBSS leve, 16                           // modo leve (F10 / ERMO_LEVE=1)

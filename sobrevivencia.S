@@ -2956,6 +2956,10 @@ post_cols:
     cmp     w9, #255
     cinc    w10, w10, lt
     str     w10, [sp, #28]
+    LA      x9, leve
+    ldr     w9, [x9]
+    str     w9, [sp, #40]
+    str     wzr, [sp, #32]
     LA      x16, fb
     LA      x17, zb
     LA      x15, lightbuf
@@ -2967,7 +2971,14 @@ pc_row:
 pc_px:
     add     w10, w11, w12, lsl #10
     add     w10, w10, w12, lsl #8       // indice do pixel
-    ldrh    w0, [x17, w10, uxtw #1]     // profundidade = (u+v)
+    ldr     w4, [sp, #40]               // modo leve, coluna impar: usa a
+    cbz     w4, 1f                      // visao e a memoria da par
+    tbz     w11, #0, 1f
+    ldr     w6, [sp, #32]
+    cbz     w6, pc_black
+    ldr     w9, [sp, #36]
+    b       pc_color
+1:  ldrh    w0, [x17, w10, uxtw #1]     // profundidade = (u+v)
     ldr     w1, [sp, #8]
     ldr     w2, [sp, #12]
     madd    w1, w11, w1, w2             // (u-v) desta coluna
@@ -3001,6 +3012,7 @@ pc_px:
     sub     w7, w7, w6
     mul     w7, w7, w3
     add     w6, w6, w7, asr #8          // S
+    str     w6, [sp, #32]
     cbz     w6, pc_black
     add     x5, x14, w4, uxtw           // visao agora (bilinear)
     ldrb    w9, [x5]
@@ -3016,6 +3028,8 @@ pc_px:
     sub     w7, w7, w9
     mul     w7, w7, w3
     add     w9, w9, w7, asr #8          // V
+    str     w9, [sp, #36]
+pc_color:
     ldr     w0, [x16, w10, uxtw #2]
     ubfx    w1, w0, #16, #8             // r
     ubfx    w2, w0, #8, #8              // g
@@ -3086,6 +3100,7 @@ pc_store:
     str     w0, [x16, w10, uxtw #2]
     b       pc_next
 pc_black:
+    str     wzr, [sp, #32]
     mov     w0, #0xFF000000
     str     w0, [x16, w10, uxtw #2]
 pc_next:
