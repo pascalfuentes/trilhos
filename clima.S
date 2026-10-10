@@ -186,6 +186,18 @@ weather_effects:
     fsub    s1, s1, s7
     fmadd   s1, s1, s0, s7
     str     s1, [x28, #G_WFOOD]
+    ldr     w9, [x28, #G_SEASON]        // inverno: mais frio e mais fome
+    cmp     w9, #3
+    b.ne    71f
+    LA      x9, wwinter
+    ldr     s2, [x9]
+    ldr     s3, [x28, #G_WCOLD]
+    fadd    s3, s3, s2
+    str     s3, [x28, #G_WCOLD]
+    ldr     s2, [x9, #4]
+    fmul    s1, s1, s2
+    str     s1, [x28, #G_WFOOD]
+71:
     LA      x9, wvis
     ldr     s1, [x9, x15, lsl #2]
     fsub    s1, s1, s7
@@ -457,6 +469,9 @@ fx_ret:
     .p2align 2
 wconst:
     .float 0.00390625                   // 1/256
+// inverno: frio extra por quadro (mesmo de sol) e fome x1,25
+wwinter:
+    .float 0.016, 1.25
 
 // por clima: sol, nublado, chuva, tempestade, calorao, neve, granizo, enchente
 wcold:  .float 0, 0, 0.006, 0.010, -0.0075, 0.016, 0.006, 0.006

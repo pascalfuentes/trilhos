@@ -1108,7 +1108,7 @@ fconst:
 // obras, ferreiro)
     .globl jobtool
 jobtool:
-    .byte 0, IT_IAXE, IT_IPICK, IT_IHOE, 0, 0, IT_ROD
+    .byte 0, IT_IAXE, IT_IPICK, IT_IHOE, 0, 0, IT_ROD, IT_SWORD
     .p2align 2
 
 itf:

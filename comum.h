@@ -257,7 +257,12 @@
 .equ G_FURNT,    1168        // conta quadros ate olhar a fornalha de novo
 .equ G_ZBRUSH,   1172        // pincel de zonas: tamanho 1..12
 .equ G_NOFISHT,  1176        // quando avisou que o pescador nao tem vara
-.equ GSIZE,      1184
+.equ G_SPOILT,   1184        // quadros ate a comida estragar um pouco
+.equ G_SPOILK,   1188        // passos (1/32 de dia) contados
+.equ G_PACKU,    1192        // para onde vai a alcateia da noite (float)
+.equ G_PACKV,    1196
+.equ G_HERDID,   1200        // ultimo grupo de manada
+.equ GSIZE,      1216
 
 .equ W_SUN,      0
 .equ W_CLOUDY,   1
@@ -396,7 +401,8 @@
 .equ J_BUILD,    4           // obras: barracos, casas e cercas
 .equ J_SMITH,    5           // ferreiro: barras de ferro e carvao na fornalha
 .equ J_FISH,     6           // pescador: zona de Pesca na agua
-.equ NJOBS,      7
+.equ J_SOLDIER,  7           // soldado: defende a vila
+.equ NJOBS,      8
 .equ Z_FOREST,   1
 .equ Z_STONE,    2
 .equ Z_FARM,     3
@@ -406,7 +412,7 @@
 .equ Z_ERASE,    7           // (so o pincel: apaga)
 .equ MAXCROP,    512         // plantas
 .equ CROPRIPE,   192         // maduro (a variante vai de 0 a 192)
-.equ CROPP,      71          // chance de crescer por passo (em 1000)
+.equ CROPP,      45          // chance de crescer por passo (em 1000)
 .equ FENCEREACH, 64          // cercas ate 8 celulas do personagem (8^2)
 .equ FENCEMAXSTEP, 24        // passos numa fileira
 
@@ -419,7 +425,7 @@
 .equ A_CRAB,     5
 .equ NATYPES,    6
 .equ MAXANIM,    48          // vagas na lista
-.equ MAXALIVE,   18          // no maximo vivos ao mesmo tempo
+.equ MAXALIVE,   10          // no maximo vivos ao mesmo tempo
 .equ MAXARROW,   16
 .equ HB_X,       228         // barra "na mao" (7 quadrados) embaixo, ao lado da janela do personagem
 .equ NHOTBAR,    8

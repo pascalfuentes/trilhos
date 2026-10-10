@@ -135,6 +135,7 @@ follow_camera:
 
 // obj_dist2(w0 = objeto) -> s0 = distancia^2 ate o personagem (celulas)
 // folha: usa x9-x10, x16, s0-s3
+    .globl obj_dist2
 obj_dist2:
     LA      x9, objs
     add     x9, x9, x0, lsl #3
@@ -180,6 +181,7 @@ gen_resources:
     stp     x21, x22, [sp, #32]
     stp     x23, x24, [sp, #48]
     str     x25, [sp, #64]
+    bl      pits_clear                  // nenhum buraco de pedreira
     ldr     w20, [x28, #G_SEED]
     add     w20, w20, #77
     mov     w19, #513
@@ -202,19 +204,28 @@ gr_loop:
     mov     w2, w20
     bl      hash3
     mov     w21, w0
-    // chance de pedra (em 1024)
-    mov     w9, #2
-    cmp     w24, #110
-    b.hs    1f
-    mov     w9, #6                      // campo seco
-1:  cmp     w25, #E_HILL
-    b.lt    2f
-    mov     w9, #70                     // colinas
-    mov     w10, #E_ROCK
-    cmp     w25, w10
-    b.lt    2f
-    mov     w9, #130                    // montanha
-2:  and     w10, w21, #1023
+    // pedreiras e minas: manchas de varias celulas (desafio.S)
+    mov     w0, w22
+    mov     w1, w23
+    bl      quarry_cell
+    tbnz    w0, #31, 5f
+    mov     w2, w0
+    mov     w3, w1
+    stp     w2, w3, [sp, #-16]!         // o chao da pedreira
+    mov     w1, w0
+    mov     w0, w19
+    bl      quarry_ground
+    ldp     w2, w3, [sp], #16
+    ubfx    w0, w21, #10, #4            // perto do meio da celula
+    add     w0, w0, #24
+    ubfx    w1, w21, #16, #4
+    add     w1, w1, #24
+    b       gr_place
+5:  mov     w9, #1                      // pedra solta (rara): 3 pedras
+    cmp     w25, #E_HILL
+    b.lt    6f
+    mov     w9, #5
+6:  and     w10, w21, #1023
     cmp     w10, w9
     b.hs    gr_bush
     lsr     w0, w21, #10
@@ -222,30 +233,18 @@ gr_loop:
     lsr     w1, w21, #16
     and     w1, w1, #63
     mov     w2, #O_ROCK
-    mov     w3, #5                      // 5 pedras
-    cmp     w25, #E_HILL                // colinas e acima: veios
-    b.lt    gr_place
-    lsr     w9, w21, #24
-    cmp     w9, #34                     // ~13%: ferro
-    b.hs    1f
-    mov     w2, #O_IRONV
-    mov     w3, #4
-    b       gr_place
-1:  cmp     w9, #60                     // ~10%: carvao
-    b.hs    gr_place
-    mov     w2, #O_COALV
-    mov     w3, #5
+    mov     w3, #3
     b       gr_place
 gr_bush:
     cmp     w25, #E_HILL
     b.ge    gr_next
-    mov     w9, #3
+    mov     w9, #1                      // poucos arbustos com frutas
     cmp     w24, #105
     b.lo    3f
-    mov     w9, #14                     // campo umido
+    mov     w9, #4                      // campo umido
     cmp     w24, #150
     b.lo    3f
-    mov     w9, #6                      // dentro da floresta
+    mov     w9, #2                      // dentro da floresta
 3:  lsr     w10, w21, #22
     cmp     w10, w9
     b.hs    gr_wheat
@@ -254,7 +253,7 @@ gr_bush:
     lsr     w1, w21, #12
     and     w1, w1, #63
     mov     w2, #O_BUSH
-    mov     w3, #3                      // 3 frutas
+    mov     w3, #2                      // 2 frutas
     b       gr_place
 gr_wheat:                               // trigo selvagem: campo aberto
     cmp     w24, #70
@@ -262,7 +261,7 @@ gr_wheat:                               // trigo selvagem: campo aberto
     cmp     w24, #150
     b.hs    gr_next
     sub     w10, w10, w9
-    cmp     w10, #5
+    cmp     w10, #1                     // trigo selvagem: raro
     b.hs    gr_next
     lsr     w0, w21, #4
     and     w0, w0, #63
@@ -567,6 +566,7 @@ find_fire_near:
 9:  ret
 
 // harvest(w0 = objeto): da 1 recurso e gasta o objeto
+    .globl harvest
 harvest:
     stp     x29, x30, [sp, #-48]!
     mov     x29, sp
@@ -680,7 +680,17 @@ harvest:
     b.ne    5f
     mov     w12, #O_BUSHE               // arbusto fica sem frutas
 5:  strb    w12, [x9, #6]
-    cmp     w10, #O_PINE                // arvore caiu: deixa de tapar a visao
+    cmp     w10, #O_ROCK                // pedreira ou veio: vira buraco
+    b.eq    51f
+    cmp     w10, #O_IRONV
+    b.lo    52f
+    cmp     w10, #O_COALV
+    b.hi    52f
+51: mov     x0, x9
+    mov     w1, w10
+    bl      quarry_done
+    b       6f
+52: cmp     w10, #O_PINE                // arvore caiu: deixa de tapar a visao
     b.hi    6f
     ldrh    w11, [x9]
     lsr     w11, w11, #6
@@ -1212,6 +1222,7 @@ su_nomine:
 
     // ---- fome ----
 su_food:
+    bl      spoil_tick                  // comida estraga (desafio.S)
     ldr     w9, [x28, #G_SATED]         // cheio: segura um tempo antes de cair
     cbz     w9, 213f
     sub     w9, w9, #1
@@ -1547,12 +1558,16 @@ su_food:
     b       22b
 24: str     w19, [x28, #G_NFIRE]
 
-    // ---- arbustos voltam a dar frutas (a cada 40 s, chance de 1/6) ----
+    // ---- arbustos voltam a dar frutas (a cada 40 s, chance de 1/54: uns
+    // 3 dias; com chuva, metade); no inverno nao ----
     ldr     w9, [x28, #G_TIME]
     mov     w10, #2400
     udiv    w11, w9, w10
     msub    w11, w11, w10, w9
     cbnz    w11, su_cam
+    ldr     w9, [x28, #G_SEASON]
+    cmp     w9, #3
+    b.eq    su_cam
     ldr     w19, [x28, #G_NOBJ]
     LA      x20, objs
 25: cbz     w19, su_cam
@@ -1560,7 +1575,7 @@ su_food:
     cmp     w9, #O_BUSHE
     b.ne    26f
     bl      rng
-    mov     w9, #6
+    mov     w9, #54
     ldr     w10, [x28, #G_WEATHER]      // chuva: frutas voltam 2x mais rapido
     ldr     w11, [x28, #G_WK]
     cmp     w11, #128
@@ -1571,13 +1586,13 @@ su_food:
     b.eq    250f
     cmp     w10, #W_FLOOD
     b.ne    251f
-250: mov    w9, #3
+250: mov    w9, #27
 251: udiv   w10, w0, w9
     msub    w10, w10, w9, w0
     cbnz    w10, 26f
     mov     w9, #O_BUSH
     strb    w9, [x20, #6]
-    mov     w9, #3
+    mov     w9, #2
     strb    w9, [x20, #7]
 26: add     x20, x20, #8
     sub     w19, w19, #1
@@ -5408,6 +5423,7 @@ tooltip_box:
 // =====================================================================
 
 // nearest_obj(w0 = tipo a, w1 = tipo b) -> w0 objeto mais perto (-1)
+    .globl nearest_obj
 nearest_obj:
     stp     x29, x30, [sp, #-64]!
     mov     x29, sp
@@ -7280,7 +7296,7 @@ fconsts:
     .float 0.015625         // F_INV64
     .float 0.075            // F_SPEED (celulas por quadro)
     .float 9.0              // F_REACH2 (alcance de 3 celulas)
-    .float 0.00115          // F_FOODRATE (100 -> 0 em ~24 min)
+    .float 0.0017           // F_FOODRATE (100 -> 0 em ~16 min)
     .float 0.0075           // F_COLD
     .float 0.05             // F_HEAT
     .float 0.0125           // F_DAYWARM
@@ -7669,6 +7685,7 @@ costnames:
 
 // nomes (16 bytes cada)
     .p2align 4
+    .globl itemnames
 itemnames:
     .asciz "Madeira"
     .p2align 4

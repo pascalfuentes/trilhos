@@ -39,7 +39,7 @@ Você é uma espécie de profeta que não envelhece, e chega com **3 famílias**
 | roda do mouse / `+` / `-` | zoom |
 | espaço | pausa |
 | P | painel da vila: clique na tarefa para trocar (botão direito volta); embaixo, abas Pessoas / Famílias (árvore genealógica) e páginas `<` `>` |
-| Z | pintar zonas com um **pincel redondo**: 1 Floresta, 2 Pedra, 3 Plantação, 4 Moradia, 5 Pesca, 0 apaga; segure o botão esquerdo para pintar e o direito para apagar; roda do mouse ou `[` `]` mudam o tamanho (1 a 12) (Z ou ESC sai) |
+| Z | pintar zonas com um **pincel redondo**: 1 Floresta, 2 Plantação, 3 Moradia, 4 Pesca, 0 apaga; segure o botão esquerdo para pintar e o direito para apagar; roda do mouse ou `[` `]` mudam o tamanho (1 a 12) (Z ou ESC sai) |
 | botão direito numa pessoa | abre a **mochila** dela (clique num item dela: você pega; num item seu: você dá) |
 | clique numa pessoa | seleciona (setinha e nome em cima) |
 | botão direito no mapa (com alguém selecionado) | a pessoa vai até lá |
@@ -51,8 +51,8 @@ Você é uma espécie de profeta que não envelhece, e chega com **3 famílias**
 **Recursos**
 
 - **Árvores e pinheiros:** 4 madeiras cada; somem quando acabam.
-- **Pedras:** 5 pedras cada; muitas nas montanhas, poucas no campo.
-- **Arbustos:** 3 frutas; voltam a dar frutas com o tempo.
+- **Pedreiras:** a pedra vem em manchas de 3 x 3 a 5 x 5 células (chão cinza), com 12 a 19 pedras em cada célula; muitas nas colinas e montanhas, raras no campo. Quando uma célula acaba, vira um **buraco de cascalho**. Fora delas há poucas pedras soltas (3 cada).
+- **Arbustos:** poucos e espalhados, com 2 frutas; demoram uns **3 dias** para dar frutas de novo (com chuva, metade) e no inverno não dão.
 
 **Fabricar (Tab)**
 
@@ -126,13 +126,14 @@ Os animais aparecem longe da vista, cada um no seu terreno, e somem quando ficam
 | Animal | Onde | Comportamento | Vida | Deixa |
 |---|---|---|---|---|
 | Coelho | campo | foge rápido | 2 | 1 carne |
-| Cervo | floresta e campo úmido | foge | 6 | 2 carne, 2 couro |
+| Cervo | floresta e campo úmido | anda em **manada** (3 ou 4) e foge junto | 6 | 2 carne, 2 couro |
 | Cabra | colinas, rocha e neve | foge | 5 | 2 carne, 1 couro |
 | Caranguejo | praia | anda devagar | 1 | 1 carne |
 | Lobo | floresta (de noite, também campo e colinas) | **ataca**: mordida de 8 | 6 | 1 carne, 1 couro |
 | Urso | floresta, rocha e neve | **ataca**: mordida de 15 | 14 | 4 carne, 3 couro |
 
-- Bichos pacíficos fogem quando você chega perto ou quando são feridos.
+- Os bichos são **poucos** (no máximo 10 por perto) e no **inverno** quase não aparecem bichos de caça.
+- Bichos pacíficos fogem quando você chega perto ou quando são feridos. Ferir um cervo espanta a manada toda.
 - Lobos e ursos perseguem: de dia só se você chegar perto, de noite de bem mais longe. Um animal ferido fica furioso.
 - Correndo (Shift), você escapa de um lobo.
 - Nenhum animal entra na água, e os perigosos têm medo de fogo: perto de uma fogueira acesa, ou dentro do abrigo, você está seguro.
@@ -173,7 +174,7 @@ Os animais aparecem longe da vista, cada um no seu terreno, e somem quando ficam
 
 **Ferro**
 
-- Nas **colinas, rocha e neve** algumas pedras são **veios**: de **ferro** (pontos laranja, 4 minérios) ou de **carvão** (pontos pretos, 5 carvões). Só quebram com a **picareta na mão** (2).
+- Nas **colinas, rocha e neve** algumas manchas são **minas** (chão avermelhado): de **ferro** (pontos laranja, 8 minérios por célula) ou de **carvão** (pontos pretos, 10 por célula). Só quebram com a **picareta na mão** (2). A célula que acaba vira **terra de mina**.
 - Monte uma **fornalha** e fique perto dela: **2 minério + 1 carvão = 1 barra de ferro**; sem carvão mineral, **3 madeira = 1 carvão**.
 - Com ferro: ferramentas de ferro (as de pedra continuam valendo; a de ferro é usada primeiro e gasta antes), espada, armadura e lampião (veja as receitas).
 
@@ -181,21 +182,21 @@ Os animais aparecem longe da vista, cada um no seu terreno, e somem quando ficam
 
 **Plantação** (como no Minecraft)
 
-- No campo aberto nasce **trigo selvagem** (dourado). Segure o botão esquerdo nele: dá 1 trigo e 1 ou 2 **sementes**.
+- No campo aberto nasce, raro, **trigo selvagem** (dourado). Segure o botão esquerdo nele: dá 1 trigo e 1 **semente**.
 - Fabrique uma **enxada** (2 madeira, 1 pedra) e aperte **6**. Segure o botão esquerdo e passe o mouse pela grama: cada célula vira **terra arada**, com sulcos. Não dá para arar areia, rocha, neve, água nem onde tem algo em cima.
 - Aperte **7** (sementes na mão) e passe pela terra arada para **plantar**.
 - O trigo cresce em **4 estágios**, do broto verde até ficar dourado. A dica do mouse mostra quanto já cresceu.
-- Colha segurando o botão esquerdo quando estiver **maduro**: 1 trigo e 1 a 3 sementes. Com sementes na mão, colher e replantar sai num gesto só.
+- Colha segurando o botão esquerdo quando estiver **maduro**: 1 trigo e 1 ou 2 sementes. Com sementes na mão, colher e replantar sai num gesto só.
 - Plantou, não tira mais: o trigo **verde** não sai, tem que esperar. Só a **enxada** desfaz: passada na terra arada, ela volta a ser grama e a planta verde que estiver ali se perde (com a semente). Numa mesma segurada do botão a enxada só ara ou só desfaz, conforme o que fez primeiro.
 - **3 trigos** viram **pão** na fogueira (enche 45 de fome).
 
 | O que acontece | Efeito no crescimento |
 |---|---|
-| sem nada | maduro em ~1 dia de jogo (12 min) |
+| sem nada | maduro em ~1,5 dia de jogo (18 min) |
 | água a até 4 quadrados | a terra fica molhada (mais escura) e cresce **2x** mais rápido |
 | chuva ou tempestade | 1,5x |
 | calorão | metade, se a terra estiver seca |
-| neve ou inverno | não cresce |
+| outono, inverno ou neve | não cresce (só brota na primavera e no verão) |
 
 - **Coelhos, cervos e cabras** enxergam trigo maduro a até 8 células e vão comer. Uma **cerca** em volta protege a plantação.
 - Dormindo, a noite passa depressa e a plantação cresce junto.
@@ -207,7 +208,7 @@ Os animais aparecem longe da vista, cada um no seu terreno, e somem quando ficam
 - O jogo começa com **3 famílias** (Silva, Souza e Lima), cada uma com pai, mãe e 2 filhos, morando num **barraco**, e um **baú** com frutas, pão e sementes. A roupa e o telhado de cada família têm uma cor.
 - Você **não envelhece**. Eles sim: **1 ano a cada 12 dias** (uma estação dura 4 dias). Com **14 anos** uma criança pode trabalhar; bem velhos (65+) podem morrer.
 - **Fé:** quem fica a até 6 células de você ganha fé (rápido); longe, ela cai devagar. Fé alta = trabalha até **1,5x mais rápido**. Abaixo de 25 (nome em laranja) às vezes enrola e pode **recusar ordens**. Fé zerada: **vai embora**.
-- **Fome:** quando a fome passa de 60% comem primeiro o **lanche da mochila**; depois, do baú (o que enche mais primeiro), e levam de lá um lanche novo; sem nada, colhem frutas nos arbustos. Sem comer, a vida cai até morrer.
+- **Fome:** cai mais rápido (de cheia a vazia em uns 14 minutos). Quando a fome passa de 60% comem primeiro o **lanche da mochila**; depois, do baú (o que enche mais primeiro), e levam de lá um lanche novo; sem nada, colhem frutas nos arbustos. Sem comer, a vida cai até morrer.
 - **Mochila de cada um:** cada pessoa carrega o que junta no trabalho (madeira, pedra, minério, carvão, trigo, peixe... várias coisas ao mesmo tempo), o **lanche** (até 2 de cada comida pronta: pão, frutas assadas, carne e peixe assados) e a **ferramenta** da tarefa. Quando a carga enche (ou não há mais o que fazer), leva tudo ao baú mais perto, menos o lanche, a ferramenta e as sementes de quem planta (fica com 10). Clique com o botão direito numa pessoa (ou na coluna **Agora** do painel P) para abrir a mochila dela no lugar do baú: clique num item dela para pegar, num item seu para dar.
 - **Sono:** às 21h vão dormir **em casa** (somem lá dentro). Quem não tem casa vai para a cabana mais perto ou em volta de uma **fogueira** acesa (até 30 células); senão, deita onde está. Em noite de inverno ou de neve, fora de casa e longe do fogo, passam **frio**.
 - **Lobos e ursos** também atacam as pessoas (cabana e fogueira protegem). Elas fogem quando veem um.
@@ -217,10 +218,11 @@ Os animais aparecem longe da vista, cada um no seu terreno, e somem quando ficam
 | Tarefa | O que faz na zona |
 |---|---|
 | Floresta | corta as árvores **adultas** (4 madeiras por viagem) e planta uma **muda** no lugar de cada uma que cai; sem árvore adulta, planta mudas no chão vazio (um quadrado sim, outro não). A madeira não acaba |
-| Pedra | quebra as pedras da zona (3 por viagem) e, de mãos vazias, os **veios** de ferro e carvão primeiro |
+| Pedra | **sem zona**: procura sozinho as pedreiras (até 40 células) e, de mochila vazia, as minas de ferro e carvão primeiro (3 por viagem) |
 | Plantar | colhe o trigo maduro e replanta, planta na terra arada vazia (pega sementes no baú) e ara o resto |
 | Obras | constrói para as famílias: barraco, casa e cerca (veja abaixo) |
 | Ferreiro | na fornalha mais perto: pega 2 minério + 1 carvão no baú e faz uma barra de ferro; sem minério, faz carvão de madeira (até ter 10 no baú) |
+| Soldado | pega uma **espada** no baú, patrulha em volta do baú da vila e **não dorme** (fica de vigia). Quando um lobo ou urso chega a 16 células, corre atrás e luta (espada: 6 de dano; sem espada: 2). Com uma **armadura** na mochila, as mordidas tiram metade |
 | Pescador | pinte uma zona de **Pesca** (Z, 5) na água: ele pega uma **vara de pesca** no baú (sem vara, avisa), vai até a margem mais perto e pesca. O peixe depende da água: lago 1, mar 1 ou 2, mar fundo 3 por vez. Com 4 peixes, leva ao baú |
 
 - **Árvores crescem por ano:** muda → **jovem** com 1 ano (12 dias) → **adulta** com 2 anos, que dá madeira. Jovem não se corta. No inverno não crescem.
@@ -256,7 +258,7 @@ Os animais aparecem longe da vista, cada um no seu terreno, e somem quando ficam
 
 **Sobrevivência**
 
-- **Fome:** quando enche (comendo), fica **cheia por 4 minutos** antes de começar a cair. Comer de novo com ela cheia renova esse tempo. Depois cai de cheia a vazia em uns 24 minutos. Sem comida, a vida cai.
+- **Fome:** quando enche (comendo), fica **cheia por 4 minutos** antes de começar a cair. Comer de novo com ela cheia renova esse tempo. Depois cai de cheia a vazia em uns 16 minutos. Sem comida, a vida cai.
 - **Calor:** de dia fica tudo bem. À noite esfria; perto de uma fogueira acesa (5 células), esquenta. Sem calor, a vida cai.
 - **Vida:** só volta com a **fome cheia** (e sem passar frio). O HUD mostra "cheia" e um filete amarelo com o tempo que ainda falta.
 - **Dia e noite:** um dia dura **12 minutos** (a noite, uns 3). A noite escurece a tela de verdade; só a fogueira e uma luz fraca em volta do personagem iluminam.
@@ -355,6 +357,20 @@ O **abrigo** protege do frio do clima e do granizo.
 - **Árvores tapam a visão**: dentro da floresta você enxerga bem menos.
 - O que você já viu mas não está vendo agora aparece **escurecido e sem cor**, do jeito que estava da última vez. Um arbusto que voltou a dar frutas longe dos seus olhos continua aparecendo vazio até você voltar lá.
 
+## Desafio
+
+O mundo é difícil de propósito: comida é pouca e estraga, o inverno pesa e as noites são perigosas.
+
+- **Comida estraga:** carne e peixe crus perdem um quarto a cada 6 horas de jogo (em 1 dia, de 8 sobram 3), frutas a cada 12 horas, assados a cada 18 horas. No **baú** estraga na metade da velocidade. Pão, trigo e sementes não estragam. Quando algo estraga na sua mochila, aparece "Estragou: ...".
+- **Fome mais rápida**, para você e para a vila; no inverno, 25% mais.
+- **Pouca comida no mundo:** poucos arbustos (que demoram dias para voltar e não dão no inverno), pouco trigo selvagem, o trigo plantado cresce mais devagar e só na primavera e no verão. É preciso guardar comida (pão dura) antes do outono.
+- **Inverno duro:** mesmo de sol, fora do abrigo e longe do fogo o calor cai devagar (de noite, depressa); a roupa de couro corta pela metade. Quase não aparecem bichos de caça.
+- **Noites perigosas:** a partir do 2º dia, ao escurecer (20:24), pode vir uma **alcateia** atrás da vila: chance de 25% + 10% por dia (+30% no inverno), com 2 lobos + 1 a cada 3 dias (até 6; +1 no inverno). Ela aparece a 22 células do baú da vila e vai direto para lá. Casas, fogueiras e o **soldado** protegem; às 06:00 os lobos que sobraram vão embora.
+- **Pedreiras e minas** em manchas de várias células; cada célula que acaba vira buraco.
+
+![Pedreira: o chão cinza, as pedras e o buraco das células esgotadas](screenshots/pedreira.png)
+![De noite, a alcateia chega e o soldado defende a vila](screenshots/soldado.png)
+
 ## Como funciona
 
 | Arquivo | O que tem |
@@ -369,6 +385,7 @@ O **abrigo** protege do frio do clima e do granizo.
 | `plantacao.S` | trigo selvagem, enxada, sementes, crescimento (água, clima, estação), colheita e bichos que comem a plantação |
 | `pessoas.S` | as pessoas: idade, fé, fome e sono, tarefas e zonas, painel, ordens, floresta e caminhos de terra batida |
 | `ferro.S` | fornalha, lampiões, ferreiro, ferramentas de ferro da vila e a visão dos moradores |
+| `desafio.S` | pedreiras e minas, comida que estraga, manadas, alcateias da noite e o soldado |
 | `mochila.S` | a mochila de cada morador (carga, lanche, ferramenta, dar e pegar), o pescador e o pincel de zonas |
 | `vila.S` | casas e terrenos, obras (barraco, casa, cerca), casamentos, nascimentos, árvores que crescem por ano e a árvore genealógica |
 | `pessoas.h` | estruturas da pessoa, do parentesco e da casa |
@@ -397,7 +414,7 @@ sudo apt install libsdl3-dev   # ou compile o SDL3 a partir do código-fonte
 make run
 ```
 
-`./ermo --shot` roda sem interação: tira screenshots, mede o tempo de cada quadro e faz um teste automático (coleta duas árvores, uma pedra e um arbusto, monta uma fogueira, come e passa a noite; corre, anda carregado, larga e recolhe uma pilha de pedras, vê a skill cair sem treino, confere que a vida só sobe com a fome cheia; fabrica tudo, monta baú e abrigo, gasta o machado, acende a tocha à noite, passa a noite no abrigo e dorme das 22h às 06h; passa 10 s em cada um dos 8 climas (com foto); caça um cervo com o arco, enfrenta um lobo à noite com o machado e vê os animais aparecendo; faz um cercado e pesca; ara e planta 6 células perto da água, colhe o trigo maduro, confere que o verde não sai e que a enxada desfaz a terra (e perde a semente), faz pão, compara o crescimento com e sem água e no inverno, e solta um coelho perto do trigo sem cerca; monta a vila (3 barracos) com zonas de floresta, pedra, plantação e moradia e deixa trabalhar 3 horas (com foto pintando zonas e do painel), confere o baú, a terra arada, o trigo, as mudas, os caminhos e as obras (casa e cerca), manda todos dormir, passa 24 dias (as mudas viram jovens e depois adultas, casamentos e nascimentos), deixa as obras fazerem o barraco do casal novo (foto da vila e da árvore genealógica) e solta um lobo perto de uma pessoa; tenta quebrar um veio sem picareta, minera ferro e carvão, monta a fornalha, faz 18 barras, carvão de madeira, ferramentas, espada, armadura e um lampião, compara o machado de pedra com o de ferro, deixa um lobo morder com armadura (foto de noite na fornalha) e põe um ferreiro, um veio e um machado de ferro na vila; pinta e apaga com o pincel, pinta uma zona de Pesca perto do baú, põe uma vara no baú e uma pescadora para trabalhar 2 horas, confere o lanche nas mochilas e dá e pega pão da mochila de uma pessoa (fotos do pincel e da mochila dela); depois nada num lago e vai para o mar aberto até o tubarão atacar).
+`./ermo --shot` roda sem interação: tira screenshots, mede o tempo de cada quadro e faz um teste automático (coleta duas árvores, uma pedra e um arbusto, monta uma fogueira, come e passa a noite; corre, anda carregado, larga e recolhe uma pilha de pedras, vê a skill cair sem treino, confere que a vida só sobe com a fome cheia; fabrica tudo, monta baú e abrigo, gasta o machado, acende a tocha à noite, passa a noite no abrigo e dorme das 22h às 06h; passa 10 s em cada um dos 8 climas (com foto); caça um cervo com o arco, enfrenta um lobo à noite com o machado e vê os animais aparecendo; faz um cercado e pesca; ara e planta 6 células perto da água, colhe o trigo maduro, confere que o verde não sai e que a enxada desfaz a terra (e perde a semente), faz pão, compara o crescimento com e sem água e no inverno, e solta um coelho perto do trigo sem cerca; monta a vila (3 barracos) com zonas de floresta, pedra, plantação e moradia e deixa trabalhar 3 horas (com foto pintando zonas e do painel), confere o baú, a terra arada, o trigo, as mudas, os caminhos e as obras (casa e cerca), manda todos dormir, passa 24 dias (as mudas viram jovens e depois adultas, casamentos e nascimentos), deixa as obras fazerem o barraco do casal novo (foto da vila e da árvore genealógica) e solta um lobo perto de uma pessoa; tenta quebrar um veio sem picareta, minera ferro e carvão, monta a fornalha, faz 18 barras, carvão de madeira, ferramentas, espada, armadura e um lampião, compara o machado de pedra com o de ferro, deixa um lobo morder com armadura (foto de noite na fornalha) e põe um ferreiro, um veio e um machado de ferro na vila; pinta e apaga com o pincel, pinta uma zona de Pesca perto do baú, põe uma vara no baú e uma pescadora para trabalhar 2 horas, confere o lanche nas mochilas e dá e pega pão da mochila de uma pessoa (fotos do pincel e da mochila dela); conta pedreiras, minas, arbustos e trigo, esgota uma pedreira (foto), deixa 8 carnes cruas 1 dia na mochila e no baú, passa 10 s de sol no inverno, solta uma manada de cervos e confere que fica junta e, de noite, solta uma alcateia de 4 lobos na vila com um soldado de espada (foto); depois nada num lago e vai para o mar aberto até o tubarão atacar).
 
 ## Próximos passos
 
@@ -408,6 +425,6 @@ make run
 - [x] Pessoas: famílias, fé, idade, tarefas e zonas
 - [x] Casas que crescem (barraco, casa, cerca), casamentos, nascimentos e árvore genealógica
 - [x] Pescador da vila, mochila de cada morador e pincel de zonas
+- [x] Mundo mais difícil: pedreiras, comida que estraga, manadas, inverno duro, alcateias e soldados
 - [ ] Pessoas caçando
-- [ ] Mais inimigos de noite
 - [ ] Salvar e carregar o jogo

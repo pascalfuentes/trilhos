@@ -44,7 +44,7 @@
 .equ ZP_X,     4
 .equ ZP_Y,     118
 .equ ZP_W,     190
-.equ ZP_H,     148
+.equ ZP_H,     132
 
     .text
     .p2align 2
@@ -365,6 +365,7 @@ ppl_newchest:
 
 // ppl_land(s0 = u, s1 = v) -> w0 = 1 se da para ficar ali (terra; as
 // pessoas da vila passam pelas cercas)
+    .globl ppl_land
 ppl_land:
     stp     x29, x30, [sp, #-32]!
     mov     x29, sp
@@ -430,6 +431,7 @@ people_update:
     bl      zone_update
     ldr     w9, [x28, #G_NOPEOPLE]
     cbnz    w9, 99f
+    bl      night_tick                  // alcateias de noite (desafio.S)
     ldr     w9, [x28, #G_PPLFRAME]
     add     w9, w9, #1
     str     w9, [x28, #G_PPLFRAME]
@@ -555,8 +557,15 @@ ppl_one:
     tst     w9, #31
     b.ne    7f
     bl      ppl_nearfire
+    // ---- soldado: nao foge nem vai dormir; luta (desafio.S) ----
+7:  ldrb    w9, [x19, #P_JOB]
+    cmp     w9, #J_SOLDIER
+    b.ne    70f
+    bl      soldier_frame
+    cbnz    w0, 99f
+    b       80f
     // ---- foge de bicho perigoso (a cada 8 quadros) ----
-7:  ldrb    w9, [x19, #P_FLAGS]
+70: ldrb    w9, [x19, #P_FLAGS]
     tbnz    w9, #0, 8f
     ldrb    w9, [x19, #P_STATE]
     cmp     w9, #ST_FLEE
@@ -871,7 +880,10 @@ ppl_decide:
     mov     x29, sp
     stp     x21, x22, [sp, #16]
     stp     x23, x24, [sp, #32]
-    // ---- hora de dormir ----
+    // ---- hora de dormir (o soldado fica de vigia) ----
+    ldrb    w9, [x19, #P_JOB]
+    cmp     w9, #J_SOLDIER
+    b.eq    10f
     ldr     w9, [x28, #G_TIME]
     mov     w10, #BEDTIME
     cmp     w9, w10
@@ -1000,18 +1012,18 @@ ppl_findwork:
     b.ne    3f
     bl      pinv_cargo                  // de mochila vazia: veios primeiro
     cbnz    w0, 21f
-    mov     w0, #O_IRONV
+    mov     w0, #O_IRONV                // sem zona: ate 40 celulas
     mov     w1, #O_COALV
-    mov     w2, #Z_STONE
+    mov     w2, #0
     mov     w3, #WK_MINE
-    PF      s0, 76
+    PF      s0, 68
     bl      ppl_findobj
     tbz     w0, #31, 22f
 21: mov     w0, #O_ROCK
     mov     w1, #O_ROCK
-    mov     w2, #Z_STONE
+    mov     w2, #0
     mov     w3, #WK_MINE
-    PF      s0, 76
+    PF      s0, 68
     bl      ppl_findobj
     tbnz    w0, #31, 8f
 22:
@@ -1031,8 +1043,12 @@ ppl_findwork:
     bl      smith_work                  // ferreiro (ferro.S)
     b       9f
 6:  cmp     w21, #J_FISH
-    b.ne    8f
+    b.ne    61f
     bl      fish_work                   // pescador (mochila.S)
+    b       9f
+61: cmp     w21, #J_SOLDIER
+    b.ne    8f
+    bl      soldier_patrol              // soldado (desafio.S)
     b       9f
 7:  mov     w0, #1
     b       9f
@@ -1358,6 +1374,7 @@ ppl_findcell:
 
 // ppl_chestfind(w0 = 0 qualquer, 1 com comida, 2 com sementes) -> w0 =
 // bau mais perto (-1)
+    .globl ppl_chestfind
 ppl_chestfind:
     stp     x29, x30, [sp, #-64]!
     mov     x29, sp
@@ -1696,6 +1713,7 @@ ppl_gosleep:
 // =====================================================================
 
 // ppl_walk -> w0 = 1 chegou
+    .globl ppl_walk
 ppl_walk:
     stp     x29, x30, [sp, #-64]!
     mov     x29, sp
@@ -1725,8 +1743,10 @@ ppl_walk:
     PF      s11, 28
 2:  ldrb    w9, [x19, #P_STATE]
     cmp     w9, #ST_FLEE
+    b.eq    21f
+    cmp     w9, #ST_FIGHT               // soldado lutando: corre
     b.ne    3f
-    PF      s11, 32
+21: PF      s11, 32
 3:  ldr     s0, [x19, #P_U]             // caminho de terra batida: mais rapido
     fcvtzs  w9, s0
     ldr     s0, [x19, #P_V]
@@ -2102,7 +2122,12 @@ ppl_workdone:
     mov     w13, #O_GONE
     strb    w13, [x23, #6]
     cmp     w12, #O_PINE                // arvore: deixa de tapar a visao
-    b.hi    79f
+    b.ls    16f
+    mov     x0, x23                     // pedreira ou veio: vira buraco
+    mov     w1, w12
+    bl      quarry_done
+    b       78f
+16:
     ldrh    w13, [x23]
     lsr     w13, w13, #6
     ldrh    w14, [x23, #2]
@@ -2140,7 +2165,7 @@ ppl_workdone:
     mov     w0, #IT_WHEAT
     mov     w1, w24
     bl      pinv_add
-    mov     w0, #3
+    mov     w0, #2
     bl      rng_mod
     add     w1, w0, #1
     mov     w0, #IT_SEED
@@ -2417,7 +2442,13 @@ beast_people:
     add     x19, x9, x20, lsl #6
     ldrb    w9, [x22, #4]
     scvtf   s0, w9
-    ldr     s1, [x19, #P_HP]
+    LA      x9, pinv                    // armadura na mochila: metade
+    add     x9, x9, x20, lsl #8
+    ldr     w9, [x9, #(4 * IT_ARMOR)]
+    cbz     w9, 88f
+    fmov    s1, #0.5
+    fmul    s0, s0, s1
+88: ldr     s1, [x19, #P_HP]
     fsub    s1, s1, s0
     str     s1, [x19, #P_HP]
     fcmp    s1, #0.0
@@ -2629,7 +2660,16 @@ person_desc:
     .globl ppl_doing
 ppl_doing:
     ldrb    w9, [x19, #P_STATE]
-    LA      x1, d_idle
+    LA      x1, d_fight
+    cmp     w9, #ST_FIGHT
+    b.eq    9f
+    ldrb    w10, [x19, #P_JOB]
+    cmp     w10, #J_SOLDIER
+    b.ne    0f
+    LA      x1, d_guard
+    cmp     w9, #ST_SLEEP
+    b.ne    9f
+0:  LA      x1, d_idle
     cmp     w9, #ST_SLEEP
     b.ne    1f
     LA      x1, d_sleep
@@ -2688,10 +2728,11 @@ people_key:
     b       7f
 4:  ldr     w9, [x28, #G_ZONEMODE]
     cbz     w9, 8f
-    sub     w10, w0, #30                // 1-5
-    cmp     w10, #5
+    sub     w10, w0, #30                // 1-4
+    cmp     w10, #4
     b.hs    5f
-    add     w10, w10, #1
+    LA      x9, zptypes
+    ldrb    w10, [x9, x10]
     str     w10, [x28, #G_ZONEMODE]
     b       7f
 5:  cmp     w0, #39                     // 0: apagar
@@ -2955,12 +2996,10 @@ people_ui_hit:
     b.lt    6f
     mov     w12, #16
     udiv    w12, w10, w12
-    cmp     w12, #6
+    cmp     w12, #5
     b.hs    6f
-    add     w11, w12, #1
-    cmp     w11, #6                     // a ultima linha: apagar
-    mov     w12, #Z_ERASE
-    csel    w11, w12, w11, eq
+    LA      x11, zptypes
+    ldrb    w11, [x11, x12]
 6:  mov     w0, #10
     mov     w1, w11
     ret
@@ -3395,24 +3434,22 @@ ppl_drawpalette:
     stp     x29, x30, [sp, #-48]!
     mov     x29, sp
     stp     x19, x20, [sp, #16]
-    str     x21, [sp, #32]
+    stp     x21, x22, [sp, #32]
     mov     w0, #ZP_X
     mov     w1, #ZP_Y
     mov     w2, #ZP_W
     mov     w3, #ZP_H
     LA      x4, s_ztitle
     bl      ui_panel
-    mov     w19, #1
-1:  cmp     w19, #6
-    b.gt    8f
-    sub     w9, w19, #1
+    mov     w22, #0                     // linha
+1:  cmp     w22, #5
+    b.ge    8f
     mov     w10, #16
     mov     w11, #(ZP_Y + 20)
-    madd    w20, w9, w10, w11
-    cmp     w19, #6                     // a ultima linha: apagar
-    b.ne    11f
-    mov     w19, #Z_ERASE
-11: ldr     w9, [x28, #G_ZONEMODE]
+    madd    w20, w22, w10, w11
+    LA      x9, zptypes
+    ldrb    w19, [x9, x22]
+    ldr     w9, [x28, #G_ZONEMODE]
     cmp     w9, w19
     b.ne    2f
     RGBA    60, 70, 110, 220
@@ -3439,9 +3476,7 @@ ppl_drawpalette:
     LA      x2, zonenames
     add     x2, x2, x19, lsl #4
     bl      text
-    cmp     w19, #Z_ERASE
-    b.eq    8f
-    add     w19, w19, #1
+    add     w22, w22, #1
     b       1b
 8:  RGBA    150, 150, 165, 255
     LA      x0, pmsgbuf2
@@ -3459,7 +3494,7 @@ ppl_drawpalette:
     mov     w1, #(ZP_Y + ZP_H - 13)
     LA      x2, s_zfoot3
     bl      text
-    ldr     x21, [sp, #32]
+    ldp     x21, x22, [sp, #32]
     ldp     x19, x20, [sp, #16]
     ldp     x29, x30, [sp], #48
     ret
@@ -4226,7 +4261,7 @@ pt_ret:
     .data
     .p2align 2
 pconst:
-    .float 0.0014                       //   0 fome por quadro (cheio -> vazio em ~20 min)
+    .float 0.002                        //   0 fome por quadro (cheio -> vazio em ~14 min)
     .float 0.008                        //   4 vida perdida sem comida
     .float 0.004                        //   8 vida recuperada bem alimentado
     .float 0.006                        //  12 vida perdida no frio
@@ -4275,9 +4310,12 @@ worktime:
 
 // o que cada tarefa carrega e quanto cabe
 jobitem:
-    .byte 0, IT_WOOD, IT_STONE, IT_WHEAT, 0, IT_IRON, IT_FISH
+    .byte 0, IT_WOOD, IT_STONE, IT_WHEAT, 0, IT_IRON, IT_FISH, 0
 jobcap:
-    .byte 0, 4, 3, 6, 0, 1, 4
+    .byte 0, 4, 3, 6, 0, 1, 4, 0
+// tipos de zona na paleta (a Pedra nao tem zona: procura sozinha)
+zptypes:
+    .byte Z_FOREST, Z_FARM, Z_HOME, Z_FISH, Z_ERASE
 // cor da roupa de cada familia (variante dos sprites: vermelho, azul, laranja)
 famvar:
     .byte 0, 2, 3
@@ -4366,18 +4404,20 @@ jobnames:
     .p2align 4
     .asciz "Pescador"
     .p2align 4
+    .asciz "Soldado"
+    .p2align 4
 zonenames:
     .asciz ""
     .p2align 4
     .asciz "1 Floresta"
     .p2align 4
-    .asciz "2 Pedra"
+    .asciz ""
     .p2align 4
-    .asciz "3 Plantacao"
+    .asciz "2 Plantacao"
     .p2align 4
-    .asciz "4 Moradia"
+    .asciz "3 Moradia"
     .p2align 4
-    .asciz "5 Pesca"
+    .asciz "4 Pesca"
     .p2align 4
     .asciz ""
     .p2align 4
@@ -4406,7 +4446,7 @@ s_refuse:   .asciz " nao quis (pouca fe)"
 s_going:    .asciz ": indo"
 s_selected: .asciz " - botao direito no mapa: va ate la"
 m_nochest:  .asciz "Ninguem tem onde guardar: faca um bau"
-m_zonemode: .asciz "Zonas: 1-5 escolhe, 0 apaga; pinte segurando o botao (direito apaga), roda ou [ ] muda o pincel (Z sai)"
+m_zonemode: .asciz "Zonas: 1-4 escolhe, 0 apaga; pinte segurando o botao (direito apaga), roda ou [ ] muda o pincel (Z sai)"
 s_zonedone: .asciz "Zona marcada: "
 s_zoneerase: .asciz "Zona apagada: "
 s_quads:    .asciz " quadrados"
@@ -4431,6 +4471,8 @@ d_fruit:    .asciz "pega fruta"
 d_build:    .asciz "construindo"
 d_smelt:    .asciz "na fornalha"
 d_fish:     .asciz "pescando"
+d_fight:    .asciz "lutando!"
+d_guard:    .asciz "de guarda"
 d_walk0:    .asciz "passeando"
 d_walk1:    .asciz "a caminho"
 d_walk2:    .asciz "vai guardar"

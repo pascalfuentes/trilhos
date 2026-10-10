@@ -429,6 +429,22 @@ shot_mode:
     str     wzr, [x28, #G_ZONEMODE]
     str     wzr, [x28, #G_CHESTOPEN]
     str     wzr, [x28, #G_INVOPEN]
+    mov     w0, #0                      // desafio: pedreira esgotada
+    bl      desafio_selftest
+    bl      draw_all
+    LA      x0, s_shot_quarry
+    bl      save_bmp
+    ldr     x0, [x28, #G_REN]
+    bl      F(SDL_RenderPresent)
+    mov     w0, #1                      // desafio: alcateia e soldado
+    bl      desafio_selftest
+    bl      draw_all
+    LA      x0, s_shot_soldier
+    bl      save_bmp
+    ldr     x0, [x28, #G_REN]
+    bl      F(SDL_RenderPresent)
+    mov     w0, #2
+    bl      desafio_selftest
     mov     w0, w19
     bl      set_zoom
     mov     w9, #1                      // o resto do teste sem a vila
@@ -1609,7 +1625,18 @@ terrain_color:
     asr     w1, w10, #16
     asr     w2, w11, #16
     add     w15, w1, w2, lsl #9         // celula
-    LA      x9, overlay
+    LA      x9, pitgrid                 // buraco de pedreira ou de mina
+    ldrb    w9, [x9, w15, uxtw]
+    cbz     w9, 13f
+    ubfx    w1, w10, #13, #2
+    LA      x2, pitcolors               // 1 buraco, 2 mina, 3 e 4 o chao
+    sub     w9, w9, #1
+    add     x2, x2, x9, lsl #3
+    ldr     w0, [x2]
+    cbnz    w1, tc_light
+    ldr     w0, [x2, #4]
+    b       tc_light
+13: LA      x9, overlay
     ldrb    w9, [x9, w15, uxtw]
     cbz     w9, 1f
     cmp     w9, #1
@@ -3201,6 +3228,15 @@ s_shot_family:  .asciz "shot_familias.bmp"
 s_shot_iron:    .asciz "shot_ferro.bmp"
 s_shot_brush:   .asciz "shot_pincel.bmp"
 s_shot_pbag:    .asciz "shot_morador.bmp"
+s_shot_quarry:  .asciz "shot_pedreira.bmp"
+s_shot_soldier: .asciz "shot_soldado.bmp"
+    .p2align 2
+// buracos de pedreira e de mina e o chao delas (duas cores cada)
+pitcolors:
+    .word 0xFF77736C, 0xFF5E5A54        // 1 buraco de pedreira (cascalho)
+    .word 0xFF6E4C3A, 0xFF4E3A30        // 2 buraco de mina
+    .word 0xFF9C988F, 0xFF8A867E        // 3 chao de pedreira
+    .word 0xFF8E6E5C, 0xFF7C5E4E        // 4 chao de mina
 s_shot_fish:    .asciz "shot_pesca.bmp"
 s_shot_hut:     .asciz "shot_abrigo.bmp"
 s_shot_sleep:   .asciz "shot_dormindo.bmp"

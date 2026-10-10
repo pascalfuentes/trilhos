@@ -145,6 +145,7 @@ animal_spawn:
     ldrb    w11, [x11, #AT_HP]
     strb    w11, [x9, #AN_HP]
     strb    wzr, [x9, #AN_HURT]
+    strb    wzr, [x9, #18]              // grupo (desafio.S)
     strh    wzr, [x9, #AN_TIMER]
     strh    wzr, [x9, #AN_CD]
     strh    wzr, [x9, #AN_ANIM]
@@ -218,10 +219,24 @@ try_spawn:
     mov     w20, #A_WOLF
 1:  cmp     w20, #255
     b.eq    9f
-    mov     w0, w20
+    ldr     w9, [x28, #G_SEASON]        // inverno: quase nenhum bicho de caca
+    cmp     w9, #3
+    b.ne    2f
+    cmp     w20, #A_WOLF
+    b.eq    2f
+    cmp     w20, #A_BEAR
+    b.eq    2f
+    bl      rng
+    tst     w0, #3
+    b.ne    9f
+2:  mov     w0, w20
     fmov    s0, s8
     fmov    s1, s9
     bl      animal_spawn
+    cmp     w20, #A_DEER                // cervo: vem em manada
+    b.ne    9f
+    tbnz    w0, #31, 9f
+    bl      herd_spawn
 9:  mov     w9, #0
 91: mov     w0, w9
     ldp     d8, d9, [sp, #32]
@@ -245,8 +260,8 @@ animals_update:
     subs    w9, w9, #1
     b.gt    1f
     bl      rng
-    and     w9, w0, #63
-    add     w9, w9, #90                 // a cada 1.5 - 2.5 s
+    and     w9, w0, #127
+    add     w9, w9, #300                // a cada 5 - 7 s
     str     w9, [x28, #G_SPAWNT]
     ldr     w10, [x28, #G_NOSPAWN]
     cbnz    w10, 2f
@@ -376,6 +391,8 @@ au_passive:
     b       au_setmove
     // ---- andando a toa: muda de rumo de vez em quando ----
 au_wander:
+    bl      group_steer                 // alcateia e manada (desafio.S)
+    cbnz    w0, au_move
     ldrh    w9, [x20, #AN_TIMER]
     subs    w9, w9, #1
     b.gt    8f
@@ -489,6 +506,8 @@ animal_hit:
     b.eq    9f
     mov     w9, #16
     strb    w9, [x19, #AN_HURT]
+    mov     x0, x19                     // a manada foge junto
+    bl      herd_alarm
     ldrb    w9, [x19, #AN_HP]
     subs    w9, w9, w1
     csel    w9, wzr, w9, lt
@@ -948,13 +967,13 @@ atypes:
 
 // o que aparece em cada terreno (8 sorteios; 255 = nada)
 spawntab:
-    .byte 5, 5, 5, 5, 5, 255, 255, 255  // praia: caranguejo
-    .byte 0, 0, 0, 0, 0, 255, 255, 255  // campo seco: coelho
-    .byte 0, 0, 0, 0, 1, 1, 255, 255    // campo: coelho, cervo (lobo so de noite)
-    .byte 1, 1, 1, 1, 1, 3, 4, 0        // floresta: cervo, lobo, urso
-    .byte 2, 2, 2, 2, 0, 0, 255, 255    // colinas: cabra, coelho
-    .byte 2, 2, 2, 2, 2, 4, 255, 255    // rocha: cabra, urso
-    .byte 2, 2, 2, 4, 4, 255, 255, 255  // neve: cabra, urso
+    .byte 5, 5, 255, 255, 255, 255, 255, 255 // praia: caranguejo
+    .byte 0, 0, 255, 255, 255, 255, 255, 255 // campo seco: coelho
+    .byte 0, 0, 1, 255, 255, 255, 255, 255   // campo: coelho, cervo (lobo so de noite)
+    .byte 1, 1, 3, 4, 0, 255, 255, 255       // floresta: cervos, lobo, urso
+    .byte 2, 2, 0, 255, 255, 255, 255, 255   // colinas: cabra, coelho
+    .byte 2, 2, 4, 255, 255, 255, 255, 255   // rocha: cabra, urso
+    .byte 2, 4, 4, 255, 255, 255, 255, 255   // neve: cabra, urso
 
 // dano do golpe pelo que esta na mao (item + 1; 0 = maos vazias)
 handdmg:

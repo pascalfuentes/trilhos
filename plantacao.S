@@ -464,8 +464,8 @@ crop_tick:
     mov     w23, #16                    // fator (em 16 avos)
     mov     w24, #0                     // calorao
     ldr     w9, [x28, #G_SEASON]
-    cmp     w9, #3                      // inverno: nada cresce
-    b.ne    1f
+    cmp     w9, #2                      // outono e inverno: nada cresce
+    b.lo    1f
     mov     w23, #0
 1:  ldr     w9, [x28, #G_WEATHER]
     cmp     w9, #W_SNOW
@@ -543,11 +543,9 @@ crop_harvest:
     ldrb    w10, [x19, #7]
     cmp     w9, #O_WHEAT
     b.ne    1f
-    // selvagem: 1 trigo e 1-2 sementes
+    // selvagem: 1 trigo e 1 semente
     mov     w20, #1
-    mov     w0, #2
-    bl      rng_mod
-    add     w21, w0, #1
+    mov     w21, #1
     mov     w0, #SK_FARM
     LA      x9, fpconst
     ldr     s0, [x9, #12]
@@ -558,7 +556,7 @@ crop_harvest:
     mov     w20, #0                     // verde: so a semente volta
     mov     w21, #1
     b       5f
-    // maduro: 1 trigo, 1-3 sementes; a skill da chance de +1 de cada
+    // maduro: 1 trigo, 1-2 sementes; a skill da chance de +1 de cada
 2:  ldr     s0, [x28, #G_SKFARM]
     fcvtzs  w22, s0
     lsr     w22, w22, #1                // chance (%) = skill / 2
@@ -567,7 +565,7 @@ crop_harvest:
     cmp     w0, w22
     cset    w20, lo
     add     w20, w20, #1
-    mov     w0, #3
+    mov     w0, #2
     bl      rng_mod
     add     w21, w0, #1
     mov     w0, #100

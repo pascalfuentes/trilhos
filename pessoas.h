@@ -81,6 +81,7 @@
 .equ ST_SLEEP, 3
 .equ ST_WAIT,  4
 .equ ST_FLEE,  5
+.equ ST_FIGHT, 6               // soldado lutando (alvo = animal)
 
 .equ NX_NONE,    0
 .equ NX_WORK,    1
