@@ -257,54 +257,10 @@ furnace_near:
 9:  ret
 
 // smith_chest(w0 item, w1 quantos, w2 item 2, w3 quantos 2 (0 = nada))
-// -> w0 = bau com isso mais perto da pessoa (-1)   folha
+// -> w0 = deposito com isso mais perto da pessoa (-1)   (deposito.S)
     .globl smith_chest
 smith_chest:
-    mov     w12, w0
-    mov     w13, w1
-    mov     w0, #-1
-    LA      x9, fconst
-    ldr     s4, [x9, #20]
-    ldr     w10, [x28, #G_NOBJ]
-    mov     w11, #0
-    LA      x14, objs
-1:  cmp     w11, w10
-    b.ge    9f
-    ldrb    w15, [x14, #6]
-    cmp     w15, #O_CHEST
-    b.ne    2f
-    ldrb    w15, [x14, #7]
-    LA      x16, chests
-    add     x16, x16, x15, lsl #CHESTSHIFT
-    ldr     w15, [x16, x12, lsl #2]
-    cmp     w15, w13
-    b.lo    2f
-    cbz     w3, 11f
-    ldr     w15, [x16, x2, lsl #2]
-    cmp     w15, w3
-    b.lo    2f
-11: ldrh    w15, [x14]
-    ucvtf   s0, w15
-    ldrh    w15, [x14, #2]
-    ucvtf   s1, w15
-    LA      x16, fconst
-    ldr     s2, [x16, #24]              // 1/64
-    fmul    s0, s0, s2
-    fmul    s1, s1, s2
-    ldr     s2, [x19, #P_U]
-    fsub    s0, s0, s2
-    ldr     s2, [x19, #P_V]
-    fsub    s1, s1, s2
-    fmul    s0, s0, s0
-    fmadd   s0, s1, s1, s0
-    fcmp    s0, s4
-    b.ge    2f
-    fmov    s4, s0
-    mov     w0, w11
-2:  add     x14, x14, #8
-    add     w11, w11, #1
-    b       1b
-9:  ret
+    b       dep_take_find
 
 // smith_work -> w0 = 1 se o ferreiro achou o que fazer (ja indo)
     .globl smith_work
@@ -381,7 +337,8 @@ smith_pay:
     b.lo    8f
     sub     w10, w10, #3
     str     w10, [x0, #(4 * IT_WOOD)]
-3:  mov     w9, #1                      // material na mao
+3:  bl      store_close                 // tira das pilhas
+    mov     w9, #1                      // material na mao
     strb    w9, [x19, #P_BFAM]
     bl      furnace_near
     tbnz    w0, #31, 8f
@@ -468,8 +425,9 @@ tool_take:
     sub     w10, w10, #1
     str     w10, [x0, x9, lsl #2]
     mov     w0, w9                      // na mochila (a de antes fica la ate
-    mov     w1, #1                      // guardar no bau)
+    mov     w1, #1                      // guardar no deposito)
     bl      pinv_add
+    bl      store_close
 9:  ldp     x29, x30, [sp], #16
     ret
 
@@ -759,6 +717,24 @@ iron_selftest:
     mov     w0, #O_FURNACE
     bl      ct_count
     str     w0, [x19, #12]
+    mov     w0, #O_FURNACE              // voce do lado dela
+    mov     w1, #O_FURNACE
+    bl      nearest_obj
+    tbnz    w0, #31, 1f
+    LA      x9, objs
+    add     x9, x9, x0, lsl #3
+    ldrh    w10, [x9]
+    ucvtf   s0, w10
+    ldrh    w10, [x9, #2]
+    ucvtf   s1, w10
+    FC      s2, F_INV64
+    fmul    s0, s0, s2
+    fmul    s1, s1, s2
+    fmov    s2, #1.5
+    fsub    s0, s0, s2
+    str     s0, [x28, #G_PU]
+    str     s1, [x28, #G_PV]
+1:
     mov     w0, #16
     bl      it_frames
     ldr     w9, [x28, #G_NEARFURN]
@@ -933,13 +909,12 @@ iron_selftest:
 it_stage1:
     ldr     w9, [x28, #G_NOPEOPLE]
     cbnz    w9, it_ret
-    LA      x19, people                 // bau mais perto da primeira pessoa
+    LA      x19, people                 // deposito com lugar para minerio
     mov     w20, #0
-    mov     w0, #IT_WOOD
-    mov     w1, #0
-    mov     w2, #0
-    mov     w3, #0
-    bl      smith_chest
+    ldr     s0, [x19, #P_U]
+    ldr     s1, [x19, #P_V]
+    mov     w0, #IT_ORE
+    bl      dep_find_put_test
     tbnz    w0, #31, it_ret
     mov     w23, w0
     bl      ppl_chestptr
@@ -954,12 +929,11 @@ it_stage1:
     add     w9, w9, #12
     str     w9, [x24, #(4 * IT_WOOD)]
     str     wzr, [x24, #(4 * IT_IRON)]
-    LA      x9, objs                    // fornalha 3 celulas ao lado do bau
-    add     x9, x9, x23, lsl #3
-    ldrh    w0, [x9]
-    ldrh    w1, [x9, #2]
-    lsr     w25, w0, #6
-    lsr     w26, w1, #6
+    bl      store_close
+    LA      x9, itcell
+    str     w23, [x9]
+    and     w25, w23, #511              // fornalha 3 celulas ao lado do
+    lsr     w26, w23, #9                // deposito
     mov     w22, #0
 5:  LA      x9, itoff
     add     x9, x9, x22, lsl #1
@@ -1042,6 +1016,10 @@ it_stage1:
     ldr     w26, [x24, #(4 * IT_ORE)]
     mov     w0, #3600                   // 2 horas de jogo
     bl      it_frames
+    LA      x9, itcell                  // o que tem no deposito agora
+    ldr     w0, [x9]
+    bl      ppl_chestptr
+    mov     x24, x0
     LA      x19, itres
     ldr     w9, [x24, #(4 * IT_IRON)]
     str     w9, [x19]
@@ -1106,6 +1084,8 @@ fconst:
     .float 0.015625                     // 24 1/64
 // ferramenta de ferro de cada tarefa (nenhuma, floresta, pedra, plantar,
 // obras, ferreiro)
+    .p2align 2
+itcell:     .space 4
     .globl jobtool
 jobtool:
     .byte 0, IT_IAXE, IT_IPICK, IT_IHOE, 0, 0, IT_ROD, IT_SWORD

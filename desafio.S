@@ -246,7 +246,10 @@ spoil_step:
     subs    w10, w10, #1
     b.ne    4b
     b       1b
-8:  tbnz    w23, #31, 9f
+8:  mov     w0, w19                     // pilhas no chao e nos depositos
+    LA      x1, spoiltab
+    bl      spoil_piles
+    tbnz    w23, #31, 9f
     bl      calc_stats
     LA      x0, dmsg                    // "Estragou: 2 Carne crua"
     LA      x1, s_rot
@@ -471,26 +474,24 @@ pack_spawn:
     mov     w19, w0
     ldr     s8, [x28, #G_PU]
     ldr     s9, [x28, #G_PV]
-    mov     w0, #O_CHEST
-    mov     w1, #O_CHEST
-    bl      nearest_obj
+    fmov    s0, s8                      // o deposito mais perto de voce
+    fmov    s1, s9
+    bl      dep_find_any
     tbnz    w0, #31, 1f
-    mov     w20, w0
-    bl      obj_dist2
+    and     w9, w0, #511
+    lsr     w10, w0, #9
+    scvtf   s0, w9
+    scvtf   s1, w10
+    fsub    s2, s0, s8
+    fsub    s3, s1, s9
+    fmul    s2, s2, s2
+    fmadd   s2, s3, s3, s2
     LA      x9, dconst
-    ldr     s1, [x9, #16]               // 45^2
-    fcmp    s0, s1
+    ldr     s3, [x9, #16]               // 45^2
+    fcmp    s2, s3
     b.gt    1f
-    LA      x9, objs
-    add     x9, x9, x20, lsl #3
-    ldrh    w10, [x9]
-    ucvtf   s8, w10
-    ldrh    w10, [x9, #2]
-    ucvtf   s9, w10
-    LA      x9, dconst
-    ldr     s2, [x9]                    // 1/64
-    fmul    s8, s8, s2
-    fmul    s9, s9, s2
+    fmov    s8, s0
+    fmov    s9, s1
 1:  str     s8, [x28, #G_PACKU]
     str     s9, [x28, #G_PACKV]
     bl      rng                         // de onde vem: uma das 16 direcoes
@@ -742,19 +743,12 @@ soldier_patrol:
     stp     d10, d11, [sp, #48]
     ldr     s8, [x19, #P_U]
     ldr     s9, [x19, #P_V]
-    mov     w0, #0
-    bl      ppl_chestfind
+    bl      dep_home                    // em volta do deposito
     tbnz    w0, #31, 1f
-    LA      x9, objs
-    add     x9, x9, x0, lsl #3
-    ldrh    w10, [x9]
-    ucvtf   s8, w10
-    ldrh    w10, [x9, #2]
-    ucvtf   s9, w10
-    LA      x9, dconst
-    ldr     s2, [x9]
-    fmul    s8, s8, s2
-    fmul    s9, s9, s2
+    and     w9, w0, #511
+    lsr     w10, w0, #9
+    scvtf   s8, w9
+    scvtf   s9, w10
 1:  mov     w21, #6                     // ate 6 tentativas
 2:  mov     w0, #13
     bl      rng_mod
@@ -1011,23 +1005,24 @@ desafio_selftest:
     b       dt_ret
 
 dt_stage1:
-    // ---- comida estraga: 8 carnes cruas na mochila e no bau, 1 dia ----
+    // ---- comida estraga: 8 carnes cruas na mochila e no deposito, 1 dia
     mov     w9, #8
     str     w9, [x28, #(G_INV + 4 * IT_MEAT)]
     LA      x19, people
     mov     w20, #0
-    mov     w0, #IT_WOOD
-    mov     w1, #0
-    mov     w2, #0
-    mov     w3, #0
-    bl      smith_chest
-    mov     x21, #0
-    tbnz    w0, #31, 1f
+    ldr     s0, [x19, #P_U]             // deposito com lugar para carne
+    ldr     s1, [x19, #P_V]
+    mov     w0, #IT_MEAT
+    bl      dep_find_put_test
+    mov     w21, w0
+    tbnz    w21, #31, 1f
     bl      ppl_chestptr
-    mov     x21, x0
     mov     w9, #8
-    str     w9, [x21, #(4 * IT_MEAT)]
+    str     w9, [x0, #(4 * IT_MEAT)]
+    bl      store_close
 1:  str     wzr, [x28, #G_SPOILK]
+    mov     w9, #W_SUN                  // de sol (com chuva estraga mais)
+    str     w9, [x28, #G_WEATHER]
     mov     w22, #32
 2:  bl      spoil_step
     subs    w22, w22, #1
@@ -1035,10 +1030,13 @@ dt_stage1:
     ldr     w9, [x28, #(G_INV + 4 * IT_MEAT)]
     str     w9, [x24, #36]
     str     wzr, [x24, #40]
-    cbz     x21, 3f
-    ldr     w9, [x21, #(4 * IT_MEAT)]
+    tbnz    w21, #31, 3f
+    mov     w0, w21
+    bl      ppl_chestptr
+    ldr     w9, [x0, #(4 * IT_MEAT)]
     str     w9, [x24, #40]
-    str     wzr, [x21, #(4 * IT_MEAT)]
+    str     wzr, [x0, #(4 * IT_MEAT)]
+    bl      store_close
 3:  str     wzr, [x28, #(G_INV + 4 * IT_MEAT)]
     bl      calc_stats
     // ---- inverno: 10 s de sol, de dia, longe do fogo ----
@@ -1123,16 +1121,10 @@ dt_stage1:
     mov     w3, #0
     bl      smith_chest
     tbnz    w0, #31, 6f
-    LA      x9, objs
-    add     x9, x9, x0, lsl #3
-    ldrh    w10, [x9]
-    ucvtf   s0, w10
-    ldrh    w10, [x9, #2]
-    ucvtf   s1, w10
-    LA      x9, dconst
-    ldr     s2, [x9]
-    fmul    s8, s0, s2
-    fmul    s9, s1, s2
+    and     w9, w0, #511                // o deposito
+    lsr     w10, w0, #9
+    scvtf   s8, w9
+    scvtf   s9, w10
     LA      x21, ring6                  // um lugar em terra do lado do bau
     mov     w22, #7
 61: ldr     s0, [x21, #8]
@@ -1360,7 +1352,7 @@ dt_t7:  .asciz " | pedreira: celulas esgotadas="
 dt_t8:  .asciz " buracos="
 dt_t9:  .asciz " pedras tiradas="
 dt_u1:  .asciz "desafio: carne crua 8 em 1 dia -> mochila="
-dt_u2:  .asciz " bau="
+dt_u2:  .asciz " deposito="
 dt_u3:  .asciz " | inverno, 10 s de sol: calor 60 -> "
 dt_u4:  .asciz " | manada: cervos="
 dt_u5:  .asciz " longe do primeiro (celulas)="

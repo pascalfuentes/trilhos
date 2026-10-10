@@ -456,10 +456,44 @@ shot_mode:
     mov     w0, #2
     bl      desafio_selftest
     bl      save_selftest               // salva, bagunca e carrega de volta
+    bl      dep_selftest                // deposito de materiais do seu lado
+    mov     w0, #3
+    bl      set_zoom
+    bl      follow_camera
+    bl      update_ambient
+    bl      update_vision
+    bl      draw_all
+    LA      x0, s_shot_depot
+    bl      save_bmp
+    ldr     x0, [x28, #G_REN]
+    bl      F(SDL_RenderPresent)
+    bl      dep_selftest_done
     mov     w0, w19
     bl      set_zoom
     mov     w9, #1                      // o resto do teste sem a vila
     str     w9, [x28, #G_NOPEOPLE]
+
+    // vitrine: todas as construcoes lado a lado, de dia e de noite
+    bl      vitrine_setup
+    cbz     w0, 97f
+    mov     w0, #10800                  // meio-dia
+    bl      vitrine_frame
+    bl      draw_all
+    LA      x0, s_shot_vitrine
+    bl      save_bmp
+    ldr     x0, [x28, #G_REN]
+    bl      F(SDL_RenderPresent)
+    mov     w0, #28800                  // 22:00
+    bl      vitrine_frame
+    bl      draw_all
+    LA      x0, s_shot_vitrine2
+    bl      save_bmp
+    ldr     x0, [x28, #G_REN]
+    bl      F(SDL_RenderPresent)
+    bl      vitrine_done
+    mov     w0, w19
+    bl      set_zoom
+97:
 
     // agua: nadando, tubarao chegando e o fim
     mov     w0, #0
@@ -487,19 +521,23 @@ shot_mode:
 //  Utilitarios
 // =====================================================================
 
-// set_zoom(w0 = 0..3): 0 = longe (0.5x) ... 3 = perto (4x)
+// set_zoom(w0 = 0..3): 0 = longe ... 3 = perto. O chao e 1,5x maior que
+// os sprites (G_Z256 = 192 << zoom; os sprites usam 128 << zoom), para
+// as coisas ficarem mais espacadas. G_K = 1/64 de celula por pixel, em
+// 1/256 (G_K * G_Z256 = 2^20).
     .globl set_zoom
 set_zoom:
     str     w0, [x28, #G_ZOOM]
-    mov     w9, #128
+    mov     w9, #192
     lsl     w9, w9, w0
     str     w9, [x28, #G_Z256]
     mov     w10, #2000
     mul     w10, w10, w9
     lsr     w10, w10, #12
     str     w10, [x28, #G_EMAXZ]
-    mov     w10, #32
-    lsr     w10, w10, w0
+    mov     w10, #0x100000              // 2^20 / G_Z256, arredondado
+    add     w10, w10, w9, lsr #1
+    udiv    w10, w10, w9
     str     w10, [x28, #G_K]
     ret
 
@@ -1407,6 +1445,7 @@ calc_hover:
     ldr     w3, [x28, #G_K]
     sub     w4, w0, #640
     mul     w4, w4, w3
+    asr     w4, w4, #8
     ldr     w5, [x28, #G_CX]
     add     w4, w4, w5                  // (u-v) em 1/64
     add     w5, w2, w4
@@ -1532,6 +1571,7 @@ draw_cols:
     ldr     w27, [x28, #G_EMAXZ]
     add     w10, w27, #360
     mul     w10, w10, w9
+    asr     w10, w10, #8
     ldr     w11, [x28, #G_CY]
     add     w10, w10, w11
     str     w10, [sp, #92]              // Y do mundo na linha de partida
@@ -1549,6 +1589,7 @@ dt_col:
     ldr     w9, [sp, #88]
     sub     w10, w26, #640
     mul     w10, w10, w9
+    asr     w10, w10, #8
     ldr     w11, [x28, #G_CX]
     add     w10, w10, w11               // X (1/16 px) = u - v (1/64 cel)
     ldr     w11, [sp, #92]
@@ -1556,7 +1597,7 @@ dt_col:
     lsl     w13, w10, #9
     add     w21, w12, w13               // u (16.16)
     sub     w22, w12, w13               // v (16.16)
-    lsl     w23, w9, #10                // passo
+    lsl     w23, w9, #2                 // passo (16.16; G_K em 1/256)
     ldr     w24, [x28, #G_EMAXZ]
     add     w24, w24, #SCRH             // yb
     mov     w25, #SCRH                  // y-buffer
@@ -1976,7 +2017,8 @@ draw_objects:
     ldr     w21, [x28, #G_Z256]
     ldr     w22, [x28, #G_CX]
     ldr     w23, [x28, #G_CY]
-    lsr     w24, w21, #8
+    mov     w9, #384                    // sprites: 128 << zoom (o chao: 192)
+    udiv    w24, w21, w9
     mov     w9, #1
     cmp     w24, #1
     csel    w24, w24, w9, ge            // escala dos sprites
@@ -2197,7 +2239,10 @@ draw_all:
     cbnz    w9, 3f
     bl      draw_title
     b       4f
-3:  bl      draw_ui
+3:  LA      x9, noui                    // fotos da vitrine: sem a interface
+    ldrb    w9, [x9]
+    cbnz    w9, 4f
+    bl      draw_ui
 4:  mov     w0, #1
     bl      setscale
     ldp     x29, x30, [sp], #16
@@ -2436,6 +2481,12 @@ palette:
     .word 0xFF8C5A30, 0xFFF2F2F2, 0xFFE05030, 0xFF6A6A70  // 36-39 couro, branco, caranguejo, lobo
     .word 0xFFD8B040, 0xFFA8862A, 0xFF9CC04A, 0xFFC8904A  // 40-43 trigo, trigo escuro, broto, pao
     .word 0xFFD07A3A, 0xFF8A4A2A, 0xFFA0503C, 0xFFFFF0A0  // 44-47 minerio, ferrugem, tijolo, luz
+    // 48-65: personagens (arte/personagens.py; a ordem que ele imprime)
+    .word 0xFFF9DE77, 0xFFD9A94A, 0xFF7A5030, 0xFF72492A  // 48-51 orbe, cajado, manto
+    .word 0xFF563921, 0xFFDFB48D, 0xFF28282C, 0xFFDCD6C8  // 52-55 sombra, pele, olhos, barba
+    .word 0xFFB98C66, 0xFFC4AD80, 0xFFC99A3E, 0xFF9A8560  // 56-59 pele, tunica, cinto
+    .word 0xFF3D3C44, 0xFF36291A, 0xFF453929, 0xFF30281C  // 60-63 pe, cabelo, calca
+    .word 0xFF5A3A28, 0xFF6B4426                          // 64-65 cinto, cabelo
 
 roofc:
     .word 0xFFB5443A, 0xFF8C3029
@@ -2865,64 +2916,64 @@ sprites:
     .byte 0,36,36,36,36,0,0,36
     .p2align 7
 // 45: cerca: poste
-    .byte 9, 7, 4, 0
-    .byte 0,0,0,0,10,0,0,0,0
-    .byte 0,0,0,0,31,0,0,0,0
-    .byte 0,0,0,0,31,0,0,0,0
-    .byte 0,0,0,0,31,0,0,0,0
-    .byte 0,0,0,0,31,0,0,0,0
-    .byte 0,0,0,0,31,0,0,0,0
-    .byte 0,0,0,0,1,0,0,0,0
+    .byte 13, 7, 6, 0
+    .byte 0,0,0,0,0,0,10,0,0,0,0,0,0
+    .byte 0,0,0,0,0,0,31,0,0,0,0,0,0
+    .byte 0,0,0,0,0,0,31,0,0,0,0,0,0
+    .byte 0,0,0,0,0,0,31,0,0,0,0,0,0
+    .byte 0,0,0,0,0,0,31,0,0,0,0,0,0
+    .byte 0,0,0,0,0,0,31,0,0,0,0,0,0
+    .byte 0,0,0,0,0,0,1,0,0,0,0,0,0
     .p2align 7
 // 46: cerca: trilho em +u
-    .byte 9, 7, 4, 0
-    .byte 0,0,0,0,10,0,0,0,0
-    .byte 0,0,0,0,31,0,0,0,0
-    .byte 0,0,0,0,31,36,0,0,0
-    .byte 0,0,0,0,31,0,36,36,0
-    .byte 0,0,0,0,31,36,0,0,0
-    .byte 0,0,0,0,31,0,36,36,0
-    .byte 0,0,0,0,1,0,0,0,0
+    .byte 13, 7, 6, 0
+    .byte 0,0,0,0,0,0,10,0,0,0,0,0,0
+    .byte 0,0,0,0,0,0,31,0,0,0,0,0,0
+    .byte 0,0,0,0,0,0,31,36,0,0,0,0,0
+    .byte 0,0,0,0,0,0,31,0,36,36,0,0,0
+    .byte 0,0,0,0,0,0,31,36,0,0,36,36,0
+    .byte 0,0,0,0,0,0,31,0,36,36,0,0,0
+    .byte 0,0,0,0,0,0,1,0,0,0,36,36,0
     .p2align 7
 // 47: cerca: trilho em +v
-    .byte 9, 7, 4, 0
-    .byte 0,0,0,0,10,0,0,0,0
-    .byte 0,0,0,0,31,0,0,0,0
-    .byte 0,0,0,36,31,0,0,0,0
-    .byte 0,36,36,0,31,0,0,0,0
-    .byte 0,0,0,36,31,0,0,0,0
-    .byte 0,36,36,0,31,0,0,0,0
-    .byte 0,0,0,0,1,0,0,0,0
+    .byte 13, 7, 6, 0
+    .byte 0,0,0,0,0,0,10,0,0,0,0,0,0
+    .byte 0,0,0,0,0,0,31,0,0,0,0,0,0
+    .byte 0,0,0,0,0,36,31,0,0,0,0,0,0
+    .byte 0,0,0,36,36,0,31,0,0,0,0,0,0
+    .byte 0,36,36,0,0,36,31,0,0,0,0,0,0
+    .byte 0,0,0,36,36,0,31,0,0,0,0,0,0
+    .byte 0,36,36,0,0,0,1,0,0,0,0,0,0
     .p2align 7
 // 48: cerca: os dois
-    .byte 9, 7, 4, 0
-    .byte 0,0,0,0,10,0,0,0,0
-    .byte 0,0,0,0,31,0,0,0,0
-    .byte 0,0,0,36,31,36,0,0,0
-    .byte 0,36,36,0,31,0,36,36,0
-    .byte 0,0,0,36,31,36,0,0,0
-    .byte 0,36,36,0,31,0,36,36,0
-    .byte 0,0,0,0,1,0,0,0,0
+    .byte 13, 7, 6, 0
+    .byte 0,0,0,0,0,0,10,0,0,0,0,0,0
+    .byte 0,0,0,0,0,0,31,0,0,0,0,0,0
+    .byte 0,0,0,0,0,36,31,36,0,0,0,0,0
+    .byte 0,0,0,36,36,0,31,0,36,36,0,0,0
+    .byte 0,36,36,0,0,36,31,36,0,0,36,36,0
+    .byte 0,0,0,36,36,0,31,0,36,36,0,0,0
+    .byte 0,36,36,0,0,0,1,0,0,0,36,36,0
     .p2align 7
 // 49: portao ao longo de u
-    .byte 9, 7, 4, 0
-    .byte 0,0,0,0,10,0,0,0,0
-    .byte 0,0,0,0,31,35,0,0,0
-    .byte 0,0,0,0,31,36,35,35,0
-    .byte 0,0,0,0,31,35,36,36,0
-    .byte 0,0,0,0,31,35,35,35,0
-    .byte 0,0,0,0,31,0,35,35,0
-    .byte 0,0,0,0,1,0,0,0,0
+    .byte 13, 7, 6, 0
+    .byte 0,0,0,0,0,0,10,0,0,0,0,0,0
+    .byte 0,0,0,0,0,0,31,35,0,0,0,0,0
+    .byte 0,0,0,0,0,0,31,36,35,35,0,0,0
+    .byte 0,0,0,0,0,0,31,35,36,36,35,35,0
+    .byte 0,0,0,0,0,0,31,35,35,35,36,36,0
+    .byte 0,0,0,0,0,0,31,0,35,35,35,35,0
+    .byte 0,0,0,0,0,0,1,0,0,0,35,35,0
     .p2align 7
 // 50: portao ao longo de v
-    .byte 9, 7, 4, 0
-    .byte 0,0,0,0,10,0,0,0,0
-    .byte 0,0,0,35,31,0,0,0,0
-    .byte 0,35,35,36,31,0,0,0,0
-    .byte 0,36,36,35,31,0,0,0,0
-    .byte 0,35,35,35,31,0,0,0,0
-    .byte 0,35,35,0,31,0,0,0,0
-    .byte 0,0,0,0,1,0,0,0,0
+    .byte 13, 7, 6, 0
+    .byte 0,0,0,0,0,0,10,0,0,0,0,0,0
+    .byte 0,0,0,0,0,35,31,0,0,0,0,0,0
+    .byte 0,0,0,35,35,36,31,0,0,0,0,0,0
+    .byte 0,35,35,36,36,35,31,0,0,0,0,0,0
+    .byte 0,36,36,35,35,35,31,0,0,0,0,0,0
+    .byte 0,35,35,35,35,0,31,0,0,0,0,0,0
+    .byte 0,35,35,0,0,0,1,0,0,0,0,0,0
     .p2align 7
 // 51: boia
     .byte 3, 4, 1, 0
@@ -3301,6 +3352,9 @@ s_shot_brush:   .asciz "shot_pincel.bmp"
 s_shot_pbag:    .asciz "shot_morador.bmp"
 s_shot_quarry:  .asciz "shot_pedreira.bmp"
 s_shot_soldier: .asciz "shot_soldado.bmp"
+s_shot_depot: .asciz "shot_deposito.bmp"
+s_shot_vitrine: .asciz "shot_estruturas.bmp"
+s_shot_vitrine2: .asciz "shot_estruturas_noite.bmp"
     .p2align 2
 // buracos de pedreira e de mina e o chao delas (duas cores cada)
 pitcolors:

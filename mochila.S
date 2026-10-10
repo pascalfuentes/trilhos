@@ -183,7 +183,10 @@ pinv_eat:
     .globl open_ptr
 open_ptr:
     ldr     w9, [x28, #G_CHESTOPEN]
-    sub     w9, w9, #1
+    cmp     w9, #255                    // deposito (deposito.S)
+    b.ne    2f
+    b       depot_ptr
+2:  sub     w9, w9, #1
     cmp     w9, #128
     b.hs    1f
     LA      x0, chests
@@ -200,6 +203,9 @@ open_title:
     stp     x29, x30, [sp, #-16]!
     mov     x29, sp
     ldr     w9, [x28, #G_CHESTOPEN]
+    LA      x0, s_deptitle
+    cmp     w9, #255
+    b.eq    9f
     cmp     w9, #128
     b.hi    1f
     LA      x0, s_chesttitle
@@ -247,7 +253,15 @@ open_person:
     .globl open_check
 open_check:
     ldr     w9, [x28, #G_CHESTOPEN]
-    cmp     w9, #128
+    cmp     w9, #255                    // deposito: fecha se voce se afastar
+    b.ne    1f
+    stp     x29, x30, [sp, #-16]!
+    bl      depot_far
+    ldp     x29, x30, [sp], #16
+    cbz     w0, 9f
+    str     wzr, [x28, #G_CHESTOPEN]
+    ret
+1:  cmp     w9, #128
     b.ls    9f
     sub     w9, w9, #129
     LA      x10, people
@@ -443,6 +457,8 @@ fish_done:
 // zone_paint(w0 u, w1 v, w2 raio, w3 tipo (0 = apaga)): circulo  folha
     .globl zone_paint
 zone_paint:
+    mov     w9, #1                      // depositos: refazer as listas
+    str     w9, [x28, #G_DEPDIRTY]
     LA      x9, zonegrid
     mul     w15, w2, w2
     add     w15, w15, w2                // r^2 + r: circulo mais cheio
@@ -608,21 +624,14 @@ mochila_selftest:
     // ---- pescador: zona de Pesca na agua perto do bau, vara no bau ----
     LA      x19, people
     mov     w20, #0
-    mov     w0, #IT_WOOD                // bau mais perto da primeira pessoa
-    mov     w1, #0
-    mov     w2, #0
-    mov     w3, #0
-    bl      mt_chest
+    ldr     s0, [x19, #P_U]             // deposito com lugar para a vara
+    ldr     s1, [x19, #P_V]
+    mov     w0, #IT_ROD
+    bl      dep_find_put_test
     tbnz    w0, #31, mt_print
     mov     w25, w0
-    bl      ppl_chestptr
-    mov     x26, x0
-    LA      x9, objs
-    add     x9, x9, x25, lsl #3
-    ldrh    w21, [x9]
-    lsr     w21, w21, #6
-    ldrh    w22, [x9, #2]
-    lsr     w22, w22, #6
+    and     w21, w25, #511              // o deposito
+    lsr     w22, w25, #9
     mov     w23, #-1                    // agua com margem mais perto do bau
     mov     w9, #0x7FFFFFFF
     str     w9, [x24, #40]
@@ -672,9 +681,12 @@ mochila_selftest:
     mov     w0, #Z_FISH
     bl      mt_count
     str     w0, [x24, #8]
-5:  mov     w9, #1                      // vara de pesca no bau
-    str     w9, [x26, #(4 * IT_ROD)]
-    str     wzr, [x26, #(4 * IT_FISH)]
+5:  mov     w0, w25                     // vara de pesca no deposito
+    bl      ppl_chestptr
+    mov     w9, #1
+    str     w9, [x0, #(4 * IT_ROD)]
+    str     wzr, [x0, #(4 * IT_FISH)]
+    bl      store_close
     LA      x9, people                  // pescadora: a mae da terceira familia
     add     x9, x9, #(9 * PSIZE)
     mov     w10, #J_FISH
@@ -683,7 +695,9 @@ mochila_selftest:
     strb    w10, [x9, #P_STATE]
     mov     w0, #3600                   // 2 horas de jogo
     bl      mt_frames
-    ldr     w23, [x26, #(4 * IT_FISH)]  // peixe no bau + na mochila dela
+    mov     w0, #IT_FISH                // peixe nos depositos + na mochila dela
+    bl      dep_total
+    mov     w23, w0
     mov     w20, #9
     mov     w0, #IT_FISH
     bl      pinv_get
@@ -814,6 +828,7 @@ mt_chest:
     .data
     .p2align 2
 // o que conta como carga (leva ao bau quando enche)
+    .globl cargolist
 cargolist:
     .byte IT_WOOD, IT_STONE, IT_ORE, IT_COAL, IT_IRON, IT_WHEAT, IT_FISH
     .byte IT_MEAT, IT_HIDE, IT_BERRY, 255
@@ -828,6 +843,7 @@ lunchok:
     .p2align 1
 nb4:
     .hword 1, -1, 512, -512
+s_deptitle: .asciz "Deposito (clique pega)"
 s_bagof:    .asciz "Mochila de "
 s_baghint:  .asciz ": clique num item dela pega; na sua, da"
 s_brush:    .asciz "Pincel: "

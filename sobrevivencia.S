@@ -109,7 +109,8 @@ elev_at:
 // sprite_scale() -> w0 = escala dos sprites (1 ou mais)
 sprite_scale:
     ldr     w0, [x28, #G_Z256]
-    lsr     w0, w0, #8
+    mov     w9, #384                    // 128 << zoom (o chao e 1,5x: 192)
+    udiv    w0, w0, w9
     cmp     w0, #1
     mov     w9, #1
     csel    w0, w9, w0, lt
@@ -287,6 +288,7 @@ gr_next:
     b       gr_loop
 gr_done:
     bl      build_treegrid
+    bl      dep_dirty
     ldr     x25, [sp, #64]
     ldp     x23, x24, [sp, #48]
     ldp     x21, x22, [sp, #32]
@@ -431,6 +433,7 @@ sr_found:
 // =====================================================================
 
 // update_ambient: cor da luz ambiente pela hora do dia
+    .globl update_ambient
 update_ambient:
     ldr     w9, [x28, #G_TIME]
     mov     w10, #0                     // k: 0 = dia ... 256 = noite
@@ -681,6 +684,8 @@ harvest:
     b.ne    5f
     mov     w12, #O_BUSHE               // arbusto fica sem frutas
 5:  strb    w12, [x9, #6]
+    mov     w15, #1                     // depositos: refazer as listas
+    str     w15, [x28, #G_DEPDIRTY]
     cmp     w10, #O_ROCK                // pedreira ou veio: vira buraco
     b.eq    51f
     cmp     w10, #O_IRONV
@@ -2308,8 +2313,11 @@ chest_move:
     ldr     w9, [x28, #G_CHESTOPEN]
     cbz     w9, 9f
     mov     w20, w0
-    bl      open_ptr                    // bau ou mochila de alguem
+    str     w1, [sp, #-16]!
+    bl      open_ptr                    // bau, deposito ou mochila de alguem
+    ldr     w1, [sp], #16
     mov     x19, x0
+    cbz     x19, 9f
     cbnz    w1, 1f
     add     x9, x28, #G_INV
     ldr     w10, [x9, x20, lsl #2]
@@ -2324,7 +2332,10 @@ chest_move:
     mov     w0, w20
     bl      inv_add
     LA      x0, p_taken
-2:  bl      popup
+2:  str     x0, [sp, #-16]!
+    bl      depot_close_player          // deposito: tira e poe as pilhas
+    ldr     x0, [sp], #16
+    bl      popup
     bl      calc_stats
 9:  ldp     x19, x20, [sp, #16]
     ldp     x29, x30, [sp], #32
@@ -2545,7 +2556,9 @@ surv_mouse:
     str     w9, [x28, #G_INVOPEN]
     str     wzr, [x28, #G_CRAFTOPEN]
     b       sm_ret
-81: ldr     w19, [x28, #G_HOVFIRE]      // direito numa fogueira: lenha
+81: bl      depot_click                 // direito num deposito: abre
+    cbnz    w0, sm_ret
+    ldr     w19, [x28, #G_HOVFIRE]      // direito numa fogueira: lenha
     tbnz    w19, #31, sm_ret
     mov     w0, w19
     bl      fire_dist2
@@ -2647,7 +2660,20 @@ surv_draw:
     and     w10, w10, #1
     add     w9, w9, w10
     b       3f
-21: ldr     w10, [x28, #G_PMOVING]
+21: cmp     w21, #2                     // perto: o profeta em 8 direcoes
+    b.lt    22f
+    sub     sp, sp, #16
+    stp     w1, w2, [sp]
+    str     w4, [sp, #8]
+    bl      player_sprite
+    ldp     w1, w2, [sp]
+    ldr     w4, [sp, #8]
+    add     sp, sp, #16
+    lsr     w3, w21, #1
+    mov     w5, #0
+    bl      blit
+    b       23f
+22: ldr     w10, [x28, #G_PMOVING]
     cbz     w10, 3f
     ldr     w10, [x28, #G_PFRAME]
     lsr     w10, w10, #3
@@ -2659,7 +2685,7 @@ surv_draw:
     mov     w5, #0
     bl      blit
     // barbatana do tubarao rondando, cada vez mais perto
-    ldr     w19, [x28, #G_SHARK]
+23: ldr     w19, [x28, #G_SHARK]
     cmp     w19, #60
     b.lt    4f
     ldr     w9, [x28, #G_FRAME]
@@ -2938,11 +2964,8 @@ post_cols:
     str     w1, [sp, #4]
     ldr     w9, [x28, #G_K]
     str     w9, [sp, #8]
-    mov     w10, #640
-    mul     w10, w10, w9
     ldr     w11, [x28, #G_CX]
-    sub     w11, w11, w10
-    str     w11, [sp, #12]              // (u-v) da coluna 0
+    str     w11, [sp, #12]              // (u-v) do meio da tela
     ldr     w9, [x28, #G_AMBR]
     str     w9, [sp, #16]
     ldr     w9, [x28, #G_AMBG]
@@ -2981,8 +3004,11 @@ pc_px:
     b       pc_color
 1:  ldrh    w0, [x17, w10, uxtw #1]     // profundidade = (u+v)
     ldr     w1, [sp, #8]
+    sub     w2, w11, #640
+    mul     w1, w2, w1
+    asr     w1, w1, #8
     ldr     w2, [sp, #12]
-    madd    w1, w11, w1, w2             // (u-v) desta coluna
+    add     w1, w1, w2                  // (u-v) desta coluna
     add     w2, w0, w1
     asr     w2, w2, #1                  // u (1/64 de celula)
     sub     w3, w0, w1
@@ -3241,6 +3267,7 @@ cv_end:
     ret
 
 // update_vision: recalcula o que esta a vista (personagem + fogueiras)
+    .globl update_vision
 update_vision:
     stp     x29, x30, [sp, #-32]!
     mov     x29, sp
@@ -4393,7 +4420,9 @@ pile_at:
     sub     w9, w9, #1
     LA      x10, memtype
     strb    w24, [x10, x9]
-9:  ldp     d8, d9, [sp, #64]
+9:  mov     w9, #1                      // depositos: refazer as listas
+    str     w9, [x28, #G_DEPDIRTY]
+    ldp     d8, d9, [sp, #64]
     ldp     x23, x24, [sp, #48]
     ldp     x21, x22, [sp, #32]
     ldp     x19, x20, [sp, #16]
@@ -4927,6 +4956,9 @@ draw_inv:
     cmp     w9, #128                    // mochila de alguem: da
     b.ls    8f
     LA      x2, s_invhint3
+    cmp     w9, #255
+    b.ne    8f
+    LA      x2, s_invhint4
 8:  mov     w0, #(INV_X + 8)
     mov     w1, #(INV_Y + INV_H - 14)
     bl      text
@@ -8015,6 +8047,7 @@ s_chesttitle:   .asciz "Bau (clique: pegar)"
 s_crafthint:    .asciz "Clique numa receita"
 s_invhint2:     .asciz "Clique: guardar no bau"
 s_invhint3:     .asciz "Clique: dar a pessoa"
+s_invhint4:     .asciz "Clique: por no deposito"
 s_chesthint:    .asciz "Clique: pegar"
 s_place1:       .asciz "Clique: colocar "
 s_place2:       .asciz " (dir.: cancela)"

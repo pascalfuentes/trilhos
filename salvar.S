@@ -349,6 +349,8 @@ load_game:
     bl      F(fclose)
     mov     w9, #-1                     // a ocupacao e refeita
     str     w9, [x28, #G_OCCFRAME]
+    mov     w9, #1                      // e as listas dos depositos
+    str     w9, [x28, #G_DEPDIRTY]
     ldr     w0, [x28, #G_ZOOM]
     bl      set_zoom
     bl      follow_camera

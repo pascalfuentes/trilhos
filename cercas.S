@@ -889,7 +889,7 @@ grid_prep:
     fcvtzs  w9, s0
     str     w9, [x28, #G_GRIDPV]
     ldr     w9, [x28, #G_K]             // um passo do terreno: linha fina
-    lsl     w9, w9, #10
+    lsl     w9, w9, #2                  // (G_K em 1/256)
     str     w9, [x28, #G_GRIDW]
     mov     w9, #1
     str     w9, [x28, #G_GRIDSHOW]

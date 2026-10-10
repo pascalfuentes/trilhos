@@ -7,6 +7,8 @@ Você é uma espécie de profeta que não envelhece, e chega com **3 famílias**
 ![Dia](screenshots/jogo.png)
 ![Noite](screenshots/noite.png)
 
+**Os personagens:** o profeta (capuz marrom, barba branca e o cajado com a pedra amarela) e os moradores (homem, mulher, menino e menina, com a roupa na cor da família) são desenhados em **8 direções**, com passos, virados para onde estão andando. O profeta guarda o cajado quando segura uma ferramenta ou a tocha. De perto o desenho tem o dobro de detalhe; no zoom mais afastado volta o boneco simples. O chão é desenhado **1,5x maior** que as coisas em cima dele (bonecos, árvores, casas, pilhas), para o mundo não ficar abarrotado.
+
 ## Como jogar
 
 | Tecla / mouse | Ação |
@@ -33,16 +35,16 @@ Você é uma espécie de profeta que não envelhece, e chega com **3 famílias**
 | clique na água com a vara na mão | lança a linha; quando aparecer "Peixe! Clique!", clique para fisgar |
 | clique com o arco na mão | atira uma flecha onde está o mouse |
 | clique num animal perto | golpe (machado tira mais vida) |
-| botão direito num baú | abre o baú (clique num item passa de um lado para o outro) |
+| botão direito num baú ou num **depósito** (a até 4 células) | abre o baú ou tudo o que está nas pilhas do depósito em volta (clique num item passa de um lado para o outro) |
 | botão direito no abrigo (depois das 18h) | dorme até amanhecer (qualquer tecla acorda) |
 | botão direito numa fogueira | pôr lenha (+2 min de fogo; no máximo 12 min) |
-| I ou botão **Mochila** | abre a mochila (clique num item: come, põe na mão, coloca ou guarda no baú aberto) |
+| I ou botão **Mochila** | abre a mochila (clique num item: come, põe na mão, coloca ou guarda no baú ou depósito aberto) |
 | C ou botão **Personagem** | abre as skills |
 | botão direito num item da mochila | larga 1 no chão (com Shift: a pilha toda) |
 | roda do mouse / `+` / `-` | zoom |
 | espaço | pausa |
 | P | painel da vila: clique na tarefa para trocar (botão direito volta); embaixo, abas Pessoas / Famílias (árvore genealógica) e páginas `<` `>` |
-| Z | pintar zonas com um **pincel redondo**: 1 Floresta, 2 Plantação, 3 Moradia, 4 Pesca, 0 apaga; segure o botão esquerdo para pintar e o direito para apagar; roda do mouse ou `[` `]` mudam o tamanho (1 a 12) (Z ou ESC sai) |
+| Z | pintar zonas com um **pincel redondo**: 1 Floresta, 2 Plantação, 3 Moradia, 4 Pesca, 5 a 8 **depósitos** (comida, materiais, ferramentas e armas, geral), 0 apaga; segure o botão esquerdo para pintar e o direito para apagar; roda do mouse ou `[` `]` mudam o tamanho (1 a 12) (Z ou ESC sai) |
 | botão direito numa pessoa | abre a **mochila** dela (clique num item dela: você pega; num item seu: você dá) |
 | clique numa pessoa | seleciona (setinha e nome em cima) |
 | botão direito no mapa (com alguém selecionado) | a pessoa vai até lá |
@@ -209,30 +211,43 @@ Os animais aparecem longe da vista, cada um no seu terreno, e somem quando ficam
 
 **Pessoas (a vila)**
 
-- O jogo começa com **3 famílias** (Silva, Souza e Lima), cada uma com pai, mãe e 2 filhos, morando num **barraco**, e um **baú** com frutas, pão e sementes. A roupa e o telhado de cada família têm uma cor.
+- O jogo começa com **3 famílias** (Silva, Souza e Lima), cada uma com pai, mãe e 2 filhos, morando num **barraco**, e um **depósito geral** 5 x 5 com frutas, pão e sementes. A roupa e o telhado de cada família têm uma cor.
 - Você **não envelhece**. Eles sim: **1 ano a cada 12 dias** (uma estação dura 4 dias). Com **14 anos** uma criança pode trabalhar; bem velhos (65+) podem morrer.
 - **Fé:** quem fica a até 6 células de você ganha fé (rápido); longe, ela cai devagar. Fé alta = trabalha até **1,5x mais rápido**. Abaixo de 25 (nome em laranja) às vezes enrola e pode **recusar ordens**. Fé zerada: **vai embora**.
-- **Fome:** cai mais rápido (de cheia a vazia em uns 14 minutos). Quando a fome passa de 60% comem primeiro o **lanche da mochila**; depois, do baú (o que enche mais primeiro), e levam de lá um lanche novo; sem nada, colhem frutas nos arbustos. Sem comer, a vida cai até morrer.
-- **Mochila de cada um:** cada pessoa carrega o que junta no trabalho (madeira, pedra, minério, carvão, trigo, peixe... várias coisas ao mesmo tempo), o **lanche** (até 2 de cada comida pronta: pão, frutas assadas, carne e peixe assados) e a **ferramenta** da tarefa. Quando a carga enche (ou não há mais o que fazer), leva tudo ao baú mais perto, menos o lanche, a ferramenta e as sementes de quem planta (fica com 10). Clique com o botão direito numa pessoa (ou na coluna **Agora** do painel P) para abrir a mochila dela no lugar do baú: clique num item dela para pegar, num item seu para dar.
+- **Fome:** cai mais rápido (de cheia a vazia em uns 14 minutos). Quando a fome passa de 60% comem primeiro o **lanche da mochila**; depois, do depósito (o que enche mais primeiro), e levam de lá um lanche novo; sem nada, colhem frutas nos arbustos. Sem comer, a vida cai até morrer.
+- **Mochila de cada um:** cada pessoa carrega o que junta no trabalho (madeira, pedra, minério, carvão, trigo, peixe... várias coisas ao mesmo tempo), o **lanche** (até 2 de cada comida pronta: pão, frutas assadas, carne e peixe assados) e a **ferramenta** da tarefa. Quando a carga enche (ou não há mais o que fazer), leva tudo ao depósito mais perto que aceita cada coisa, menos o lanche, a ferramenta e as sementes de quem planta (fica com 10). Clique com o botão direito numa pessoa (ou na coluna **Agora** do painel P) para abrir a mochila dela: clique num item dela para pegar, num item seu para dar.
 - **Sono:** às 21h vão dormir **em casa** (somem lá dentro). Quem não tem casa vai para a cabana mais perto ou em volta de uma **fogueira** acesa (até 30 células); senão, deita onde está. Em noite de inverno ou de neve, fora de casa e longe do fogo, passam **frio**.
 - **Lobos e ursos** também atacam as pessoas (cabana e fogueira protegem). Elas fogem quando veem um.
 - **Zonas:** aperte **Z** e pinte o chão com o pincel redondo (segure o botão; o direito apaga). A roda do mouse ou `[` `]` mudam o tamanho, de 1 a 12, e o círculo aparece no chão sob o mouse. Os terrenos das casas não mudam.
-- **Tarefas** (painel **P**, só adultos): cada uma trabalha **só dentro das zonas** pintadas para ela (**Z**) e leva o que juntou para o baú mais perto:
+- **Tarefas** (painel **P**, só adultos): cada uma trabalha **só dentro das zonas** pintadas para ela (**Z**) e leva o que juntou para o depósito mais perto:
 
 | Tarefa | O que faz na zona |
 |---|---|
 | Floresta | corta as árvores **adultas** (4 madeiras por viagem) e planta uma **muda** no lugar de cada uma que cai; sem árvore adulta, planta mudas no chão vazio (um quadrado sim, outro não). A madeira não acaba |
 | Pedra | **sem zona**: procura sozinho as pedreiras (até 40 células) e, de mochila vazia, as minas de ferro e carvão primeiro (3 por viagem) |
-| Plantar | colhe o trigo maduro e replanta, planta na terra arada vazia (pega sementes no baú) e ara o resto |
+| Plantar | colhe o trigo maduro e replanta, planta na terra arada vazia (pega sementes no depósito) e ara o resto |
 | Obras | constrói para as famílias: barraco, casa e cerca (veja abaixo) |
-| Ferreiro | na fornalha mais perto: pega 2 minério + 1 carvão no baú e faz uma barra de ferro; sem minério, faz carvão de madeira (até ter 10 no baú) |
-| Soldado | pega uma **espada** no baú, patrulha em volta do baú da vila e **não dorme** (fica de vigia). Quando um lobo ou urso chega a 16 células, corre atrás e luta (espada: 6 de dano; sem espada: 2). Com uma **armadura** na mochila, as mordidas tiram metade |
-| Pescador | pinte uma zona de **Pesca** (Z, 5) na água: ele pega uma **vara de pesca** no baú (sem vara, avisa), vai até a margem mais perto e pesca. O peixe depende da água: lago 1, mar 1 ou 2, mar fundo 3 por vez. Com 4 peixes, leva ao baú |
+| Ferreiro | na fornalha mais perto: pega 2 minério + 1 carvão no depósito e faz uma barra de ferro; sem minério, faz carvão de madeira (até ter 10 guardados) |
+| Soldado | pega uma **espada** no depósito, patrulha em volta do depósito da vila e **não dorme** (fica de vigia). Quando um lobo ou urso chega a 16 células, corre atrás e luta (espada: 6 de dano; sem espada: 2). Com uma **armadura** na mochila, as mordidas tiram metade |
+| Pescador | pinte uma zona de **Pesca** (Z, 4) na água: ele pega uma **vara de pesca** no depósito (sem vara, avisa), vai até a margem mais perto e pesca. O peixe depende da água: lago 1, mar 1 ou 2, mar fundo 3 por vez. Com 4 peixes, leva ao depósito |
+
+- **Depósitos:** a vila não usa baú: guarda tudo em **pilhas no chão**, dentro das zonas de depósito que você pinta (Z, 5 a 8). Cada quadrado guarda **uma pilha de um item só** (até 20 madeiras, 15 pedras, 20 frutas, 40 sementes, 15 pães, 5 ferramentas...), então o tamanho da zona é quanto cabe: um depósito 4 x 4 tem 16 pilhas. O quadrado precisa estar **limpo** (sem árvore, pedra ou arbusto) e fora da água. Cada tipo aceita uma coisa:
+
+| Depósito | Guarda |
+|---|---|
+| 5 Comida | frutas, carne, peixe, trigo, pão, sementes e assados |
+| 6 Materiais | madeira, pedra, couro, minério, carvão, barras de ferro |
+| 7 Ferramentas e armas | machados, picaretas, enxadas, vara, cesto, arco, flechas, espada, armadura, roupa e mochila de couro, tochas |
+| 8 Geral | qualquer coisa (menos construções: fogueira, baú, cerca...) |
+
+  Quem leva carga procura o depósito mais perto **com lugar** para aquele item (sem lugar, avisa: "A vila precisa de depósito com lugar"). Comida nas pilhas estraga **como no chão**, e mais rápido na chuva. Seu baú continua seu: os moradores não mexem nele. Botão direito num quadrado do depósito (a até 4 células) abre tudo o que está nas pilhas em volta (5 células): pegar e guardar mexe direto nas pilhas.
+
+![Um depósito de materiais 3 x 3: madeira e pedra em pilhas](screenshots/deposito.png)
 
 - **Árvores crescem por ano:** muda → **jovem** com 1 ano (12 dias) → **adulta** com 2 anos, que dá madeira. Jovem não se corta. No inverno não crescem.
 
 - **Caminhos:** onde se anda muito (pessoas e você) o mato vira **terra batida**, e nela se anda 25-30% mais rápido. Caminho pouco usado volta a ser mato aos poucos.
-- **Ferramentas de ferro da vila:** ponha machado, picareta ou enxada de ferro num baú: quem trabalha na Floresta, na Pedra ou na Plantação vai lá pegar a sua e trabalha **2x mais rápido**.
+- **Ferramentas de ferro da vila:** ponha machado, picareta ou enxada de ferro num depósito: quem trabalha na Floresta, na Pedra ou na Plantação vai lá pegar a sua e trabalha **2x mais rápido**.
 - **Cada morador enxerga em volta** (7 células de dia, 3 de noite): o mapa vai se revelando por onde a vila anda, e você vê o que acontece longe de você.
 - No painel **P**, a coluna **Agora** mostra o que cada um está fazendo (cortando, quebrando, construindo, na fornalha, vai comer, dormindo...). Passe o mouse numa pessoa: nome, idade, tarefa, fé e o que está fazendo.
 - As pessoas da vila passam pelas cercas (abrem o portão); os bichos não.
@@ -244,7 +259,7 @@ Os animais aparecem longe da vista, cada um no seu terreno, e somem quando ficam
 
 **Casas e a vila crescendo**
 
-- Cada família tem um **terreno 5 x 5** com a casa no meio. Quem tem a tarefa **Obras** pega o material no baú e constrói, nesta ordem:
+- Cada família tem um **terreno 5 x 5** com a casa no meio. Quem tem a tarefa **Obras** pega o material no depósito e constrói, nesta ordem:
 
 | Obra | Material | O que muda |
 |---|---|---|
@@ -363,7 +378,7 @@ O **abrigo** protege do frio do clima e do granizo.
 
 ## Salvar e carregar
 
-- **F5** salva tudo num arquivo só, `ermo.sav`, na pasta de onde o jogo foi aberto: você (vida, fome, mochila, skills, ferramentas), a hora, o dia e o clima, o que mudou no mundo (árvores cortadas, pedreiras, terra arada, plantas, cercas, construções, baús), o que você já viu, os animais e a vila inteira (pessoas, mochilas, tarefas, zonas, casas e a árvore genealógica). Não dá para salvar morto nem dormindo.
+- **F5** salva tudo num arquivo só, `ermo.sav`, na pasta de onde o jogo foi aberto: você (vida, fome, mochila, skills, ferramentas), a hora, o dia e o clima, o que mudou no mundo (árvores cortadas, pedreiras, terra arada, plantas, cercas, construções, baús e pilhas dos depósitos), o que você já viu, os animais e a vila inteira (pessoas, mochilas, tarefas, zonas, casas e a árvore genealógica). Não dá para salvar morto nem dormindo.
 - **F9** carrega o último jogo salvo, a qualquer hora (e depois de morrer).
 - Ao abrir o jogo, se tiver um `ermo.sav`, a tela de título já mostra o mundo dele: **ENTER** (ou **C**) continua. **N** começa um jogo novo nesse mundo e **R** sorteia outro mundo.
 - O relevo sai da semente do mundo, então o arquivo guarda só o que muda (uns 2 MB).
@@ -372,11 +387,11 @@ O **abrigo** protege do frio do clima e do granizo.
 
 O mundo é difícil de propósito: comida é pouca e estraga, o inverno pesa e as noites são perigosas.
 
-- **Comida estraga:** carne e peixe crus perdem um quarto a cada 6 horas de jogo (em 1 dia, de 8 sobram 3), frutas a cada 12 horas, assados a cada 18 horas. No **baú** estraga na metade da velocidade. Pão, trigo e sementes não estragam. Quando algo estraga na sua mochila, aparece "Estragou: ...".
+- **Comida estraga:** carne e peixe crus perdem um quarto a cada 6 horas de jogo (em 1 dia, de 8 sobram 3), frutas a cada 12 horas, assados a cada 18 horas. No seu **baú** estraga na metade da velocidade; nas pilhas dos depósitos, como no chão (mais rápido na chuva). Pão, trigo e sementes não estragam. Quando algo estraga na sua mochila, aparece "Estragou: ...".
 - **Fome mais rápida**, para você e para a vila; no inverno, 25% mais.
 - **Pouca comida no mundo:** poucos arbustos (que demoram dias para voltar e não dão no inverno), pouco trigo selvagem, o trigo plantado cresce mais devagar e só na primavera e no verão. É preciso guardar comida (pão dura) antes do outono.
 - **Inverno duro:** mesmo de sol, fora do abrigo e longe do fogo o calor cai devagar (de noite, depressa); a roupa de couro corta pela metade. Quase não aparecem bichos de caça.
-- **Noites perigosas:** a partir do 2º dia, ao escurecer (20:24), pode vir uma **alcateia** atrás da vila: chance de 25% + 10% por dia (+30% no inverno), com 2 lobos + 1 a cada 3 dias (até 6; +1 no inverno). Ela aparece a 22 células do baú da vila e vai direto para lá. Casas, fogueiras e o **soldado** protegem; às 06:00 os lobos que sobraram vão embora.
+- **Noites perigosas:** a partir do 2º dia, ao escurecer (20:24), pode vir uma **alcateia** atrás da vila: chance de 25% + 10% por dia (+30% no inverno), com 2 lobos + 1 a cada 3 dias (até 6; +1 no inverno). Ela aparece a 22 células do depósito da vila e vai direto para lá. Casas, fogueiras e o **soldado** protegem; às 06:00 os lobos que sobraram vão embora.
 - **Pedreiras e minas** em manchas de várias células; cada célula que acaba vira buraco.
 
 ![Pedreira: o chão cinza, as pedras e o buraco das células esgotadas](screenshots/pedreira.png)
@@ -398,6 +413,9 @@ O mundo é difícil de propósito: comida é pouca e estraga, o inverno pesa e a
 | `ferro.S` | fornalha, lampiões, ferreiro, ferramentas de ferro da vila e a visão dos moradores |
 | `desafio.S` | pedreiras e minas, comida que estraga, manadas, alcateias da noite e o soldado |
 | `salvar.S` | salvar e carregar o jogo (F5 / F9) e o "continuar" da tela de título |
+| `deposito.S` | os depósitos da vila: zonas, pilhas no chão, o que cada um aceita, pegar e guardar |
+| `personagens.S` | os desenhos do profeta e dos moradores em 8 direções e 3 poses (gerado por `arte/personagens.py`) |
+| `vitrine.S` | a vitrine do `--shot`: todas as construções lado a lado, de dia e de noite, para comparar desenhos |
 | `mochila.S` | a mochila de cada morador (carga, lanche, ferramenta, dar e pegar), o pescador e o pincel de zonas |
 | `intel/instalar.sh` | prepara um Ubuntu x86-64 para rodar o jogo emulado (QEMU) |
 | `vila.S` | casas e terrenos, obras (barraco, casa, cerca), casamentos, nascimentos, árvores que crescem por ano e a árvore genealógica |
@@ -445,7 +463,7 @@ O script (`intel/instalar.sh`) liga os pacotes arm64 do Ubuntu, instala o QEMU e
 
 O tempo do jogo anda por quadro: se a máquina virtual desenhar menos de 60 quadros por segundo, o dia passa mais devagar.
 
-`./ermo --shot` roda sem interação: tira screenshots, mede o tempo de cada quadro e faz um teste automático (coleta duas árvores, uma pedra e um arbusto, monta uma fogueira, come e passa a noite; corre, anda carregado, larga e recolhe uma pilha de pedras, vê a skill cair sem treino, confere que a vida só sobe com a fome cheia; fabrica tudo, monta baú e abrigo, gasta o machado, acende a tocha à noite, passa a noite no abrigo e dorme das 22h às 06h; passa 10 s em cada um dos 8 climas (com foto); caça um cervo com o arco, enfrenta um lobo à noite com o machado e vê os animais aparecendo; faz um cercado e pesca; ara e planta 6 células perto da água, colhe o trigo maduro, confere que o verde não sai e que a enxada desfaz a terra (e perde a semente), faz pão, compara o crescimento com e sem água e no inverno, e solta um coelho perto do trigo sem cerca; monta a vila (3 barracos) com zonas de floresta, pedra, plantação e moradia e deixa trabalhar 3 horas (com foto pintando zonas e do painel), confere o baú, a terra arada, o trigo, as mudas, os caminhos e as obras (casa e cerca), manda todos dormir, passa 24 dias (as mudas viram jovens e depois adultas, casamentos e nascimentos), deixa as obras fazerem o barraco do casal novo (foto da vila e da árvore genealógica) e solta um lobo perto de uma pessoa; tenta quebrar um veio sem picareta, minera ferro e carvão, monta a fornalha, faz 18 barras, carvão de madeira, ferramentas, espada, armadura e um lampião, compara o machado de pedra com o de ferro, deixa um lobo morder com armadura (foto de noite na fornalha) e põe um ferreiro, um veio e um machado de ferro na vila; pinta e apaga com o pincel, pinta uma zona de Pesca perto do baú, põe uma vara no baú e uma pescadora para trabalhar 2 horas, confere o lanche nas mochilas e dá e pega pão da mochila de uma pessoa (fotos do pincel e da mochila dela); conta pedreiras, minas, arbustos e trigo, esgota uma pedreira (foto), deixa 8 carnes cruas 1 dia na mochila e no baú, passa 10 s de sol no inverno, solta uma manada de cervos e confere que fica junta e, de noite, solta uma alcateia de 4 lobos na vila com um soldado de espada (foto); salva o jogo, bagunça o dia, uma pessoa, um baú, a mochila e os objetos, carrega de volta e confere que tudo voltou; depois nada num lago e vai para o mar aberto até o tubarão atacar).
+`./ermo --shot` roda sem interação: tira screenshots, mede o tempo de cada quadro e faz um teste automático (coleta duas árvores, uma pedra e um arbusto, monta uma fogueira, come e passa a noite; corre, anda carregado, larga e recolhe uma pilha de pedras, vê a skill cair sem treino, confere que a vida só sobe com a fome cheia; fabrica tudo, monta baú e abrigo, gasta o machado, acende a tocha à noite, passa a noite no abrigo e dorme das 22h às 06h; passa 10 s em cada um dos 8 climas (com foto); caça um cervo com o arco, enfrenta um lobo à noite com o machado e vê os animais aparecendo; faz um cercado e pesca; ara e planta 6 células perto da água, colhe o trigo maduro, confere que o verde não sai e que a enxada desfaz a terra (e perde a semente), faz pão, compara o crescimento com e sem água e no inverno, e solta um coelho perto do trigo sem cerca; monta a vila (3 barracos) com zonas de floresta, pedra, plantação e moradia e deixa trabalhar 3 horas (com foto pintando zonas e do painel), confere o depósito, a terra arada, o trigo, as mudas, os caminhos e as obras (casa e cerca), manda todos dormir, passa 24 dias (as mudas viram jovens e depois adultas, casamentos e nascimentos), deixa as obras fazerem o barraco do casal novo (foto da vila e da árvore genealógica) e solta um lobo perto de uma pessoa; tenta quebrar um veio sem picareta, minera ferro e carvão, monta a fornalha, faz 18 barras, carvão de madeira, ferramentas, espada, armadura e um lampião, compara o machado de pedra com o de ferro, deixa um lobo morder com armadura (foto de noite na fornalha) e põe um ferreiro, um veio e um machado de ferro na vila; pinta e apaga com o pincel, pinta uma zona de Pesca perto do depósito, põe uma vara no depósito e uma pescadora para trabalhar 2 horas, confere o lanche nas mochilas e dá e pega pão da mochila de uma pessoa (fotos do pincel e da mochila dela); conta pedreiras, minas, arbustos e trigo, esgota uma pedreira (foto), deixa 8 carnes cruas 1 dia na mochila e no depósito, passa 10 s de sol no inverno, solta uma manada de cervos e confere que fica junta e, de noite, solta uma alcateia de 4 lobos na vila com um soldado de espada (foto); salva o jogo, bagunça o dia, uma pessoa, um baú, a mochila e os objetos, carrega de volta e confere que tudo voltou; pinta um depósito de materiais 3 x 3, guarda 100 madeiras e 50 pedras, confere que frutas não entram, tira madeira, abre o depósito, pega e guarda pedras (foto); monta a vitrine com todas as construções num lugar plano e fotografa de dia e de noite, sem a interface (`shot_estruturas.bmp` e `shot_estruturas_noite.bmp`); depois nada num lago e vai para o mar aberto até o tubarão atacar).
 
 ## Próximos passos
 

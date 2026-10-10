@@ -44,7 +44,7 @@
 .equ ZP_X,     4
 .equ ZP_Y,     118
 .equ ZP_W,     190
-.equ ZP_H,     132
+.equ ZP_H,     196
 
     .text
     .p2align 2
@@ -288,17 +288,8 @@ ppl_camp:
     cbnz    w0, 3f
 2:  add     w21, w21, #1
     b       1b
-3:  mov     w0, w22
-    bl      ppl_newchest
-    tbnz    w0, #31, 9f
-    LA      x9, chests                  // comida para os primeiros dias
-    add     x9, x9, x1, lsl #CHESTSHIFT
-    mov     w10, #30
-    str     w10, [x9, #(4 * IT_BERRY)]
-    mov     w10, #12
-    str     w10, [x9, #(4 * IT_BREAD)]
-    mov     w10, #8
-    str     w10, [x9, #(4 * IT_SEED)]
+3:  mov     w0, w22                     // o primeiro deposito (deposito.S)
+    bl      dep_camp
     mov     w19, w0
     bl      occ_build
     mov     w0, w19
@@ -1372,86 +1363,17 @@ ppl_findcell:
     ldp     x29, x30, [sp], #96
     ret
 
-// ppl_chestfind(w0 = 0 qualquer, 1 com comida, 2 com sementes) -> w0 =
-// bau mais perto (-1)
+// ppl_chestfind(w0 = 0 guardar, 1 comer, 2 sementes) -> w0 = celula do
+// deposito para onde ir (-1)   (deposito.S)
     .globl ppl_chestfind
 ppl_chestfind:
-    stp     x29, x30, [sp, #-64]!
-    mov     x29, sp
-    stp     x21, x22, [sp, #16]
-    stp     x23, x24, [sp, #32]
-    str     d8, [sp, #48]
-    mov     w21, w0
-    mov     w22, #-1
-    PF      s8, 76
-    ldr     w23, [x28, #G_NOBJ]
-    mov     w24, #0
-1:  cmp     w24, w23
-    b.ge    9f
-    LA      x9, objs
-    add     x9, x9, x24, lsl #3
-    ldrb    w10, [x9, #6]
-    cmp     w10, #O_CHEST
-    b.ne    5f
-    cbz     w21, 3f
-    ldrb    w11, [x9, #7]
-    LA      x12, chests
-    add     x12, x12, x11, lsl #CHESTSHIFT
-    cmp     w21, #2
-    b.ne    2f
-    ldr     w13, [x12, #(4 * IT_SEED)]
-    cbz     w13, 5f
-    b       3f
-2:  LA      x13, eatorder               // tem algo de comer?
-    mov     w14, #0
-21: ldrb    w15, [x13, x14]
-    ldr     w15, [x12, x15, lsl #2]
-    cbnz    w15, 3f
-    add     w14, w14, #1
-    cmp     w14, #7
-    b.lo    21b
-    b       5f
-3:  ldrh    w10, [x9]
-    ucvtf   s0, w10
-    ldrh    w10, [x9, #2]
-    ucvtf   s1, w10
-    PF      s2, 40
-    fmul    s0, s0, s2
-    fmul    s1, s1, s2
-    ldr     s2, [x19, #P_U]
-    fsub    s0, s0, s2
-    ldr     s2, [x19, #P_V]
-    fsub    s1, s1, s2
-    fmul    s0, s0, s0
-    fmadd   s0, s1, s1, s0
-    fcmp    s0, s8
-    b.ge    5f
-    fmov    s8, s0
-    mov     w22, w24
-5:  add     w24, w24, #1
-    b       1b
-9:  mov     w0, w22
-    ldr     d8, [sp, #48]
-    ldp     x23, x24, [sp, #32]
-    ldp     x21, x22, [sp, #16]
-    ldp     x29, x30, [sp], #64
-    ret
+    b       dep_chestfind
 
-// ppl_chestptr(w0 = objeto) -> x0 = contadores do bau (0 se nao e bau)  folha
+// ppl_chestptr(w0 = celula) -> x0 = os contadores da "loja" em volta dela
+// (0 se -1); quem mexe chama store_close depois   (deposito.S)
     .globl ppl_chestptr
 ppl_chestptr:
-    tbnz    w0, #31, 8f
-    LA      x9, objs
-    add     x9, x9, x0, lsl #3
-    ldrb    w10, [x9, #6]
-    cmp     w10, #O_CHEST
-    b.ne    8f
-    ldrb    w10, [x9, #7]
-    LA      x0, chests
-    add     x0, x0, x10, lsl #CHESTSHIFT
-    ret
-8:  mov     x0, #0
-    ret
+    b       store_cell
 
 // ---- ir ate um lugar ----
 
@@ -1492,13 +1414,20 @@ ppl_goobj:
     fmul    s1, s1, s2
     b       ppl_gopoint
 
-// ppl_gochest(w0 = bau, w1 = o que fazer la)
+// ppl_gochest(w0 = celula do deposito, w1 = o que fazer la)
     .globl ppl_gochest
 ppl_gochest:
     strb    w1, [x19, #P_NEXT]
     str     w0, [x19, #P_TARGET]
     strb    wzr, [x19, #P_WKIND]
-    b       ppl_goobj
+    and     w9, w0, #511
+    lsr     w10, w0, #9
+    scvtf   s0, w9
+    scvtf   s1, w10
+    PF      s2, 96
+    fadd    s0, s0, s2
+    fadd    s1, s1, s2
+    b       ppl_gopoint
 
 // ppl_gowork_obj(w0 = objeto, w1 = tipo de trabalho)
     .globl ppl_gowork_obj
@@ -1533,18 +1462,15 @@ ppl_wander:
     stp     d10, d11, [sp, #48]
     ldr     s8, [x19, #P_U]
     ldr     s9, [x19, #P_V]
-    mov     w0, #0
-    bl      ppl_chestfind
+    bl      dep_home                    // perto do deposito
     tbnz    w0, #31, 1f
-    LA      x9, objs
-    add     x9, x9, x0, lsl #3
-    ldrh    w10, [x9]
-    ucvtf   s0, w10
-    ldrh    w10, [x9, #2]
-    ucvtf   s1, w10
-    PF      s2, 40
-    fmul    s0, s0, s2
-    fmul    s1, s1, s2
+    and     w9, w0, #511
+    lsr     w10, w0, #9
+    scvtf   s0, w9
+    scvtf   s1, w10
+    PF      s2, 96
+    fadd    s0, s0, s2
+    fadd    s1, s1, s2
     fsub    s2, s0, s8
     fsub    s3, s1, s9
     fmul    s2, s2, s2
@@ -2289,6 +2215,7 @@ ppl_deposit:
     bl      pinv_deposit                // tudo menos ferramenta, lanche, sementes
     ldr     x0, [sp], #16
     bl      pinv_takefood               // e repoe o lanche
+    bl      store_close_back            // empilha; o que nao coube volta
 9:  ldp     x29, x30, [sp], #16
     ret
 
@@ -2327,6 +2254,7 @@ ppl_eat:
 9:  cbz     x21, 91f                    // e leva um lanche
     mov     x0, x21
     bl      pinv_takefood
+    bl      store_close
 91: ldp     x21, x22, [sp, #16]
     ldp     x29, x30, [sp], #32
     ret
@@ -2353,6 +2281,7 @@ ppl_takeseeds:
     mov     w0, #IT_SEED
     mov     w1, w10
     bl      pinv_add
+    bl      store_close
 9:  ldp     x29, x30, [sp], #16
     ret
 
@@ -2520,7 +2449,43 @@ people_draw:
     mov     w22, w0                     // x
     mov     w23, w1                     // y
     add     w24, w2, #24                // profundidade
-    mov     w9, #SPR_KID                // sprite: crianca, homem ou mulher
+    cmp     w21, #2                     // perto: o desenho grande (personagens.S)
+    b.lt    40f
+    LA      x9, plast                   // direcao: para onde andou
+    add     x9, x9, x20, lsl #3
+    ldp     s2, s3, [x9]
+    ldr     s0, [x19, #P_U]
+    ldr     s1, [x19, #P_V]
+    stp     s0, s1, [x9]
+    fsub    s0, s0, s2
+    fsub    s1, s1, s3
+    LA      x25, pdirs
+    ldrb    w0, [x25, x20]
+    bl      char_dir
+    strb    w0, [x25, x20]
+    mov     w1, w0
+    mov     w2, #0                      // pose: parado ou o passo
+    ldrb    w10, [x19, #P_STATE]
+    cmp     w10, #ST_WALK
+    b.eq    41f
+    cmp     w10, #ST_FLEE
+    b.ne    42f
+41: ldrh    w10, [x19, #P_ANIM]
+    lsr     w10, w10, #3
+    and     w10, w10, #3
+    LA      x11, poseseq
+    ldrb    w2, [x11, x10]
+42: ldrh    w10, [x19, #P_AGE]          // homem, mulher, menino ou menina
+    ldrb    w11, [x19, #P_SEX]
+    mov     w0, #2
+    mov     w12, #4
+    cmp     w10, #ADULTDAYS
+    csel    w0, w0, w12, hs
+    add     w0, w0, w11
+    bl      char_ptr
+    lsr     w3, w21, #1                 // metade da escala, o dobro de detalhe
+    b       43f
+40: mov     w9, #SPR_KID                // sprite: crianca, homem ou mulher
     ldrh    w10, [x19, #P_AGE]
     cmp     w10, #ADULTDAYS
     b.lo    2f
@@ -2539,9 +2504,9 @@ people_draw:
     add     w9, w9, w10
 4:  LA      x0, sprites
     add     x0, x0, x9, lsl #7
-    mov     w1, w22
-    mov     w2, w23
     mov     w3, w21
+43: mov     w1, w22
+    mov     w2, w23
     mov     w4, w24
     LA      x9, fams                    // cor da roupa: a da familia
     ldrb    w10, [x19, #P_FAM]
@@ -2728,8 +2693,8 @@ people_key:
     b       7f
 4:  ldr     w9, [x28, #G_ZONEMODE]
     cbz     w9, 8f
-    sub     w10, w0, #30                // 1-4
-    cmp     w10, #4
+    sub     w10, w0, #30                // 1-8
+    cmp     w10, #8
     b.hs    5f
     LA      x9, zptypes
     ldrb    w10, [x9, x10]
@@ -2881,6 +2846,8 @@ people_world_click:
 // zone_fill(w0 u0, w1 v0, w2 u1, w3 v1, w4 tipo) -> w0 = quadrados  folha
     .globl zone_fill
 zone_fill:
+    mov     w9, #1                      // depositos: refazer as listas
+    str     w9, [x28, #G_DEPDIRTY]
     cmp     w0, w2                      // ordena e prende no mapa
     csel    w9, w0, w2, lt
     csel    w2, w2, w0, lt
@@ -2911,6 +2878,9 @@ zone_fill:
     ldrb    w15, [x10, w14, uxtw]       // terreno de casa nao muda
     cmp     w15, #Z_LOT
     b.eq    21f
+    sub     w15, w15, #Z_DEPF           // nem deposito
+    cmp     w15, #3
+    b.ls    21f
     strb    w4, [x10, w14, uxtw]
     add     w11, w11, #1
 21:
@@ -2996,7 +2966,7 @@ people_ui_hit:
     b.lt    6f
     mov     w12, #16
     udiv    w12, w10, w12
-    cmp     w12, #5
+    cmp     w12, #9
     b.hs    6f
     LA      x11, zptypes
     ldrb    w11, [x11, x12]
@@ -3442,7 +3412,7 @@ ppl_drawpalette:
     LA      x4, s_ztitle
     bl      ui_panel
     mov     w22, #0                     // linha
-1:  cmp     w22, #5
+1:  cmp     w22, #9
     b.ge    8f
     mov     w10, #16
     mov     w11, #(ZP_Y + 20)
@@ -3692,12 +3662,8 @@ pt_block:
     str     w2, [sp, #96]
     LA      x9, pt_res
     ldr     w9, [x9]
-    LA      x10, objs
-    add     x10, x10, x9, lsl #3
-    ldrh    w21, [x10]
-    lsr     w21, w21, #6                // bau: u, v
-    ldrh    w22, [x10, #2]
-    lsr     w22, w22, #6
+    and     w21, w9, #511               // deposito: u, v
+    lsr     w22, w9, #9
     mov     w23, #-1                    // melhor canto
     mov     w24, #0x7FFFFFFF
     mov     w25, #-16                   // dv
@@ -3766,15 +3732,13 @@ pt_reach:
     PF      s12, 76                     // melhor distancia^2
     LA      x9, pt_res
     ldr     w9, [x9]
-    LA      x10, objs
-    add     x10, x10, x9, lsl #3
-    ldrh    w11, [x10]
-    ucvtf   s8, w11
-    ldrh    w11, [x10, #2]
-    ucvtf   s9, w11
-    PF      s2, 40
-    fmul    s8, s8, s2                  // bau (celulas)
-    fmul    s9, s9, s2
+    and     w11, w9, #511               // deposito
+    lsr     w12, w9, #9
+    scvtf   s8, w11
+    scvtf   s9, w12
+    PF      s2, 96
+    fadd    s8, s8, s2
+    fadd    s9, s9, s2
     mov     w19, #0
 1:  ldr     w9, [x28, #G_NOBJ]
     cmp     w19, w9
@@ -3891,6 +3855,7 @@ people_selftest:
     str     w9, [x0, #(4 * IT_WOOD)]
     mov     w9, #10
     str     w9, [x0, #(4 * IT_STONE)]
+    bl      store_close
 0:  bl      vila_found
     // zonas: floresta em volta da arvore mais perto do bau (sem agua no
     // caminho), pedra em volta da pedra; plantacao e moradia perto do bau
@@ -3921,6 +3886,10 @@ people_selftest:
     mov     w0, #10                     // moradia: 2 terrenos
     mov     w1, #5
     mov     w2, #Z_HOME
+    bl      pt_block
+    mov     w0, #6                      // e mais um deposito geral 6 x 5
+    mov     w1, #5
+    mov     w2, #Z_DEPG
     bl      pt_block
 3:  LA      x9, people                  // tarefas dos pais e maes
     mov     w10, #J_FOREST
@@ -4258,7 +4227,113 @@ pt_ret:
     ret
 
 // ---------------------------------------------------------------------
+
+// =====================================================================
+//  Personagens em 8 direcoes (os quadros estao em personagens.S)
+// =====================================================================
+
+// char_dir(s0 = du, s1 = dv: quanto andou, w0 = direcao de antes) -> w0
+// direcao na tela: 0 S, 1 SO, 2 O, 3 NO, 4 N, 5 NE, 6 L, 7 SE   folha
+    .globl char_dir
+char_dir:
+    fsub    s2, s0, s1                  // x na tela
+    fadd    s3, s0, s1
+    fmov    s4, #0.5
+    fmul    s3, s3, s4                  // y na tela (para baixo)
+    fabs    s4, s2
+    fabs    s5, s3
+    fadd    s6, s4, s5
+    MOVI32  w9, 0x38D1B717              // 0,0001: parado, fica como estava
+    fmov    s7, w9
+    fcmp    s6, s7
+    b.lt    9f
+    fmov    s7, #0.40625                // ~ tan(22,5 graus)
+    fmul    s6, s4, s7
+    fcmp    s5, s6
+    b.gt    1f
+    mov     w0, #6                      // de lado: L ou O
+    mov     w9, #2
+    fcmp    s2, #0.0
+    csel    w0, w0, w9, gt
+    ret
+1:  fmul    s6, s5, s7
+    fcmp    s4, s6
+    b.gt    2f
+    mov     w0, #0                      // de frente (S) ou de costas (N)
+    mov     w9, #4
+    fcmp    s3, #0.0
+    csel    w0, w0, w9, gt
+    ret
+2:  fcmp    s3, #0.0                    // diagonais
+    b.le    3f
+    mov     w0, #7                      // SE
+    mov     w9, #1                      // SO
+    fcmp    s2, #0.0
+    csel    w0, w0, w9, gt
+    ret
+3:  mov     w0, #5                      // NE
+    mov     w9, #3                      // NO
+    fcmp    s2, #0.0
+    csel    w0, w0, w9, gt
+9:  ret
+
+// char_ptr(w0 = conjunto, w1 = direcao, w2 = pose) -> x0 = quadro   folha
+    .globl char_ptr
+char_ptr:
+    mov     w9, #24
+    mov     w10, #3
+    madd    w9, w0, w9, w2
+    madd    w9, w1, w10, w9
+    mov     w10, #320
+    mul     w9, w9, w10
+    LA      x0, charspr
+    add     x0, x0, x9
+    ret
+
+// player_sprite -> x0 = o quadro do profeta (direcao em que andou; sem o
+// cajado quando tem algo na mao ou a tocha acesa)
+    .globl player_sprite
+player_sprite:
+    stp     x29, x30, [sp, #-16]!
+    mov     x29, sp
+    LA      x9, pllast
+    ldp     s2, s3, [x9]
+    ldr     s0, [x28, #G_PU]
+    ldr     s1, [x28, #G_PV]
+    stp     s0, s1, [x9]
+    fsub    s0, s0, s2
+    fsub    s1, s1, s3
+    LA      x9, pldir
+    ldrb    w0, [x9]
+    bl      char_dir
+    LA      x9, pldir
+    strb    w0, [x9]
+    mov     w1, w0
+    mov     w2, #0
+    ldr     w10, [x28, #G_PMOVING]
+    cbz     w10, 1f
+    ldr     w10, [x28, #G_PFRAME]
+    lsr     w10, w10, #3
+    and     w10, w10, #3
+    LA      x11, poseseq
+    ldrb    w2, [x11, x10]
+1:  ldr     w9, [x28, #G_HAND]
+    ldr     w10, [x28, #G_TORCHLIT]
+    orr     w9, w9, w10
+    cmp     w9, #0
+    cset    w0, ne
+    bl      char_ptr
+    ldp     x29, x30, [sp], #16
+    ret
+
     .data
+poseseq:    .byte 0, 1, 0, 2            // o ciclo de passos
+pldir:      .byte 0
+    .p2align 3
+pllast:     .space 8
+plast:      .space (MAXPEOPLE * 8)      // onde cada um estava no ultimo quadro
+pdirs:      .space MAXPEOPLE
+    .p2align 2
     .p2align 2
 pconst:
     .float 0.002                        //   0 fome por quadro (cheio -> vazio em ~14 min)
@@ -4315,7 +4390,8 @@ jobcap:
     .byte 0, 4, 3, 6, 0, 1, 4, 0
 // tipos de zona na paleta (a Pedra nao tem zona: procura sozinha)
 zptypes:
-    .byte Z_FOREST, Z_FARM, Z_HOME, Z_FISH, Z_ERASE
+    .byte Z_FOREST, Z_FARM, Z_HOME, Z_FISH, Z_DEPF, Z_DEPM, Z_DEPT, Z_DEPG
+    .byte Z_ERASE
 // cor da roupa de cada familia (variante dos sprites: vermelho, azul, laranja)
 famvar:
     .byte 0, 2, 3
@@ -4327,6 +4403,7 @@ campoff:
     .globl zonecolors
 zonecolors:
     .word 0, 0xFF30B050, 0xFFA8A8C8, 0xFFF0D040, 0xFFE09060, 0xFF38C8F0, 0xFFB86A3C, 0xFFE04848
+    .word 0xFFF08C3C, 0xFF9C7A5A, 0xFFA884E0, 0xFFE8E8F0
 
     .p2align 3
 causemsgs:
@@ -4423,6 +4500,14 @@ zonenames:
     .p2align 4
     .asciz "0 Apagar"
     .p2align 4
+    .asciz "5 Dep. comida"
+    .p2align 4
+    .asciz "6 Dep. material"
+    .p2align 4
+    .asciz "7 Dep. ferram."
+    .p2align 4
+    .asciz "8 Dep. geral"
+    .p2align 4
 
 s_sp:       .asciz " "
 s_comma:    .asciz ", "
@@ -4445,8 +4530,8 @@ s_kidnojob: .asciz ": crianca ainda nao trabalha (14 anos)"
 s_refuse:   .asciz " nao quis (pouca fe)"
 s_going:    .asciz ": indo"
 s_selected: .asciz " - botao direito no mapa: va ate la"
-m_nochest:  .asciz "Ninguem tem onde guardar: faca um bau"
-m_zonemode: .asciz "Zonas: 1-4 escolhe, 0 apaga; pinte segurando o botao (direito apaga), roda ou [ ] muda o pincel (Z sai)"
+m_nochest:  .asciz "A vila precisa de deposito com lugar: pinte um (Z, 5 a 8)"
+m_zonemode: .asciz "Zonas: 1-8 escolhe, 0 apaga; pinte segurando o botao (direito apaga), roda ou [ ] muda o pincel (Z sai)"
 s_zonedone: .asciz "Zona marcada: "
 s_zoneerase: .asciz "Zona apagada: "
 s_quads:    .asciz " quadrados"

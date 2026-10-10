@@ -296,54 +296,14 @@ vila_cost:
     ldrb    w0, [x9]
     ret
 
-// vila_chestwith(w0 madeira, w1 pedra) -> w0 = bau com isso mais perto
-// da pessoa x19 (-1)
+// vila_chestwith(w0 madeira, w1 pedra) -> w0 = deposito com isso mais
+// perto da pessoa x19 (-1)
 vila_chestwith:
-    stp     x29, x30, [sp, #-16]!
-    mov     x29, sp
-    mov     w12, w0
-    mov     w13, w1
-    mov     w0, #-1
-    PF      s4, 76
-    ldr     w10, [x28, #G_NOBJ]
-    mov     w11, #0
-    LA      x14, objs
-1:  cmp     w11, w10
-    b.ge    9f
-    ldrb    w15, [x14, #6]
-    cmp     w15, #O_CHEST
-    b.ne    2f
-    ldrb    w15, [x14, #7]
-    LA      x9, chests
-    add     x9, x9, x15, lsl #CHESTSHIFT
-    ldr     w15, [x9, #(4 * IT_WOOD)]
-    cmp     w15, w12
-    b.lo    2f
-    ldr     w15, [x9, #(4 * IT_STONE)]
-    cmp     w15, w13
-    b.lo    2f
-    ldrh    w15, [x14]
-    ucvtf   s0, w15
-    ldrh    w15, [x14, #2]
-    ucvtf   s1, w15
-    PF      s2, 40
-    fmul    s0, s0, s2
-    fmul    s1, s1, s2
-    ldr     s2, [x19, #P_U]
-    fsub    s0, s0, s2
-    ldr     s2, [x19, #P_V]
-    fsub    s1, s1, s2
-    fmul    s0, s0, s0
-    fmadd   s0, s1, s1, s0
-    fcmp    s0, s4
-    b.ge    2f
-    fmov    s4, s0
-    mov     w0, w11
-2:  add     x14, x14, #8
-    add     w11, w11, #1
-    b       1b
-9:  ldp     x29, x30, [sp], #16
-    ret
+    mov     w3, w1
+    mov     w1, w0
+    mov     w0, #IT_WOOD
+    mov     w2, #IT_STONE
+    b       dep_take_find
 
 // vila_gosite(w0 = casa): o construtor (x19) vai ate o terreno
 vila_gosite:
@@ -510,6 +470,7 @@ vila_pay:
     str     w10, [x24, #(4 * IT_STONE)]
     strb    w22, [x23, #F_PAID]
     strb    wzr, [x23, #F_PROG]
+    bl      store_close                 // tira das pilhas
 7:  mov     w0, w21
     bl      vila_gosite
     b       9f

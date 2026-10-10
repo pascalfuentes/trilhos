@@ -105,7 +105,7 @@
 .equ G_WANTSHOT, 112
 .equ G_NOBJ,     116
 .equ G_EMAXZ,    120         // altura maxima em pixels de tela
-.equ G_K,        124         // 1/16 px do mundo por pixel de tela
+.equ G_K,        124         // 1/64 de celula (u-v) por pixel de tela, em 1/256
 .equ G_PU,       128         // personagem: posicao (float, celulas)
 .equ G_PV,       132
 .equ G_PE,       136         // elevacao sob o personagem
@@ -262,6 +262,7 @@
 .equ G_PACKU,    1192        // para onde vai a alcateia da noite (float)
 .equ G_PACKV,    1196
 .equ G_HERDID,   1200        // ultimo grupo de manada
+.equ G_DEPDIRTY, 1204        // depositos: refazer as listas
 .equ GSIZE,      1216
 
 .equ W_SUN,      0
@@ -410,6 +411,10 @@
 .equ Z_FISH,     5           // pesca (na agua)
 .equ Z_LOT,      6           // terreno de uma casa (5 x 5)
 .equ Z_ERASE,    7           // (so o pincel: apaga)
+.equ Z_DEPF,     8           // deposito de comida
+.equ Z_DEPM,     9           // deposito de materiais
+.equ Z_DEPT,     10          // deposito de ferramentas e armas
+.equ Z_DEPG,     11          // deposito geral
 .equ MAXCROP,    512         // plantas
 .equ CROPRIPE,   192         // maduro (a variante vai de 0 a 192)
 .equ CROPP,      45          // chance de crescer por passo (em 1000)
