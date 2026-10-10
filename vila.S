@@ -1439,6 +1439,7 @@ tbuf:       .space 96
 tlines:     .space (MAXTLINES * 3)
     .p2align 2
     .globl vstat
+    .globl vstat
 vstat:      .word 0, 0, 0, 0            // casamentos, nascimentos
 
 GBSS kin, (MAXPEOPLE * 8)

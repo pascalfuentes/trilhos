@@ -1161,9 +1161,21 @@ dt_stage1:
     str     w9, [x28, #G_TIME]
     LA      x9, dstat
     str     wzr, [x9]
-    mov     w20, #4                     // soldado: o pai da segunda familia
-    LA      x9, people
+    mov     w20, #0                     // soldado: o primeiro adulto vivo
+61: LA      x9, people
     add     x19, x9, x20, lsl #6
+    ldrb    w9, [x19, #P_ALIVE]
+    cbz     w9, 63f
+    ldrh    w9, [x19, #P_AGE]
+    cmp     w9, #ADULTDAYS
+    b.hs    64f
+63: add     w20, w20, #1
+    cmp     w20, #MAXPEOPLE
+    b.lt    61b
+    mov     w20, #0
+    LA      x9, people
+    mov     x19, x9
+64: str     w20, [x24, #80]
     mov     w9, #J_SOLDIER
     strb    w9, [x19, #P_JOB]
     mov     w9, #ST_IDLE
@@ -1206,9 +1218,11 @@ dt_stage2:
     ldr     w9, [x9]
     str     w9, [x24, #68]              // abatidos pelo soldado
     LA      x10, people
-    ldr     s0, [x10, #(4 * PSIZE + P_HP)]
+    ldr     w9, [x24, #80]
+    add     x10, x10, x9, lsl #6
+    ldr     s0, [x10, #P_HP]
     fcvtzs  w9, s0
-    ldrb    w10, [x10, #(4 * PSIZE + P_ALIVE)]
+    ldrb    w10, [x10, #P_ALIVE]
     cmp     w10, #0
     csel    w9, wzr, w9, eq
     str     w9, [x24, #72]              // vida do soldado

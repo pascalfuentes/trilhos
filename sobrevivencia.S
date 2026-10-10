@@ -116,6 +116,7 @@ sprite_scale:
     ret
 
 // follow_camera: centraliza a camera no personagem
+    .globl follow_camera
 follow_camera:
     ldr     s0, [x28, #G_PU]
     ldr     s1, [x28, #G_PV]
@@ -7965,11 +7966,11 @@ s_paren2:       .asciz ")"
 s_far:          .asciz " - longe"
 s_fire:         .asciz "Fogueira: "
 s_firehint:     .asciz " s (botao direito: +lenha)"
-s_hint:         .asciz "WASD andar  E comer  F fogo  Tab fabricar  I/C/P janelas  Z zonas  F11 tela"
+s_hint:         .asciz "WASD andar  E comer  F fogo  Tab fabricar  I/C/P janelas  Z zonas  F5 salva"
 s_dead1:        .asciz "FIM DE JOGO"
 s_dead2:        .asciz "Voce sobreviveu "
 s_dead3:        .asciz " noite(s)"
-s_dead4:        .asciz "ENTER: novo mundo     ESC: menu"
+s_dead4:        .asciz "ENTER: novo mundo     F9: carregar     ESC: menu"
 s_nl:           .asciz "\n"
 p_axe:          .asciz "+1 machado"
 p_pick:         .asciz "+1 picareta"

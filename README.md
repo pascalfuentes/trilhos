@@ -11,7 +11,10 @@ Você é uma espécie de profeta que não envelhece, e chega com **3 famílias**
 
 | Tecla / mouse | Ação |
 |---|---|
-| ENTER | entrar no mundo (na tela de título) |
+| ENTER | entrar no mundo (na tela de título); se tiver jogo salvo daquele mundo, continua ele |
+| C / N | na tela de título: continua o jogo salvo / começa um jogo novo no mundo mostrado |
+| F5 | salva o jogo (em `ermo.sav`, na pasta do jogo) |
+| F9 | carrega o jogo salvo (também na tela de título e depois de morrer) |
 | WASD / setas | andar |
 | Shift (segurando) | correr |
 | segurar o botão esquerdo | coletar a árvore, pedra ou arbusto sob o mouse (até 3 células de distância) |
@@ -358,6 +361,13 @@ O **abrigo** protege do frio do clima e do granizo.
 - **Árvores tapam a visão**: dentro da floresta você enxerga bem menos.
 - O que você já viu mas não está vendo agora aparece **escurecido e sem cor**, do jeito que estava da última vez. Um arbusto que voltou a dar frutas longe dos seus olhos continua aparecendo vazio até você voltar lá.
 
+## Salvar e carregar
+
+- **F5** salva tudo num arquivo só, `ermo.sav`, na pasta de onde o jogo foi aberto: você (vida, fome, mochila, skills, ferramentas), a hora, o dia e o clima, o que mudou no mundo (árvores cortadas, pedreiras, terra arada, plantas, cercas, construções, baús), o que você já viu, os animais e a vila inteira (pessoas, mochilas, tarefas, zonas, casas e a árvore genealógica). Não dá para salvar morto nem dormindo.
+- **F9** carrega o último jogo salvo, a qualquer hora (e depois de morrer).
+- Ao abrir o jogo, se tiver um `ermo.sav`, a tela de título já mostra o mundo dele: **ENTER** (ou **C**) continua. **N** começa um jogo novo nesse mundo e **R** sorteia outro mundo.
+- O relevo sai da semente do mundo, então o arquivo guarda só o que muda (uns 2 MB).
+
 ## Desafio
 
 O mundo é difícil de propósito: comida é pouca e estraga, o inverno pesa e as noites são perigosas.
@@ -387,6 +397,7 @@ O mundo é difícil de propósito: comida é pouca e estraga, o inverno pesa e a
 | `pessoas.S` | as pessoas: idade, fé, fome e sono, tarefas e zonas, painel, ordens, floresta e caminhos de terra batida |
 | `ferro.S` | fornalha, lampiões, ferreiro, ferramentas de ferro da vila e a visão dos moradores |
 | `desafio.S` | pedreiras e minas, comida que estraga, manadas, alcateias da noite e o soldado |
+| `salvar.S` | salvar e carregar o jogo (F5 / F9) e o "continuar" da tela de título |
 | `mochila.S` | a mochila de cada morador (carga, lanche, ferramenta, dar e pegar), o pescador e o pincel de zonas |
 | `intel/instalar.sh` | prepara um Ubuntu x86-64 para rodar o jogo emulado (QEMU) |
 | `vila.S` | casas e terrenos, obras (barraco, casa, cerca), casamentos, nascimentos, árvores que crescem por ano e a árvore genealógica |
@@ -434,7 +445,7 @@ O script (`intel/instalar.sh`) liga os pacotes arm64 do Ubuntu, instala o QEMU e
 
 O tempo do jogo anda por quadro: se a máquina virtual desenhar menos de 60 quadros por segundo, o dia passa mais devagar.
 
-`./ermo --shot` roda sem interação: tira screenshots, mede o tempo de cada quadro e faz um teste automático (coleta duas árvores, uma pedra e um arbusto, monta uma fogueira, come e passa a noite; corre, anda carregado, larga e recolhe uma pilha de pedras, vê a skill cair sem treino, confere que a vida só sobe com a fome cheia; fabrica tudo, monta baú e abrigo, gasta o machado, acende a tocha à noite, passa a noite no abrigo e dorme das 22h às 06h; passa 10 s em cada um dos 8 climas (com foto); caça um cervo com o arco, enfrenta um lobo à noite com o machado e vê os animais aparecendo; faz um cercado e pesca; ara e planta 6 células perto da água, colhe o trigo maduro, confere que o verde não sai e que a enxada desfaz a terra (e perde a semente), faz pão, compara o crescimento com e sem água e no inverno, e solta um coelho perto do trigo sem cerca; monta a vila (3 barracos) com zonas de floresta, pedra, plantação e moradia e deixa trabalhar 3 horas (com foto pintando zonas e do painel), confere o baú, a terra arada, o trigo, as mudas, os caminhos e as obras (casa e cerca), manda todos dormir, passa 24 dias (as mudas viram jovens e depois adultas, casamentos e nascimentos), deixa as obras fazerem o barraco do casal novo (foto da vila e da árvore genealógica) e solta um lobo perto de uma pessoa; tenta quebrar um veio sem picareta, minera ferro e carvão, monta a fornalha, faz 18 barras, carvão de madeira, ferramentas, espada, armadura e um lampião, compara o machado de pedra com o de ferro, deixa um lobo morder com armadura (foto de noite na fornalha) e põe um ferreiro, um veio e um machado de ferro na vila; pinta e apaga com o pincel, pinta uma zona de Pesca perto do baú, põe uma vara no baú e uma pescadora para trabalhar 2 horas, confere o lanche nas mochilas e dá e pega pão da mochila de uma pessoa (fotos do pincel e da mochila dela); conta pedreiras, minas, arbustos e trigo, esgota uma pedreira (foto), deixa 8 carnes cruas 1 dia na mochila e no baú, passa 10 s de sol no inverno, solta uma manada de cervos e confere que fica junta e, de noite, solta uma alcateia de 4 lobos na vila com um soldado de espada (foto); depois nada num lago e vai para o mar aberto até o tubarão atacar).
+`./ermo --shot` roda sem interação: tira screenshots, mede o tempo de cada quadro e faz um teste automático (coleta duas árvores, uma pedra e um arbusto, monta uma fogueira, come e passa a noite; corre, anda carregado, larga e recolhe uma pilha de pedras, vê a skill cair sem treino, confere que a vida só sobe com a fome cheia; fabrica tudo, monta baú e abrigo, gasta o machado, acende a tocha à noite, passa a noite no abrigo e dorme das 22h às 06h; passa 10 s em cada um dos 8 climas (com foto); caça um cervo com o arco, enfrenta um lobo à noite com o machado e vê os animais aparecendo; faz um cercado e pesca; ara e planta 6 células perto da água, colhe o trigo maduro, confere que o verde não sai e que a enxada desfaz a terra (e perde a semente), faz pão, compara o crescimento com e sem água e no inverno, e solta um coelho perto do trigo sem cerca; monta a vila (3 barracos) com zonas de floresta, pedra, plantação e moradia e deixa trabalhar 3 horas (com foto pintando zonas e do painel), confere o baú, a terra arada, o trigo, as mudas, os caminhos e as obras (casa e cerca), manda todos dormir, passa 24 dias (as mudas viram jovens e depois adultas, casamentos e nascimentos), deixa as obras fazerem o barraco do casal novo (foto da vila e da árvore genealógica) e solta um lobo perto de uma pessoa; tenta quebrar um veio sem picareta, minera ferro e carvão, monta a fornalha, faz 18 barras, carvão de madeira, ferramentas, espada, armadura e um lampião, compara o machado de pedra com o de ferro, deixa um lobo morder com armadura (foto de noite na fornalha) e põe um ferreiro, um veio e um machado de ferro na vila; pinta e apaga com o pincel, pinta uma zona de Pesca perto do baú, põe uma vara no baú e uma pescadora para trabalhar 2 horas, confere o lanche nas mochilas e dá e pega pão da mochila de uma pessoa (fotos do pincel e da mochila dela); conta pedreiras, minas, arbustos e trigo, esgota uma pedreira (foto), deixa 8 carnes cruas 1 dia na mochila e no baú, passa 10 s de sol no inverno, solta uma manada de cervos e confere que fica junta e, de noite, solta uma alcateia de 4 lobos na vila com um soldado de espada (foto); salva o jogo, bagunça o dia, uma pessoa, um baú, a mochila e os objetos, carrega de volta e confere que tudo voltou; depois nada num lago e vai para o mar aberto até o tubarão atacar).
 
 ## Próximos passos
 
@@ -447,4 +458,4 @@ O tempo do jogo anda por quadro: se a máquina virtual desenhar menos de 60 quad
 - [x] Pescador da vila, mochila de cada morador e pincel de zonas
 - [x] Mundo mais difícil: pedreiras, comida que estraga, manadas, inverno duro, alcateias e soldados
 - [ ] Pessoas caçando
-- [ ] Salvar e carregar o jogo
+- [x] Salvar e carregar o jogo

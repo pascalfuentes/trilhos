@@ -129,6 +129,7 @@ F(main):
 
     ldr     w9, [x28, #G_SHOT]
     cbnz    w9, shot_mode
+    bl      save_title                  // tem jogo salvo: o titulo mostra o mundo dele
 
 main_loop:
     bl      handle_events
@@ -454,6 +455,7 @@ shot_mode:
     bl      F(SDL_RenderPresent)
     mov     w0, #2
     bl      desafio_selftest
+    bl      save_selftest               // salva, bagunca e carrega de volta
     mov     w0, w19
     bl      set_zoom
     mov     w9, #1                      // o resto do teste sem a vila
@@ -694,6 +696,7 @@ new_world:
     ldp     x29, x30, [sp], #32
     ret
 
+    .globl generate_map
 generate_map:
     stp     x29, x30, [sp, #-32]!
     mov     x29, sp
@@ -1168,7 +1171,15 @@ he_key:
     LA      x0, m_leve1
 11: bl      set_msg
     b       he_loop
-2:  ldr     w9, [x28, #G_STATE]
+2:  cmp     w20, #66                    // F9: carrega o jogo salvo
+    b.ne    3f
+    bl      load_game
+    b       he_loop
+3:  cmp     w20, #62                    // F5: salva
+    b.ne    4f
+    bl      save_game
+    b       he_loop
+4:  ldr     w9, [x28, #G_STATE]
     cbnz    w9, he_key_game
     // --- tela de titulo ---
     cmp     w20, #41                    // ESC
@@ -1179,12 +1190,30 @@ he_key:
     b.eq    he_start
     cmp     w20, #44                    // ESPACO
     b.eq    he_start
-    cmp     w20, #21                    // R: outro mundo
+    cmp     w20, #6                     // C: continua o jogo salvo
+    b.ne    5f
+    bl      save_has
+    cbz     w0, he_loop
+    bl      load_game
+    b       he_loop
+5:  cmp     w20, #17                    // N: jogo novo neste mundo
+    b.ne    6f
+    str     wzr, [x28, #G_INGAME]
+    bl      generate_map
+    bl      start_game
+    b       he_loop
+6:  cmp     w20, #21                    // R: outro mundo
     b.ne    he_loop
     bl      new_world
     b       he_loop
 he_start:
-    bl      start_game
+    ldr     w9, [x28, #G_INGAME]        // jogo salvo deste mundo: continua
+    cbnz    w9, 1f
+    bl      save_here
+    cbz     w0, 1f
+    bl      load_game
+    b       he_loop
+1:  bl      start_game
     b       he_loop
 
 he_key_game:
@@ -2311,9 +2340,11 @@ draw_title:
     mov     w2, #255
     mov     w3, #255
     bl      setcolor
+    LA      x0, txt                     // jogar, voltar ou continuar
+    bl      save_enter
     mov     w0, #640
     mov     w1, #250
-    LA      x2, s_enter
+    LA      x2, txt
     mov     w3, #0
     bl      text_center
 1:  mov     w0, #170
@@ -3230,7 +3261,7 @@ s_title:        .asciz "ERMO"
 s_sub:          .asciz "um jogo de sobrevivencia escrito em assembly ARM64"
 s_world:        .asciz "Mundo #"
 s_enter:        .asciz "Pressione ENTER para jogar"
-s_title_help:   .asciz "R: gerar outro mundo     F11: tela cheia     ESC: sair"
+s_title_help:   .asciz "N: jogo novo   R: outro mundo   F9: carregar   F11: tela cheia   ESC: sair"
 s_credit:       .asciz "feito por Andre + Claude"
 s_sep_paren:    .asciz "   -   ("
 s_comma:        .asciz ","

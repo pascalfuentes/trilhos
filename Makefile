@@ -5,7 +5,7 @@
 
 CC ?= cc
 UNAME := $(shell uname)
-SRCS := ermo.S sobrevivencia.S clima.S animais.S cercas.S pesca.S plantacao.S pessoas.S vila.S ferro.S mochila.S desafio.S
+SRCS := ermo.S sobrevivencia.S clima.S animais.S cercas.S pesca.S plantacao.S pessoas.S vila.S ferro.S mochila.S desafio.S salvar.S
 
 SDL_LIBS := $(shell pkg-config --libs sdl3 2>/dev/null)
 ifeq ($(SDL_LIBS),)

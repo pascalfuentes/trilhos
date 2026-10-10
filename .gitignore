@@ -1,6 +1,7 @@
 ermo
 trilhos
 *.bmp
+*.sav
 *.o
 .DS_Store
 tmpshots/
