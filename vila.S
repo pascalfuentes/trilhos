@@ -399,7 +399,7 @@ vila_buildwork:
     b       2b
 70: add     w21, w21, #1
     b       1b
-80: mov     w0, #0
+80: bl      road_work                   // sem obra: pavimenta (estradas.S)
     b       99f
 90: mov     w0, #1
 99: ldp     x25, x26, [sp, #48]

@@ -125,7 +125,7 @@ lamps_light:
     fmul    s1, s1, s2
     ldrsh   w0, [x20, #4]
     bl      proj
-    mov     w9, #12                     // a luz fica la em cima
+    mov     w9, #9                      // a luz fica la em cima (o vidro)
     mul     w9, w9, w21
     asr     w9, w9, #8
     sub     w1, w1, w9

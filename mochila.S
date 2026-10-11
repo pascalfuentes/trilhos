@@ -547,6 +547,7 @@ mt_num:
     ret
 
 // mt_frames(w0 = quadros)
+    .globl mt_frames
 mt_frames:
     stp     x29, x30, [sp, #-32]!
     mov     x29, sp

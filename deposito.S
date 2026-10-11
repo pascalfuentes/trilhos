@@ -1365,6 +1365,7 @@ dt_spot:
     fcvtzs  w1, s0
     mov     w2, #10
 // dep_spot(w0 u, w1 v, w2 raio inicial) -> w0, w1   folha
+    .globl dep_spot
 dep_spot:
     mov     w12, w0
     mov     w13, w1
@@ -1523,6 +1524,7 @@ itemcat:
     .byte 3, 3, 0, 0, 3, 1, 1, 3, 1, 1, 1, 2, 2, 2, 0, 3   // 16..31
     .byte 3, 3, 3, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0   // 32..47
 // quanto cabe numa pilha
+    .globl stackcap
 stackcap:
     .byte 20, 15, 20, 5, 5, 10, 15, 3, 0, 0, 0, 3, 40, 10, 10, 10
     .byte 3, 3, 0, 0, 5, 10, 10, 5, 40, 20, 15, 15, 20, 10, 0, 3

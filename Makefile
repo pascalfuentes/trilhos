@@ -5,7 +5,7 @@
 
 CC ?= cc
 UNAME := $(shell uname)
-SRCS := ermo.S sobrevivencia.S clima.S animais.S cercas.S pesca.S plantacao.S pessoas.S vila.S ferro.S mochila.S desafio.S salvar.S deposito.S personagens.S vitrine.S
+SRCS := ermo.S sobrevivencia.S clima.S animais.S cercas.S pesca.S plantacao.S pessoas.S vila.S ferro.S mochila.S desafio.S salvar.S deposito.S personagens.S vitrine.S estruturas.S construcoes.S estradas.S colisao.S
 
 SDL_LIBS := $(shell pkg-config --libs sdl3 2>/dev/null)
 ifeq ($(SDL_LIBS),)
@@ -20,7 +20,7 @@ ifeq ($(UNAME),Darwin)
   ARCH := -arch arm64
 endif
 
-ermo: $(SRCS) comum.h pessoas.h
+ermo: $(SRCS) comum.h pessoas.h estruturas.h estrpal.inc
 	$(CC) $(ARCH) -o $@ $(SRCS) $(SDL_LIBS)
 
 run: ermo

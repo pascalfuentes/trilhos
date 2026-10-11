@@ -1439,6 +1439,7 @@ ppl_gowork_obj:
     b       ppl_goobj
 
 // ppl_gowork_cell(w0 = celula, w1 = tipo de trabalho)
+    .globl ppl_gowork_cell
 ppl_gowork_cell:
     str     w0, [x19, #P_TARGET]
     strb    w1, [x19, #P_WKIND]
@@ -1680,7 +1681,12 @@ ppl_walk:
     add     w9, w9, w10, lsl #9
     LA      x10, overlay
     ldrb    w9, [x10, w9, uxtw]
-    cmp     w9, #1
+    cmp     w9, #4                      // estrada de pedra: 50%
+    b.ne    31f
+    fmov    s0, #1.5
+    fmul    s11, s11, s0
+    b       4f
+31: cmp     w9, #1
     b.ne    4f
     PF      s0, 36
     fmul    s11, s11, s0
@@ -1688,6 +1694,7 @@ ppl_walk:
     fdiv    s0, s11, s10
     fmul    s8, s8, s0
     fmul    s9, s9, s0
+    bl      ppl_lane                    // alguem vindo: vai pela direita
     ldrh    w9, [x19, #P_DET]           // desviando: anda de lado
     cbz     w9, 5f
     sub     w9, w9, #1
@@ -1753,6 +1760,47 @@ ppl_walk:
     ldp     x29, x30, [sp], #64
     ret
 
+// ppl_lane: s8, s9 = o passo de x19; se tem alguem no quadrado da frente,
+// puxa o passo para a direita (cada um pela sua direita: se cruzam)
+ppl_lane:
+    stp     x29, x30, [sp, #-32]!
+    mov     x29, sp
+    stp     d8, d9, [sp, #16]
+    fmul    s0, s8, s8
+    fmadd   s0, s9, s9, s0
+    fsqrt   s0, s0
+    fcmp    s0, #0.0
+    b.eq    9f
+    fmov    s1, #0.75                   // 0,75 celula a frente
+    fdiv    s1, s1, s0
+    ldr     s2, [x19, #P_U]
+    fmadd   s2, s8, s1, s2
+    ldr     s3, [x19, #P_V]
+    fmadd   s3, s9, s1, s3
+    fcvtzs  w9, s2
+    fcvtzs  w10, s3
+    add     w0, w9, w10, lsl #9
+    ldr     s2, [x19, #P_U]
+    fcvtzs  w9, s2
+    ldr     s2, [x19, #P_V]
+    fcvtzs  w10, s2
+    add     w9, w9, w10, lsl #9
+    cmp     w0, w9
+    b.eq    9f
+    bl      crowd_at
+    cbz     w0, 9f
+    ldp     d8, d9, [sp, #16]
+    fmov    s2, #0.5                    // direita: (-dv, du) / 2
+    fmsub   s0, s9, s2, s8
+    fmadd   s1, s8, s2, s9
+    fmov    s8, s0
+    fmov    s9, s1
+    ldp     x29, x30, [sp], #32
+    ret
+9:  ldp     d8, d9, [sp, #16]
+    ldp     x29, x30, [sp], #32
+    ret
+
 // ppl_trymove(s0 = du, s1 = dv) -> w0 = 1 andou (nao entra na agua nem
 // passa por cerca; portao passa)
 ppl_trymove:
@@ -1767,6 +1815,18 @@ ppl_trymove:
     fmov    s0, s8
     fmov    s1, s9
     bl      ppl_land
+    cbz     w0, 9f
+    ldr     s0, [x19, #P_U]             // cheio? (2 por quadrado; colisao.S)
+    fcvtzs  w9, s0
+    ldr     s0, [x19, #P_V]
+    fcvtzs  w10, s0
+    add     w1, w9, w10, lsl #9
+    fcvtzs  w9, s8
+    fcvtzs  w10, s9
+    add     w2, w9, w10, lsl #9
+    mov     w0, w20
+    mov     w3, #300
+    bl      crowd_try
     cbz     w0, 9f
     ldr     s0, [x19, #P_U]             // celula de antes
     fcvtzs  w9, s0
@@ -1826,8 +1886,12 @@ ppl_arrive:
     bl      smith_pay
     b       9f
 33: cmp     w9, #NX_TOOL                // pega a ferramenta de ferro
-    b.ne    4f
+    b.ne    34f
     bl      tool_take
+    b       8f
+34: cmp     w9, #NX_ROADST              // obras: pedra para a estrada
+    b.ne    4f
+    bl      road_takestone
     b       8f
 4:  cmp     w9, #NX_SLEEP
     b.ne    5f
@@ -1883,8 +1947,12 @@ ppl_valid:
     bl      smith_valid
     b       9f
 62: cmp     w22, #WK_FISH
-    b.ne    1f
+    b.ne    63f
     bl      fish_valid
+    b       9f
+63: cmp     w22, #WK_ROAD
+    b.ne    1f
+    bl      road_valid
     b       9f
 1:  cmp     w22, #WK_PLANT
     b.eq    30f
@@ -1927,6 +1995,8 @@ ppl_valid:
     ldrb    w9, [x9, w21, uxtw]
     cmp     w9, #2
     b.lo    8f
+    cmp     w9, #3
+    b.hi    8f
     mov     w0, w21
     bl      obj_in_cell
     tbz     w0, #31, 8f
@@ -2010,7 +2080,12 @@ ppl_workdone:
     b.hs    79f
     bl      ppl_startwork
     b       99f
-69: cmp     w22, #WK_BUILD              // obra: mais um passo
+69: cmp     w22, #WK_ROAD               // estrada: um quadrado pronto
+    b.ne    691f
+    mov     w0, w21
+    bl      road_done
+    b       79f
+691: cmp    w22, #WK_BUILD              // obra: mais um passo
     b.ne    10f
     mov     w0, w21
     bl      vila_step
@@ -4381,13 +4456,13 @@ ring8:
 // tempo de cada tipo de trabalho (quadros, com fe 50)
     .p2align 1
 worktime:
-    .hword 0, 150, 210, 60, 40, 90, 90, 40, 150, 300, 500
+    .hword 0, 150, 210, 60, 40, 90, 90, 40, 150, 300, 500, 180
 
 // o que cada tarefa carrega e quanto cabe
 jobitem:
     .byte 0, IT_WOOD, IT_STONE, IT_WHEAT, 0, IT_IRON, IT_FISH, 0
 jobcap:
-    .byte 0, 4, 3, 6, 0, 1, 4, 0
+    .byte 0, 4, 3, 6, 5, 1, 4, 0               // obras: ate 5 pedras (estrada)
 // tipos de zona na paleta (a Pedra nao tem zona: procura sozinha)
 zptypes:
     .byte Z_FOREST, Z_FARM, Z_HOME, Z_FISH, Z_DEPF, Z_DEPM, Z_DEPT, Z_DEPG
@@ -4556,18 +4631,19 @@ d_fruit:    .asciz "pega fruta"
 d_build:    .asciz "construindo"
 d_smelt:    .asciz "na fornalha"
 d_fish:     .asciz "pescando"
+d_road:     .asciz "fazendo estrada"
 d_fight:    .asciz "lutando!"
 d_guard:    .asciz "de guarda"
 d_walk0:    .asciz "passeando"
 d_walk1:    .asciz "a caminho"
 d_walk2:    .asciz "vai guardar"
 d_walk3:    .asciz "vai comer"
-d_walk4:    .asciz "vai ao bau"
+d_walk4:    .asciz "vai ao deposito"
 d_walk5:    .asciz "vai dormir"
 d_walk6:    .asciz "ordem"
     .p2align 3
-d_work:     .quad d_idle, d_chop, d_mine, d_harv, d_plant, d_till, d_sapl, d_fruit, d_build, d_smelt, d_fish
-d_walk:     .quad d_walk0, d_walk1, d_walk2, d_walk3, d_walk4, d_walk5, d_walk6, d_walk4, d_walk4, d_walk4
+d_work:     .quad d_idle, d_chop, d_mine, d_harv, d_plant, d_till, d_sapl, d_fruit, d_build, d_smelt, d_fish, d_road
+d_walk:     .quad d_walk0, d_walk1, d_walk2, d_walk3, d_walk4, d_walk5, d_walk6, d_walk4, d_walk4, d_walk4, d_walk4
 s_hfood:    .asciz "Fo"
 s_hhp:      .asciz "Vi"
 s_pfoot:    .asciz "clique na tarefa"

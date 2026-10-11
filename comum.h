@@ -335,7 +335,8 @@
 .equ IT_SWORD,   34          // espada
 .equ IT_ARMOR,   35          // armadura de ferro
 .equ IT_LAMP,    36          // lampiao (construcao)
-.equ NITEMS,     37
+.equ IT_ROAD,    37          // estrada (construcao, arrasta como a cerca)
+.equ NITEMS,     38
 .equ MAXITEMS,   48          // vagas na mochila e em cada bau
 .equ CHESTSHIFT, 8           // cada bau: 48 contadores (256 bytes)
 .equ IRONDUR,    120         // usos de uma ferramenta de ferro
@@ -392,6 +393,7 @@
 .equ SPR_LAMP,   85
 .equ SPR_IRONV,  86          // veios
 .equ SPR_COALV,  87
+.equ SPR_ROAD,   88          // estrada (icone)
 .equ MAXLAMP,    64
 // pessoas
 .equ MAXPEOPLE,  64          // vagas (quem morreu fica, para a arvore genealogica)
@@ -443,7 +445,7 @@
 .equ FIREMAX,    43200       // no maximo 12 min
 .equ MAXCHEST,   64          // cada bau: 32 contadores (128 bytes)
 .equ MAXSHELTER, 32
-.equ NRECIPES,   28
+.equ NRECIPES,   29
 
 // interface (coordenadas do espaco de texto 640 x 360)
 .equ BTN_Y,      16

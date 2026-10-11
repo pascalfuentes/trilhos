@@ -155,8 +155,13 @@ fence_check:
     mov     w9, #25
     cmp     w21, #IT_FENCE
     b.eq    11f
+    cmp     w21, #IT_ROAD
+    b.eq    111f
     cmp     w21, #IT_GATE
-    b.ne    12f
+    b.eq    11f
+    b       12f
+111: mov    w9, #FENCEREACH             // estrada: ate 8, pode ser debaixo de voce
+    b       12f
 11: mov     w9, #FENCEREACH
     LA      x0, m_onplayer              // cerca/portao: nao em cima de voce
     ldr     s3, [x28, #G_PU]
@@ -197,11 +202,18 @@ fence_check:
     mov     x0, x1
     b.lt    8f
     add     w9, w25, w26, lsl #9        // celula
-    LA      x10, overlay                // terra arada
+    LA      x10, overlay                // terra arada (2, 3); estrada (4)
     ldrb    w11, [x10, w9, uxtw]
-    LA      x0, m_farmland
+    LA      x0, m_hasroad
+    cmp     w11, #4
+    b.ne    22f
+    cmp     w21, #IT_ROAD
+    b.eq    8f
+    b       23f
+22: LA      x0, m_farmland
     cmp     w11, #2
     b.hs    8f
+23:
     LA      x10, occgrid                // arvore, pedra, bau...
     ldrb    w11, [x10, w9, uxtw]
     LA      x0, m_occupied
@@ -364,7 +376,9 @@ fence_drag:
     str     wzr, [x28, #G_FDRAG]
     str     wzr, [x28, #G_FTGOK]
     b       9f
-1:  cmp     w9, #(IT_FENCE + 1)         // so a cerca arrasta
+1:  cmp     w9, #(IT_FENCE + 1)         // so a cerca e a estrada arrastam
+    b.eq    11f
+    cmp     w9, #(IT_ROAD + 1)
     b.eq    11f
     str     wzr, [x28, #G_FDRAG]
 11: bl      occ_build                   // o que ocupa cada quadrado
@@ -388,8 +402,14 @@ fence_drag:
     mov     w1, w19
     bl      numcat
     LA      x1, m_row2
-    bl      strcat_cur
-    ldr     w1, [x28, #(G_INV + 4 * IT_FENCE)]
+    ldr     w9, [x28, #G_PLACE]
+    cmp     w9, #(IT_ROAD + 1)
+    b.ne    3f
+    LA      x1, m_rrow2
+3:  bl      strcat_cur
+    bl      drag_item
+    add     x9, x28, #G_INV
+    ldr     w1, [x9, x1, lsl #2]
     bl      numcat
     LA      x1, m_row3
     bl      strcat_cur
@@ -404,17 +424,37 @@ plan_new:
     ldr     w9, [x28, #G_FPLANN]
     LA      x10, fplan
     LA      x11, fencegrid
-    mov     w0, #0
-1:  cbz     w9, 9f
+    mov     w14, #0                     // cerca: celula vazia = 0
+    ldr     w15, [x28, #G_PLACE]
+    cmp     w15, #(IT_ROAD + 1)
+    b.ne    1f
+    LA      x11, overlay                // estrada: celula sem estrada
+    mov     w14, #4
+1:  mov     w0, #0
+2:  cbz     w9, 9f
     ldrh    w12, [x10], #2
     ldrh    w13, [x10], #2
     add     w12, w12, w13, lsl #9
     ldrb    w12, [x11, w12, uxtw]
+    cmp     w14, #0
+    b.ne    3f
     cmp     w12, #0
     cinc    w0, w0, eq
-    sub     w9, w9, #1
-    b       1b
+    b       4f
+3:  cmp     w12, w14
+    cinc    w0, w0, ne
+4:  sub     w9, w9, #1
+    b       2b
 9:  ret
+
+// drag_item -> w1 = o item que se arrasta (cerca ou estrada)   folha
+drag_item:
+    ldr     w1, [x28, #G_PLACE]
+    sub     w1, w1, #1
+    cmp     w1, #IT_ROAD
+    mov     w9, #IT_FENCE
+    csel    w1, w1, w9, eq
+    ret
 
 // fence_press: apertou o botao com cercas na mao: comeca a fileira aqui
     .globl fence_press
@@ -455,33 +495,51 @@ fence_commit:
     mov     w19, w0                     // celulas
     mov     w20, #0                     // i
     mov     w21, #0                     // colocadas
+    bl      drag_item
+    mov     w22, w1                     // cerca ou estrada
 2:  cmp     w20, w19
     b.ge    4f
     LA      x9, fplan
     add     x9, x9, x20, lsl #2
     ldrh    w0, [x9]
     ldrh    w1, [x9, #2]
-    add     w10, w0, w1, lsl #9         // ja tem cerca: pula
-    LA      x11, fencegrid
+    add     w10, w0, w1, lsl #9
+    cmp     w22, #IT_ROAD
+    b.ne    21f
+    LA      x11, overlay                // ja tem estrada: pula
+    ldrb    w10, [x11, w10, uxtw]
+    cmp     w10, #4
+    b.eq    3f
+    bl      road_put
+    b       22f
+21: LA      x11, fencegrid              // ja tem cerca: pula
     ldrb    w10, [x11, w10, uxtw]
     cbnz    w10, 3f
     mov     w2, #1
     bl      fence_put
-    add     w21, w21, w0
-    ldr     w9, [x28, #(G_INV + 4 * IT_FENCE)]
+22: add     w21, w21, w0
+    add     x9, x28, #G_INV
+    ldr     w9, [x9, x22, lsl #2]
     cbz     w9, 4f
 3:  add     w20, w20, #1
     b       2b
-4:  ldr     w9, [x28, #(G_INV + 4 * IT_FENCE)]
+4:  add     x9, x28, #G_INV
+    ldr     w9, [x9, x22, lsl #2]
     cbnz    w9, 5f
-    str     wzr, [x28, #G_PLACE]        // acabaram as cercas
+    str     wzr, [x28, #G_PLACE]        // acabaram as cercas (ou estradas)
 5:  LA      x0, m_nofence
-    cbz     w21, 6f
+    cmp     w22, #IT_ROAD
+    b.ne    51f
+    LA      x0, m_noroad
+51: cbz     w21, 6f
     LA      x0, fmsgbuf                 // "9 cercas colocadas"
     mov     w1, w21
     bl      numcat
     LA      x1, m_placed
-    bl      strcat_cur
+    cmp     w22, #IT_ROAD
+    b.ne    52f
+    LA      x1, m_rplaced
+52: bl      strcat_cur
     LA      x0, fmsgbuf
 6:  bl      set_msg
 9:  ldp     x21, x22, [sp, #32]
@@ -868,9 +926,11 @@ grid_prep:
     mov     w10, #25                    // construcoes: 5 celulas
     cmp     w9, #IT_FENCE
     b.eq    11f
+    cmp     w9, #IT_ROAD
+    b.eq    11f
     cmp     w9, #IT_GATE
     b.ne    2f
-11: mov     w10, #FENCEREACH            // cerca e portao: 8
+11: mov     w10, #FENCEREACH            // cerca, portao e estrada: 8
     b       2f
 1:  ldr     w9, [x28, #G_HAND]
     cmp     w9, #(IT_HOE + 1)
@@ -915,9 +975,11 @@ fence_overlay:
     sub     w26, w9, #1                 // item
     ldr     w9, [x28, #G_FTGOK]
     cbz     w9, 99f
+    cmp     w26, #IT_ROAD
+    b.eq    6f
     cmp     w26, #IT_FENCE
     b.ne    7f
-    ldr     w9, [x28, #G_FDRAG]
+6:  ldr     w9, [x28, #G_FDRAG]
     cbz     w9, 7f
     bl      fence_plan                  // arrastando cercas: a fileira
     b       8f
@@ -939,7 +1001,14 @@ fence_overlay:
     ldrh    w23, [x9, #2]
     MOVI32  w24, 0xFFFFFFFF             // ja tem cerca (e e cerca): branco
     add     w10, w22, w23, lsl #9
-    LA      x11, fencegrid
+    cmp     w26, #IT_ROAD
+    b.ne    101f
+    LA      x11, overlay                // ja tem estrada: branco
+    ldrb    w10, [x11, w10, uxtw]
+    cmp     w10, #4
+    b.eq    13f
+    b       11f
+101: LA     x11, fencegrid
     ldrb    w10, [x11, w10, uxtw]
     cmp     w26, #IT_FENCE
     b.ne    11f
@@ -1025,6 +1094,10 @@ m_occupied: .asciz "Ocupado: tem algo nesse quadrado"
 m_farmland: .asciz "Terra arada (a enxada desfaz)"
 m_row1:     .asciz "Fileira: "
 m_row2:     .asciz " cercas (voce tem "
+m_rrow2:    .asciz " estradas (voce tem "
+m_rplaced:  .asciz " quadrados de estrada"
+m_noroad:   .asciz "Nenhuma estrada coube ai (vermelho = nao da)"
+m_hasroad:  .asciz "Ja tem estrada aqui"
 m_row3:     .asciz ")"
 m_placed:   .asciz " cercas colocadas"
 m_nofence:  .asciz "Nenhuma cerca coube ai (vermelho = nao da)"

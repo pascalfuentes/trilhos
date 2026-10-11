@@ -468,6 +468,8 @@ shot_mode:
     ldr     x0, [x28, #G_REN]
     bl      F(SDL_RenderPresent)
     bl      dep_selftest_done
+    bl      road_selftest               // estradas: voce e a vila
+    bl      crowd_selftest              // 2 por quadrado, ninguem tranca
     mov     w0, w19
     bl      set_zoom
     mov     w9, #1                      // o resto do teste sem a vila
@@ -477,6 +479,7 @@ shot_mode:
     bl      vitrine_setup
     cbz     w0, 97f
     mov     w0, #10800                  // meio-dia
+    mov     w1, #3
     bl      vitrine_frame
     bl      draw_all
     LA      x0, s_shot_vitrine
@@ -484,9 +487,18 @@ shot_mode:
     ldr     x0, [x28, #G_REN]
     bl      F(SDL_RenderPresent)
     mov     w0, #28800                  // 22:00
+    mov     w1, #3
     bl      vitrine_frame
     bl      draw_all
     LA      x0, s_shot_vitrine2
+    bl      save_bmp
+    ldr     x0, [x28, #G_REN]
+    bl      F(SDL_RenderPresent)
+    mov     w0, #10800                  // de longe (zoom 1: desenho reduzido)
+    mov     w1, #1
+    bl      vitrine_frame
+    bl      draw_all
+    LA      x0, s_shot_vitrine3
     bl      save_bmp
     ldr     x0, [x28, #G_REN]
     bl      F(SDL_RenderPresent)
@@ -1746,6 +1758,8 @@ terrain_color:
 13: LA      x9, overlay
     ldrb    w9, [x9, w15, uxtw]
     cbz     w9, 1f
+    cmp     w9, #4                      // estrada de pedra (estradas.S)
+    b.eq    14f
     cmp     w9, #1
     b.ne    11f
     MOVI32  w0, 0xFF9A7A52              // caminho de terra batida
@@ -1763,6 +1777,59 @@ terrain_color:
 12: MOVI32  w0, 0xFF5C3C20              // molhada (agua a ate 4 quadrados)
     cbnz    w1, tc_light
     MOVI32  w0, 0xFF46301A
+    b       tc_light
+    // estrada: o azulejo pelos vizinhos (+u 1, +v 2, -u 4, -v 8), lido no
+    // ponto da celula (o azulejo de 24 x 12 cobre o losango)
+14: LA      x9, overlay
+    add     x9, x9, w15, uxtw
+    mov     w2, #0
+    ldrb    w1, [x9, #1]
+    cmp     w1, #4
+    cinc    w2, w2, eq
+    ldrb    w1, [x9, #512]
+    cmp     w1, #4
+    mov     w3, #2
+    csel    w3, w3, wzr, eq
+    orr     w2, w2, w3
+    ldurb   w1, [x9, #-1]
+    cmp     w1, #4
+    mov     w3, #4
+    csel    w3, w3, wzr, eq
+    orr     w2, w2, w3
+    sub     x9, x9, #512
+    ldrb    w1, [x9]
+    cmp     w1, #4
+    mov     w3, #8
+    csel    w3, w3, wzr, eq
+    orr     w2, w2, w3
+    and     w3, w10, #0xFFFF            // onde, dentro da celula
+    and     w4, w11, #0xFFFF
+    sub     w5, w3, w4
+    mov     w6, #12
+    mul     w5, w5, w6
+    asr     w5, w5, #16
+    add     w5, w5, #12                 // x no azulejo
+    add     w6, w3, w4
+    mov     w8, #6
+    mul     w6, w6, w8
+    lsr     w6, w6, #16                 // y
+    cmp     w5, #0
+    csel    w5, wzr, w5, lt
+    mov     w8, #23
+    cmp     w5, w8
+    csel    w5, w8, w5, gt
+    mov     w8, #11
+    cmp     w6, w8
+    csel    w6, w8, w6, hi
+    mov     w8, #288
+    mul     w2, w2, w8
+    mov     w8, #24
+    madd    w2, w6, w8, w2
+    add     w2, w2, w5
+    LA      x9, roadtiles
+    ldr     w0, [x9, w2, uxtw #2]
+    cbnz    w0, tc_light
+    MOVI32  w0, 0xFF9A7A52              // fora das pedras: terra batida
     b       tc_light
 1:  LA      x9, moist                   // umidade interpolada + ruido
     add     x9, x9, w15, uxtw
@@ -2070,7 +2137,29 @@ do_loop:
     cmp     w2, w9
     b.gt    do_skip
     add     w4, w10, w11                // profundidade
-    LA      x9, objsprite               // sprite do tipo de objeto
+    sub     sp, sp, #32                 // construcoes: o desenho novo
+    stp     w1, w2, [sp]
+    stp     w4, w10, [sp, #8]
+    stp     w11, w13, [sp, #16]
+    str     w14, [sp, #24]
+    mov     w0, w13
+    mov     w1, w14
+    mov     w2, w10
+    mov     w3, w11
+    bl      obj_frame
+    mov     w9, w0
+    ldp     w1, w2, [sp]
+    ldp     w4, w10, [sp, #8]
+    ldp     w11, w13, [sp, #16]
+    ldr     w14, [sp, #24]
+    add     sp, sp, #32
+    tbnz    w9, #31, 64f
+    mov     w0, w9
+    mov     w3, w24
+    mov     w5, w14
+    bl      estr_blit
+    b       do_skip
+64: LA      x9, objsprite               // sprite do tipo de objeto
     ldrb    w15, [x9, x13]
     cmp     w13, #O_CROP                // trigo plantado: estagio 0..3
     b.ne    60f
@@ -2122,12 +2211,19 @@ do_done:
 // blit(x0 = sprite, w1 = x, w2 = y base, w3 = escala, w4 = profundidade,
 //      w5 = variante)   folha; usa x0-x17
     .globl blit
+//  Cabecalho de 4 bytes (largura, altura, ancora x, 0): os pes na ultima
+//  linha. Cabecalho de 8 (largura, altura, ancora x, ancora y, k, 0, 0, 0;
+//  construcoes, estruturas.S): a ancora e um canto de pixel no meio do
+//  losango, e cada linha abaixo dela fica k mais perto (o chao da frente
+//  nao corta a base). Cor com alfa 0xFE: brilha de noite (post_cols).
 blit:
     sub     sp, sp, #16
     ldrb    w6, [x0]                    // largura
     ldrb    w7, [x0, #1]                // altura
     str     w7, [sp]
     ldrb    w8, [x0, #2]                // ancora x
+    ldrb    w9, [x0, #3]                // ancora y (0 = sprite antigo)
+    cbnz    w9, 91f
     add     x0, x0, #4
     mul     w9, w8, w3
     sub     w1, w1, w9
@@ -2135,11 +2231,30 @@ blit:
     sub     w1, w1, w9                  // esquerda
     mul     w9, w7, w3
     sub     w2, w2, w9                  // topo
+    mov     w9, #255                    // nenhuma linha abaixo da ancora
+    strh    w9, [sp, #8]
+    strh    wzr, [sp, #10]
+    b       92f
+91: strh    w9, [sp, #8]                // ancora y
+    ldrb    w10, [x0, #4]
+    strh    w10, [sp, #10]              // k
+    add     x0, x0, #8
+    mul     w10, w8, w3
+    sub     w1, w1, w10                 // esquerda = x - ax * escala
+    mul     w10, w9, w3
+    sub     w2, w2, w10                 // topo = y - ay * escala
+92: str     w4, [sp, #4]                // profundidade da ancora
     LA      x16, fb
     LA      x17, zb
     mov     w10, #0
 b_row:
-    mov     w11, #0
+    ldr     w4, [sp, #4]
+    ldrh    w12, [sp, #8]
+    subs    w12, w10, w12
+    b.lt    93f
+    ldrh    w13, [sp, #10]
+    madd    w4, w12, w13, w4
+93: mov     w11, #0
 b_col:
     ldrb    w12, [x0], #1
     cbz     w12, b_next
@@ -2487,6 +2602,7 @@ palette:
     .word 0xFFB98C66, 0xFFC4AD80, 0xFFC99A3E, 0xFF9A8560  // 56-59 pele, tunica, cinto
     .word 0xFF3D3C44, 0xFF36291A, 0xFF453929, 0xFF30281C  // 60-63 pe, cabelo, calca
     .word 0xFF5A3A28, 0xFF6B4426                          // 64-65 cinto, cabelo
+#include "estrpal.inc"
 
 roofc:
     .word 0xFFB5443A, 0xFF8C3029
@@ -3304,6 +3420,14 @@ sprites:
     .byte 21,21,21,18,22,18,22,22
     .byte 0,22,22,22,22,22,22,0
     .p2align 7
+// 88: estrada (icone na mochila): paralelepipedos num losango de terra
+    .byte 8, 5, 4, 0
+    .byte 0,0,10,20,20,10,0,0
+    .byte 0,20,21,20,22,20,21,0
+    .byte 10,21,20,22,20,21,20,10
+    .byte 0,20,22,20,21,22,20,0
+    .byte 0,0,10,21,20,10,0,0
+    .p2align 7
 
 m_gridon:       .asciz "Grade ligada (G desliga)"
 m_gridoff:      .asciz "Grade desligada"
@@ -3355,6 +3479,7 @@ s_shot_soldier: .asciz "shot_soldado.bmp"
 s_shot_depot: .asciz "shot_deposito.bmp"
 s_shot_vitrine: .asciz "shot_estruturas.bmp"
 s_shot_vitrine2: .asciz "shot_estruturas_noite.bmp"
+s_shot_vitrine3: .asciz "shot_estruturas_longe.bmp"
     .p2align 2
 // buracos de pedreira e de mina e o chao delas (duas cores cada)
 pitcolors:

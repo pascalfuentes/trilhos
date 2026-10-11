@@ -69,6 +69,7 @@ vt_add:
 
 // vt_spot -> w0, w1 = o meio de um quadrado de 31 x 31 celulas de terra,
 // quase plano, o mais perto de voce (-1 se nao achou)
+    .globl vt_spot
 vt_spot:
     stp     x29, x30, [sp, #-16]!
     mov     x29, sp
@@ -283,6 +284,35 @@ vitrine_setup:
     add     w23, w23, #1
     cmp     w23, #3
     b.le    8b
+    // estradas: uma reta em u que cruza uma em v, e um T
+    LA      x24, vtpos
+    ldp     w19, w20, [x24]
+    LA      x10, overlay
+    mov     w11, #4
+    mov     w9, #-9                     // em u, na fileira v0 + 3
+1:  add     w12, w19, w9
+    add     w13, w20, #3
+    add     w12, w12, w13, lsl #9
+    strb    w11, [x10, w12, uxtw]
+    add     w9, w9, #1
+    cmp     w9, #5
+    b.le    1b
+    mov     w9, #-4                     // em v, na coluna u0 + 5
+2:  add     w12, w19, #5
+    add     w13, w20, w9
+    add     w12, w12, w13, lsl #9
+    strb    w11, [x10, w12, uxtw]
+    add     w9, w9, #1
+    cmp     w9, #8
+    b.le    2b
+    mov     w9, #4                      // um T: em v na coluna u0 - 6
+3:  sub     w12, w19, #6
+    add     w13, w20, w9
+    add     w12, w12, w13, lsl #9
+    strb    w11, [x10, w12, uxtw]
+    add     w9, w9, #1
+    cmp     w9, #8
+    b.le    3b
     // voce no meio (a camera tambem), tudo a vista, sol
     LA      x24, vtpos
     ldp     w19, w20, [x24]
@@ -308,7 +338,8 @@ vitrine_setup:
     ldp     x29, x30, [sp], #64
     ret
 
-// vitrine_frame(w0 = hora em quadros): prepara a foto (camera, luz, visao)
+// vitrine_frame(w0 = hora em quadros, w1 = zoom): prepara a foto (camera,
+// luz, visao)
     .globl vitrine_frame
 vitrine_frame:
     stp     x29, x30, [sp, #-32]!
@@ -320,7 +351,7 @@ vitrine_frame:
     strb    w10, [x9]
     str     wzr, [x28, #G_MSGT]
     str     wzr, [x28, #G_POPT]
-    mov     w0, #3
+    mov     w0, w1
     bl      set_zoom
     bl      follow_camera
     bl      update_ambient

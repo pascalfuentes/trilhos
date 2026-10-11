@@ -302,7 +302,18 @@ farm_act:
     b.eq    90f
     cmp     w9, #3
     b.eq    90f
-    LA      x20, p_untill
+    LA      x9, overlay                 // estrada: a enxada desfaz (a pedra volta)
+    ldrb    w9, [x9, w22, uxtw]
+    cmp     w9, #4
+    b.ne    201f
+    mov     w0, w22
+    bl      road_dig
+    mov     w9, #2
+    str     w9, [x28, #G_FARMMODE]
+    mov     w0, #IT_HOE
+    bl      tool_use
+    b       80f
+201: LA     x20, p_untill
     mov     w0, w22
     bl      obj_in_cell
     tbnz    w0, #31, 23f
@@ -334,6 +345,8 @@ farm_act:
     // ---- plantar ----
 50: LA      x9, overlay
     ldrb    w9, [x9, w22, uxtw]
+    cmp     w9, #4                      // na estrada nao
+    b.eq    90f
     cmp     w9, #2
     b.hs    51f
     mov     w0, w22                     // em cima de outra coisa: deixa colher
@@ -429,6 +442,8 @@ farm_tint:
     ldrb    w9, [x9, w19, uxtw]
     cmp     w9, #2
     b.lo    7f
+    cmp     w9, #3
+    b.hi    7f
 6:  MOVI32  w0, 0xFF40E060
     b       9f
 7:  MOVI32  w0, 0xFFE03C30

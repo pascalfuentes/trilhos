@@ -93,6 +93,7 @@
 .equ NX_PAY,     7              // obras: pega o material no bau
 .equ NX_SMITH,   8              // ferreiro: pega minerio e carvao (ou madeira)
 .equ NX_TOOL,    9              // pega a ferramenta de ferro no bau
+.equ NX_ROADST, 10              // obras: pega pedra para a estrada
 
 .equ WK_CHOP,    1
 .equ WK_MINE,    2
@@ -104,6 +105,7 @@
 .equ WK_BUILD,   8
 .equ WK_SMELT,   9              // na fornalha
 .equ WK_FISH,   10              // pescando (alvo = celula de agua)
+.equ WK_ROAD,   11              // pavimentando (alvo = celula)
 
 .equ CAUSE_FOME,  1
 .equ CAUSE_FRIO,  2

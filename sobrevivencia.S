@@ -325,6 +325,8 @@ surv_reset:
     str     w9, [x28, #G_HOVFIRE]
     str     wzr, [x28, #G_MINEPROG]
     str     wzr, [x28, #G_NFIRE]
+    bl      ash_reset
+    bl      crowd_reset
     str     wzr, [x28, #G_DEAD]
     str     wzr, [x28, #G_PAUSE]
     str     wzr, [x28, #G_POPT]
@@ -809,6 +811,7 @@ surv_update:
     stp     x21, x22, [sp, #32]
     stp     d8, d9, [sp, #48]
     stp     d10, d11, [sp, #64]
+    bl      crowd_frame                 // quem esta em cada quadrado (colisao.S)
     ldr     w9, [x28, #G_MSGT]
     cbz     w9, 1f
     sub     w9, w9, #1
@@ -985,7 +988,12 @@ surv_update:
     add     w9, w9, w10, lsl #9
     LA      x10, overlay
     ldrb    w9, [x10, w9, uxtw]
-    cmp     w9, #1
+    cmp     w9, #4                      // estrada de pedra: 50%
+    b.ne    950f
+    fmov    s1, #1.5
+    fmul    s0, s0, s1
+    b       951f
+950: cmp    w9, #1
     b.ne    951f
     fmov    s1, #1.25
     fmul    s0, s0, s1
@@ -1014,6 +1022,17 @@ surv_update:
     bl      fence_at
     cmp     w0, #1
     b.eq    10f
+    ldr     s4, [x28, #G_PU]            // gente demais no quadrado? (colisao.S)
+    ldr     s5, [x28, #G_PV]
+    fcvtzs  w9, s4
+    fcvtzs  w10, s5
+    add     w1, w9, w10, lsl #9
+    fcvtzs  w9, s10
+    add     w2, w9, w10, lsl #9
+    mov     w0, #MAXPEOPLE
+    mov     w3, #120
+    bl      crowd_try
+    cbz     w0, 10f
     str     s10, [x28, #G_PU]
 10: ldr     s0, [x28, #G_PV]
     fadd    s10, s0, s9
@@ -1026,6 +1045,17 @@ surv_update:
     bl      fence_at
     cmp     w0, #1
     b.eq    su_after_move
+    ldr     s4, [x28, #G_PU]
+    ldr     s5, [x28, #G_PV]
+    fcvtzs  w9, s4
+    fcvtzs  w10, s5
+    add     w1, w9, w10, lsl #9
+    fcvtzs  w10, s10
+    add     w2, w9, w10, lsl #9
+    mov     w0, #MAXPEOPLE
+    mov     w3, #120
+    bl      crowd_try
+    cbz     w0, su_after_move
     str     s10, [x28, #G_PV]
 su_after_move:
     ldr     s0, [x28, #G_PU]
@@ -1555,7 +1585,11 @@ su_food:
     subs    w11, w11, #1
     str     w11, [x10, #12]
     b.gt    23f
-    sub     w19, w19, #1                // apagou: tira da lista
+    stp     x9, x10, [sp, #-16]!        // apagou: ficam as cinzas
+    mov     x0, x10
+    bl      ash_add
+    ldp     x9, x10, [sp], #16
+    sub     w19, w19, #1                // e sai da lista
     add     x12, x20, x19, lsl #4
     ldp     x13, x14, [x12]
     stp     x13, x14, [x10]
@@ -1563,6 +1597,7 @@ su_food:
 23: add     w9, w9, #1
     b       22b
 24: str     w19, [x28, #G_NFIRE]
+    bl      ash_update
 
     // ---- arbustos voltam a dar frutas (a cada 40 s, chance de 1/54: uns
     // 3 dias; com chuva, metade); no inverno nao ----
@@ -1827,7 +1862,10 @@ start_place:
     LA      x0, m_place
     b.ne    1f
     LA      x0, m_placefence
-1:  b       set_msg
+1:  cmp     w0, #IT_ROAD
+    b.ne    2f
+    LA      x0, m_placeroad
+2:  b       set_msg
 
 // can_craft(w0 = receita) -> w0 = 1 se tem tudo   folha
 // receita (16 bytes): resultado, quantos, precisa de fogo, 0,
@@ -2032,9 +2070,12 @@ place_try:
     stp     x19, x20, [sp, #16]
     stp     x21, x22, [sp, #32]
     stp     d8, d9, [sp, #48]
-    ldr     w9, [x28, #G_PLACE]         // cerca: comeca uma fileira (coloca ao soltar)
+    ldr     w9, [x28, #G_PLACE]         // cerca e estrada: comeca uma fileira
+    cmp     w9, #(IT_ROAD + 1)          // (coloca ao soltar)
+    b.eq    101f
     cmp     w9, #(IT_FENCE + 1)
     b.ne    10f
+101:
     bl      fence_press
     b       9f
 10: bl      place_check
@@ -2069,6 +2110,9 @@ place_try:
     b       9f
 12: cmp     w20, #IT_FIRE
     b.ne    2f
+    fmov    s0, s8                      // as cinzas dali somem
+    fmov    s1, s9
+    bl      ash_clear
     ldr     w9, [x28, #G_NFIRE]         // fogueira: 4 min de fogo
     LA      x10, fires
     add     x10, x10, x9, lsl #4
@@ -2615,24 +2659,26 @@ surv_draw:
     ldr     s1, [x20, #4]
     ldr     w0, [x20, #8]
     bl      proj
-    mov     w4, w2
-    add     w4, w4, #16
+    add     w4, w2, #4
     mov     w2, w1
     mov     w1, w0
-    ldr     w9, [x28, #G_FRAME]
-    lsr     w9, w9, #3
-    add     w9, w9, w19
-    and     w9, w9, #1
-    add     w9, w9, #SPR_FIRE
-    LA      x0, sprites
-    add     x0, x0, x9, lsl #7
+    stp     w1, w2, [sp, #-16]!
+    str     w4, [sp, #8]
+    bl      fire_frame                  // acesa: chama animada (estruturas.S)
+    add     w0, w0, w19                 // cada uma num tempo
+    and     w0, w0, #3
+    ldp     w1, w2, [sp]
+    ldr     w4, [sp, #8]
+    add     sp, sp, #16
     mov     w3, w21
     mov     w5, #0
-    bl      blit
+    bl      estr_blit
     add     w19, w19, #1
     b       1b
-    // animais e flechas
+    // cinzas e animais e flechas
 2:  mov     w0, w21
+    bl      ash_draw
+    mov     w0, w21
     bl      animals_draw
     bl      arrows_draw
     mov     w0, w21
@@ -2777,7 +2823,9 @@ surv_draw:
     // previa da construcao no mouse (pisca se nao der para colocar)
 50: ldr     w19, [x28, #G_PLACE]
     cbz     w19, 6f
-    cmp     w19, #(IT_FENCE + 1)        // cerca: a grade mostra a previa
+    cmp     w19, #(IT_FENCE + 1)        // cerca e estrada: a grade mostra a previa
+    b.eq    6f
+    cmp     w19, #(IT_ROAD + 1)
     b.eq    6f
     ldr     w9, [x28, #G_HOVOK]
     cbz     w9, 6f
@@ -3091,9 +3139,12 @@ pc_color:
     add     w3, w5, w7, asr #8
     mul     w3, w3, w6
     lsr     w3, w3, #8
-    // luz da noite
+    // luz da noite (o que brilha, alfa 0xFE, nao escurece)
     ldr     w5, [sp, #28]
     cbz     w5, pc_store
+    lsr     w5, w0, #24
+    cmp     w5, #0xFE
+    b.eq    pc_store
     ldrb    w5, [x15, w10, uxtw]        // luz das fogueiras
     mov     w8, #255
     ldr     w7, [sp, #16]
@@ -7445,12 +7496,12 @@ objsprite:
 itemweight:
     .hword 15, 20, 1, 20, 25, 5, 3, 10, 100, 120, 200, 15, 1, 5, 4, 10, 30, 20, 10, 30, 10, 5, 4
     .hword 15, 1, 3, 4
-    .hword 30, 10, 20, 250, 25, 30, 20, 25, 80, 40
+    .hword 30, 10, 20, 250, 25, 30, 20, 25, 80, 40, 20
 
 // construcoes (vao para o mapa e nao se largam)
 itembuild:
     .byte 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0
-    .byte 0, 0, 0, 1, 0, 0, 0, 0, 0, 1
+    .byte 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 1
 
 // texto que sobe ao coletar cada item
     .p2align 3
@@ -7459,14 +7510,14 @@ popitem:
     .quad p_wood, p_wood, p_wood, p_bow, p_arrow, p_meat, p_cmeat, p_hide
     .quad p_coat, p_lbag, p_wood, p_wood, p_rod, p_fish, p_cfish, p_hoe
     .quad p_seed, p_wheat, p_bread
-    .quad p_ore, p_coal, p_iron, p_wood, p_wood, p_wood, p_wood, p_wood, p_wood, p_wood
+    .quad p_ore, p_coal, p_iron, p_wood, p_wood, p_wood, p_wood, p_wood, p_wood, p_wood, p_stone
 
 // sprite de cada item (icone na mochila e na pilha)
 itemicon:
     .byte 12, 13, 14, 15, 16, 17, 18, 19, SPR_FIRE, 20, 21, 23, 24, 25, 26, 27, 28, 29, 48, 49, 42, 43, 44
     .byte SPR_HOE, SPR_SEED, SPR_WHEAT, SPR_BREAD
     .byte SPR_ORE, SPR_COAL, SPR_IRON, SPR_FURNACE, SPR_IAXE, SPR_IPICK, SPR_IHOE, SPR_SWORD
-    .byte SPR_ARMOR, SPR_LAMP
+    .byte SPR_ARMOR, SPR_LAMP, SPR_ROAD
 
 // barra "na mao": teclas 1-8
 hotbar:
@@ -7480,22 +7531,22 @@ hbkeys:
 eatvalue:
     .float 0, 0, 15, 0, 0, 0, 50, 0, 0, 0, 0, 0, 0, 10, 60, 0, 0, 0, 0, 0, 0, 8, 40
     .float 0, 0, 0, 45
-    .float 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    .float 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 eatorder:
     .byte IT_CMEAT, IT_BREAD, IT_COOKED, IT_CFISH, IT_BERRY, IT_MEAT, IT_FISH
     .p2align 3
 eatpop:
     .quad 0, 0, p_eat, 0, 0, 0, p_eatc, 0, 0, 0, 0, 0, 0, p_eatraw, p_eatm, 0, 0, 0, 0, 0, 0, p_eatfish, p_eatcf
     .quad 0, 0, 0, p_eatbread
-    .quad 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    .quad 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 handpop:
     .quad 0, 0, 0, p_haxe, p_hpick, 0, 0, 0, 0, 0, 0, p_hbow, 0, 0, 0, 0, 0, 0, 0, 0, p_hrod, 0, 0
     .quad p_hhoe, p_hseed, 0, 0
-    .quad 0, 0, 0, 0, 0, 0, 0, p_hsword, 0, 0
+    .quad 0, 0, 0, 0, 0, 0, 0, p_hsword, 0, 0, 0
 nohave:
     .quad 0, 0, 0, m_noaxe, m_nopick, 0, 0, 0, 0, 0, 0, m_nobow, 0, 0, 0, 0, 0, 0, 0, 0, m_norod, 0, 0
     .quad m_nohoe, m_noseed, 0, 0
-    .quad 0, 0, 0, 0, 0, 0, 0, m_nosword, 0, 0
+    .quad 0, 0, 0, 0, 0, 0, 0, m_nosword, 0, 0, 0
 
 // a ferramenta de ferro de cada uma (machado, picareta, enxada)
     .globl irontool
@@ -7536,6 +7587,7 @@ recipes:
     .byte IT_SWORD, 1, 2, 0, IT_IRON, 3, IT_WOOD, 1, 0, 0, 0, 0, 0, 0, 0, 0
     .byte IT_ARMOR, 1, 2, 0, IT_IRON, 6, IT_HIDE, 2, 0, 0, 0, 0, 0, 0, 0, 0
     .byte IT_LAMP, 1, 2, 0, IT_IRON, 1, IT_COAL, 1, IT_WOOD, 2, 0, 0, 0, 0, 0, 0
+    .byte IT_ROAD, 1, 0, 0, IT_STONE, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 
 // o que cada receita faz (2 linhas de 32 bytes)
     .p2align 5
@@ -7651,6 +7703,10 @@ recdesc:
     .asciz "Luz a noite sem lenha."
     .p2align 5
     .asciz "Clique no mapa: monta."
+    .p2align 5
+    .asciz "Piso: anda 50% mais"
+    .p2align 5
+    .asciz "rapido. Arraste no mapa."
     .p2align 5
 
 // nomes curtos para o custo (16 bytes)
@@ -7789,21 +7845,6 @@ itemnames:
     .p2align 4
     .asciz "Pao"
     .p2align 4
-skillnames:
-    .asciz "Natacao"
-    .p2align 4
-    .asciz "Corrida"
-    .p2align 4
-    .asciz "Lenhador"
-    .p2align 4
-    .asciz "Mineracao"
-    .p2align 4
-    .asciz "Forca"
-    .p2align 4
-    .asciz "Pesca"
-    .p2align 4
-    .asciz "Agricultura"
-    .p2align 4
     .asciz "Minerio"
     .p2align 4
     .asciz "Carvao"
@@ -7823,6 +7864,24 @@ skillnames:
     .asciz "Armadura"
     .p2align 4
     .asciz "Lampiao"
+    .p2align 4
+    .asciz "Estrada"
+    .p2align 4
+    .globl skillnames
+skillnames:
+    .asciz "Natacao"
+    .p2align 4
+    .asciz "Corrida"
+    .p2align 4
+    .asciz "Lenhador"
+    .p2align 4
+    .asciz "Mineracao"
+    .p2align 4
+    .asciz "Forca"
+    .p2align 4
+    .asciz "Pesca"
+    .p2align 4
+    .asciz "Agricultura"
     .p2align 4
 
 // cor da barra de cada skill (0x00RRGGBB)
@@ -8033,6 +8092,7 @@ m_shelterok:    .asciz "Abrigo pronto! Dentro dele nao passa frio"
 m_placecancel:  .asciz "Cancelado"
 m_rowcancel:    .asciz "Fileira cancelada"
 m_placefence:   .asciz "Arraste na grade para a fileira; solte para colocar"
+m_placeroad:    .asciz "Arraste para fazer a estrada; solte para colocar"
 m_nodrop:       .asciz "Construcoes nao se largam: clique nelas para colocar"
 m_chestfull:    .asciz "Esvazie o bau antes de desmontar"
 m_axebroke:     .asciz "O machado quebrou!"

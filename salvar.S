@@ -351,6 +351,8 @@ load_game:
     str     w9, [x28, #G_OCCFRAME]
     mov     w9, #1                      // e as listas dos depositos
     str     w9, [x28, #G_DEPDIRTY]
+    bl      crowd_reset                 // as contas da colisao e as cinzas
+    bl      ash_reset
     ldr     w0, [x28, #G_ZOOM]
     bl      set_zoom
     bl      follow_camera
