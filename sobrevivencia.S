@@ -2524,6 +2524,8 @@ surv_mouse:
     b       sm_ret
 7:  cmp     w19, #1
     b.ne    8f
+    bl      F(staff_click)              // cajado: magia (c/magia.c)
+    cbnz    w0, sm_ret
     bl      F(shift_attack)             // Shift: ataca parado (c/teclas.c)
     cbnz    w0, sm_ret
     bl      F(attack_moving)
@@ -2662,6 +2664,7 @@ surv_draw:
     mov     w0, w21
     bl      animals_draw
     bl      arrows_draw
+    bl      F(magic_draw)               // bolas de magia (c/magia.c)
     mov     w0, w21
     bl      fish_draw
     ldr     w9, [x28, #G_SLEEP]         // dormindo: esta dentro da cabana
@@ -7521,11 +7524,13 @@ itemweight:
     .hword 15, 20, 1, 20, 25, 5, 3, 10, 100, 120, 200, 15, 1, 5, 4, 10, 30, 20, 10, 30, 10, 5, 4
     .hword 15, 1, 3, 4
     .hword 30, 10, 20, 250, 25, 30, 20, 25, 80, 40, 20
+    .hword 20                           // cajado
 
 // construcoes (vao para o mapa e nao se largam)
 itembuild:
     .byte 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0
     .byte 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 1
+    .byte 0                             // cajado
 
 // texto que sobe ao coletar cada item
     .p2align 3
@@ -7535,6 +7540,7 @@ popitem:
     .quad p_coat, p_lbag, p_wood, p_wood, p_rod, p_fish, p_cfish, p_hoe
     .quad p_seed, p_wheat, p_bread
     .quad p_ore, p_coal, p_iron, p_wood, p_wood, p_wood, p_wood, p_wood, p_wood, p_wood, p_stone
+    .quad p_wood                        // cajado
 
 // sprite de cada item (icone na mochila e na pilha)
 itemicon:
@@ -7542,12 +7548,13 @@ itemicon:
     .byte SPR_HOE, SPR_SEED, SPR_WHEAT, SPR_BREAD
     .byte SPR_ORE, SPR_COAL, SPR_IRON, SPR_FURNACE, SPR_IAXE, SPR_IPICK, SPR_IHOE, SPR_SWORD
     .byte SPR_ARMOR, SPR_LAMP, SPR_ROAD
+    .byte 42                            // cajado (icone da vara, ate o pedido 3.0)
 
 // barra "na mao": teclas 1-8
 hotbar:
-    .byte IT_AXE, IT_PICK, IT_BOW, IT_TORCH, IT_ROD, IT_HOE, IT_SEED, IT_SWORD
+    .byte IT_AXE, IT_PICK, IT_BOW, IT_TORCH, IT_ROD, IT_HOE, IT_SEED, IT_SWORD, IT_STAFF
 hbkeys:
-    .asciz "1", "2", "3", "4", "5", "6", "7", "8"
+    .asciz "1", "2", "3", "4", "5", "6", "7", "8", "9"
 
 // comida: quanto enche (0 = nao se come) e a ordem do E
     .p2align 2
@@ -7556,6 +7563,7 @@ eatvalue:
     .float 0, 0, 15, 0, 0, 0, 50, 0, 0, 0, 0, 0, 0, 10, 60, 0, 0, 0, 0, 0, 0, 8, 40
     .float 0, 0, 0, 45
     .float 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    .float 0                            // cajado
 eatorder:
     .byte IT_CMEAT, IT_BREAD, IT_COOKED, IT_CFISH, IT_BERRY, IT_MEAT, IT_FISH
     .p2align 3
@@ -7563,14 +7571,17 @@ eatpop:
     .quad 0, 0, p_eat, 0, 0, 0, p_eatc, 0, 0, 0, 0, 0, 0, p_eatraw, p_eatm, 0, 0, 0, 0, 0, 0, p_eatfish, p_eatcf
     .quad 0, 0, 0, p_eatbread
     .quad 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    .quad 0                             // cajado
 handpop:
     .quad 0, 0, 0, p_haxe, p_hpick, 0, 0, 0, 0, 0, 0, p_hbow, 0, 0, 0, 0, 0, 0, 0, 0, p_hrod, 0, 0
     .quad p_hhoe, p_hseed, 0, 0
     .quad 0, 0, 0, 0, 0, 0, 0, p_hsword, 0, 0, 0
+    .quad p_hstaff
 nohave:
     .quad 0, 0, 0, m_noaxe, m_nopick, 0, 0, 0, 0, 0, 0, m_nobow, 0, 0, 0, 0, 0, 0, 0, 0, m_norod, 0, 0
     .quad m_nohoe, m_noseed, 0, 0
     .quad 0, 0, 0, 0, 0, 0, 0, m_nosword, 0, 0, 0
+    .quad m_nostaff
 
 // a ferramenta de ferro de cada uma (machado, picareta, enxada)
     .globl irontool
@@ -7612,6 +7623,7 @@ recipes:
     .byte IT_ARMOR, 1, 2, 0, IT_IRON, 6, IT_HIDE, 2, 0, 0, 0, 0, 0, 0, 0, 0
     .byte IT_LAMP, 1, 2, 0, IT_IRON, 1, IT_COAL, 1, IT_WOOD, 2, 0, 0, 0, 0, 0, 0
     .byte IT_ROAD, 1, 0, 0, IT_STONE, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    .byte IT_STAFF, 1, 0, 0, IT_WOOD, 4, IT_HIDE, 2, 0, 0, 0, 0, 0, 0, 0, 0   // cajado
 
 // o que cada receita faz (2 linhas de 32 bytes)
     .p2align 5
@@ -7731,6 +7743,10 @@ recdesc:
     .asciz "Piso: anda 50% mais"
     .p2align 5
     .asciz "rapido. Arraste no mapa."
+    .p2align 5
+    .asciz "Na mao: atira magia [9]"
+    .p2align 5
+    .asciz "(5 de mana; a Energia da dano)"
     .p2align 5
 
 // nomes curtos para o custo (16 bytes)
@@ -7890,6 +7906,8 @@ itemnames:
     .asciz "Lampiao"
     .p2align 4
     .asciz "Estrada"
+    .p2align 4
+    .asciz "Cajado"
     .p2align 4
     .globl skillnames
 skillnames:
@@ -8104,11 +8122,13 @@ m_ironbroke:    .asciz "A ferramenta de ferro quebrou!"
 m_furnaceok:    .asciz "Fornalha pronta: ferro e carvao perto dela"
 m_lampok:       .asciz "Lampiao aceso"
 m_nosword:      .asciz "Voce nao tem uma espada (fabrique com ferro)"
+m_nostaff:      .asciz "Voce nao tem um cajado (fabrique: Tab)"
 s_plusfurn:     .asciz " + fornalha"
 p_ore:          .asciz "+1 minerio de ferro"
 p_coal:         .asciz "+1 carvao"
 p_iron:         .asciz "+1 ferro"
 p_hsword:       .asciz "Espada na mao"
+p_hstaff:       .asciz "Cajado na mao: clique atira magia (5 de mana)"
 m_place:        .asciz "Clique no mapa para colocar (botao direito cancela)"
 m_nopoint:      .asciz "Aponte para o chao"
 m_toomanychests: .asciz "Baus demais"

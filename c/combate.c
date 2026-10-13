@@ -46,18 +46,19 @@ int hit_chance(int animal)
 
 int hit_damage(int base, int distancia)
 {
-    int attr = distancia ? G_I32(G_DEX) : G_I32(G_STR);
+    int attr = distancia == 2 ? G_I32(G_ENE) : distancia ? G_I32(G_DEX) : G_I32(G_STR);
     int dano = (base * (100 + 3 * (attr - 10)) + 50) / 100;
     return dano < 1 ? 1 : dano;
 }
 
-// golpe (distancia 0) ou flecha (1) no bicho -> 1 se acertou
+// golpe (distancia 0), flecha (1) ou magia (2, nunca erra; Energia)
+// no bicho -> 1 se acertou
 int player_hit(int animal, int base, int distancia)
 {
     uint8_t *a = animals + animal * 32;
     float u = *(float *)a, v = *(float *)(a + 4);
     int tipo = a[AN_TYPE];
-    if (!sempre_acerta && (int)(rng() % 100) >= hit_chance(animal)) {
+    if (distancia < 2 && !sempre_acerta && (int)(rng() % 100) >= hit_chance(animal)) {
         dmgnum_add(u, v, altura(tipo), 2, "Errou");
         return 0;
     }

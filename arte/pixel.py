@@ -276,6 +276,18 @@ if f2:
     for i in range(0, len(ml), 8):
         w('    .quad ' + ', '.join(ml[i:i + 8]))
 
+# ---- bola de magia (cajado, c/magia.c): 2 quadros, cores de brilho
+#      azuis do pedido 2.0 (ate o desenho do pedido 3.0)
+if f2:
+    orbs = [
+        ['..ÒÒÒ..', '.ÒÑÑÑÒ.', 'ÒÑÐÐÐÑÒ', 'ÒÑÐÐÐÑÒ', 'ÒÑÐÐÐÑÒ', '.ÒÑÑÑÒ.', '..ÒÒÒ..'],
+        ['...Ò...', '.ÒÑÑÑÒ.', '.ÑÐÐÐÑ.', 'ÒÑÐÐÐÑÒ', '.ÑÐÐÐÑ.', '.ÒÑÑÑÒ.', '...Ò...'],
+    ]
+    ol = [emit(o, 3, 6) for o in orbs]
+    w('    .p2align 3')
+    w('    .globl pixorb')
+    w('pixorb: .quad ' + ', '.join(ol))
+
 # ---- sombras: ovais no chao (indice 254), heroi, lobo e urso ----
 def oval(wd, ht):
     rows = []

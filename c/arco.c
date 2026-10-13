@@ -73,6 +73,7 @@ void bow_release(void)
         *(int32_t *)(a + AR_LIFE) = 40 + (int)(10 * forca);
         *(int32_t *)(a + AR_E) = G_I32(G_PE) + 64;      // na altura do peito
         *(int32_t *)(a + AR_DANO) = 4 + (int)(3 * forca + 0.5f);
+        *(int32_t *)(a + 28) = 0;            // flecha (1 = magia: c/magia.c)
         G_I32(G_INV + 4 * IT_ARROW) -= 1;
         G_I32(G_ATKCD) = 30;
         calc_stats();

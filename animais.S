@@ -1289,8 +1289,8 @@ melee_attack:
     mov     w0, #1
     ldr     w9, [x28, #G_ATKCD]
     cbnz    w9, 9f
-    mov     w9, #30
-    str     w9, [x28, #G_ATKCD]
+    bl      F(weapon_cooldown)          // espera pela arma (c/magia.c)
+    str     w0, [x28, #G_ATKCD]
     ldr     w9, [x28, #G_HAND]          // dano pelo que esta na mao
     LA      x10, handdmg
     ldrb    w1, [x10, x9]
@@ -1424,8 +1424,8 @@ arrows_update:
     ldr     w1, [x19, #24]              // dano da flecha (c/arco.c; 0 = 4)
     cbnz    w1, 21f
     mov     w1, #4
-21: mov     w2, #1                      // (com a Destreza e o acerto:
-                                        // c/combate.c)
+21: ldr     w2, [x19, #28]              // 1 flecha, 2 magia (c/magia.c)
+    add     w2, w2, #1                  // (acerto e dano: c/combate.c)
     bl      F(player_hit)
     b       4f
 3:  add     x21, x21, #32
@@ -1456,6 +1456,8 @@ arrows_draw:
     mov     w20, #0
 1:  ldr     w9, [x19, #AR_LIFE]
     cbz     w9, 8f
+    ldr     w9, [x19, #28]              // magia: desenhada em C (c/magia.c)
+    cbnz    w9, 8f
     ldr     s0, [x19, #AN_U]            // ponta
     ldr     s1, [x19, #AN_V]
     ldr     w0, [x19, #AR_E]

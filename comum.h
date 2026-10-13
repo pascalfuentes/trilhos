@@ -337,7 +337,8 @@
 .equ IT_ARMOR,   35          // armadura de ferro
 .equ IT_LAMP,    36          // lampiao (construcao)
 .equ IT_ROAD,    37          // estrada (construcao, arrasta como a cerca)
-.equ NITEMS,     38
+.equ IT_STAFF,   38          // cajado (magia: c/magia.c)
+.equ NITEMS,     39
 .equ MAXITEMS,   48          // vagas na mochila e em cada bau
 .equ CHESTSHIFT, 8           // cada bau: 48 contadores (256 bytes)
 .equ IRONDUR,    120         // usos de uma ferramenta de ferro
@@ -415,7 +416,7 @@
 .equ MAXALIVE,   10          // no maximo vivos ao mesmo tempo
 .equ MAXARROW,   16
 .equ HB_X,       228         // barra "na mao" (7 quadrados) embaixo, ao lado da janela do personagem
-.equ NHOTBAR,    8
+.equ NHOTBAR,    9
 .equ HB_Y,       306
 
 .equ TOOLDUR,    40          // usos de um machado ou picareta
@@ -425,7 +426,7 @@
 .equ FIREMAX,    43200       // no maximo 12 min
 .equ MAXCHEST,   64          // cada bau: 32 contadores (128 bytes)
 .equ MAXSHELTER, 32
-.equ NRECIPES,   29
+.equ NRECIPES,   30
 
 // interface (coordenadas do espaco de texto 640 x 360)
 .equ BTN_Y,      16

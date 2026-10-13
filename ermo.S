@@ -481,6 +481,7 @@ shot_mode:
     bl      F(combat_selftest)          // acerto e dano (c/combate.c)
     bl      F(numbers_shot)             // foto dos numeros de dano (c/numeros.c)
     bl      F(death_selftest)           // morrer custa 1 nivel (c/morte.c)
+    bl      F(magic_selftest)           // cajado e espera por arma (c/magia.c)
     mov     w9, #165                    // e a luz de subir de nivel (quadro 4)
     str     w9, [x28, #G_LVLT]
     mov     w9, #1                      // janela C com pontos para gastar

@@ -5,7 +5,7 @@
 
 CC ?= cc
 UNAME := $(shell uname)
-CSRCS := c/inimigos.c c/nivel.c c/movimento.c c/alvo.c c/teclas.c c/combate.c c/numeros.c c/tempo.c c/morte.c c/arco.c
+CSRCS := c/inimigos.c c/nivel.c c/movimento.c c/alvo.c c/teclas.c c/combate.c c/numeros.c c/tempo.c c/morte.c c/arco.c c/magia.c
 CFLAGS ?= -O2
 CFLAGS += -std=c11 -Wall -ffixed-x28   # x28 aponta para o estado G (assembly)
 SRCS := ermo.S sobrevivencia.S clima.S animais.S cercas.S pesca.S plantacao.S ferro.S desafio.S salvar.S personagens.S heroi.S pilhas.S nivel.S estruturas.S pixel.S construcoes.S estradas.S
