@@ -26,6 +26,9 @@
 //    um campeao (+2 niveis, vida x1,5, anel azul) ou um chefe (+4 a +5
 //    niveis, vida x2, anel dourado, nome proprio); o urso, sozinho, tambem
 //    pode ser campeao ou chefe. A barra do topo usa a placa de cada um.
+//  - XP (etapa 2.3): o nivel do bicho (metade nos pacificos), x2 o
+//    campeao e x4 o chefe; acima do seu nivel +10% por nivel (ate +50%),
+//    5-6 abaixo 50%, 7-9 abaixo 25%, 10 ou mais abaixo 10% (minimo 1).
 // =====================================================================
 
 #include "comum.h"
@@ -624,6 +627,49 @@ region_level:
     csel    w0, w9, w0, gt
     ret
 
+// an_xp(w0 = nivel, w1 = posto, w2 = perigoso) -> w0 = XP   folha
+    .globl an_xp
+an_xp:
+    mov     w9, w0                      // base: o nivel
+    cbnz    w2, 1f
+    add     w9, w9, #1                  // pacifico: metade
+    lsr     w9, w9, #1
+1:  cmp     w1, #1                      // campeao x2, chefe x4
+    b.ne    2f
+    lsl     w9, w9, #1
+2:  cmp     w1, #2
+    b.ne    3f
+    lsl     w9, w9, #2
+3:  ldr     w10, [x28, #G_LEVEL]        // diferenca de nivel
+    sub     w10, w0, w10
+    mov     w11, #100
+    cmp     w10, #0
+    b.le    4f
+    mov     w12, #10                    // acima: +10% por nivel, ate +50%
+    mul     w12, w10, w12
+    cmp     w12, #50
+    mov     w13, #50
+    csel    w12, w13, w12, gt
+    add     w11, w11, w12
+    b       6f
+4:  cmn     w10, #5                     // abaixo
+    b.gt    6f
+    mov     w11, #50
+    cmn     w10, #7
+    b.gt    6f
+    mov     w11, #25
+    cmn     w10, #10
+    b.gt    6f
+    mov     w11, #10
+6:  mul     w9, w9, w11
+    add     w9, w9, #50                 // arredonda
+    mov     w10, #100
+    udiv    w0, w9, w10
+    cmp     w0, #1
+    mov     w9, #1
+    csel    w0, w9, w0, lt
+    ret
+
 // an_maxhp(x0 = animal) -> w0 = vida maxima: base x (4 + nivel) / 5   folha
     .globl an_maxhp
 an_maxhp:
@@ -789,6 +835,37 @@ an_selftest:
     add     w19, w19, #1
     cmp     w19, #3
     b.lt    1b
+    mov     x0, x21                     // XP: voce no nivel 1 e no 10
+    LA      x1, s_ant5
+    bl      strcat_cur
+    mov     x21, x0
+    ldr     w9, [x28, #G_LEVEL]
+    str     w9, [sp, #40]
+    mov     w9, #1
+    str     w9, [x28, #G_LEVEL]
+    mov     w19, #0
+3:  LA      x9, xptests                 // nivel, posto, perigoso, seu nivel
+    add     x9, x9, x19, lsl #2
+    ldrb    w0, [x9]
+    ldrb    w1, [x9, #1]
+    ldrb    w2, [x9, #2]
+    ldrb    w10, [x9, #3]
+    str     w10, [x28, #G_LEVEL]
+    bl      an_xp
+    mov     w1, w0
+    mov     x0, x21
+    bl      numcat
+    mov     w9, #47
+    strb    w9, [x0], #1
+    strb    wzr, [x0]
+    mov     x21, x0
+    add     w19, w19, #1
+    cmp     w19, #6
+    b.lt    3b
+    sub     x21, x21, #1
+    strb    wzr, [x21]
+    ldr     w9, [sp, #40]
+    str     w9, [x28, #G_LEVEL]
 9:  mov     x0, x21
     ldr     x21, [sp, #32]
     ldp     x19, x20, [sp, #16]
@@ -871,8 +948,12 @@ animal_hit:
     bl      strcat_cur
     LA      x0, msgbuf
     bl      set_msg
-    LA      x9, animxp                  // XP (nivel.S): por enquanto, pelo bicho
-    ldrb    w0, [x9, x20]
+    ldrb    w0, [x19, #AN_LVL]          // XP pelo nivel (etapa 2.3)
+    ldrb    w1, [x19, #AN_RANK]
+    LA      x9, atypes
+    add     x9, x9, x20, lsl #4
+    ldrb    w2, [x9, #AT_HOST]
+    bl      an_xp
     bl      xp_gain
 9:  ldp     x21, x22, [sp, #32]
     ldp     x19, x20, [sp, #16]
@@ -1566,8 +1647,6 @@ adirtab:
     .hword -64, 0,  -59, -24, -45, -45, -24, -59
     .hword 0, -64,   24, -59,  45, -45,  59, -24
 
-// XP de abater cada bicho (coelho, cervo, cabra, lobo, urso, caranguejo)
-animxp:     .byte 1, 1, 1, 2, 3, 1
     .p2align 3
 killmsg:
     .quad 0, 0, 0, m_wolf, m_bear, 0
@@ -1617,6 +1696,9 @@ bossnames:  .asciz "Lebre Branca"
     .space 1
     .p2align 2
 grpofs:     .float 1.2, 0.4, -0.5, 1.1, 0.6, -1.2
+s_ant5:     .asciz " | XP (lobo 1, lobo 6, campeao 3, chefe 8, cervo 2 / voce 1; lobo 3 / voce 10)="
+xptests:    .byte 1, 0, 1, 1,   6, 0, 1, 1,   3, 1, 1, 1,   8, 2, 1, 1
+            .byte 2, 0, 0, 1,   3, 0, 1, 10
 s_anv:      .asciz " Nv "
 s_avida:    .asciz " (vida "
 s_danger:   .asciz " - perigoso!"

@@ -211,7 +211,7 @@ Os animais aparecem longe da vista, cada um no seu terreno, e somem quando ficam
 
 **Nível e experiência**
 
-- Você começa no **nível 1** e ganha **XP** abatendo bichos (por enquanto: coelho, cervo, cabra e caranguejo 1, lobo 2, urso 3; na fase 2 o XP passa a ser o nível do inimigo).
+- Você começa no **nível 1** e ganha **XP** abatendo bichos. O XP é o **nível do bicho** (metade nos pacíficos), ×2 no campeão e ×4 no chefe. Bicho acima do seu nível dá +10% por nível (até +50%); bem abaixo dá menos: 5 a 6 níveis abaixo, 50%; 7 a 9, 25%; 10 ou mais, 10% (sempre pelo menos 1).
 - Para subir do nível N para o N+1 são precisos round(1,5^(N−1)) de XP: 1, 2, 2, 3, 5, 8, 11, 17, 26, 38… (nível 20: 2.217; nível 40: 7.371.555). Não tem nível máximo; o XP é guardado em 64 bits.
 - O painel mostra **Nv** e a barra roxa de XP (com "atual/precisa"). Ao subir aparece "Você subiu para o nível N!" e o nível pisca em dourado.
 - **Janela do personagem (C):** a desenhada pelo designer (pedido 1.0): retrato do herói com o equipamento, nível, barra de XP, os 4 atributos com ícone e botão **+** (acende com o mouse em cima, afunda ao apertar, fica apagado sem pontos), os pontos livres, a vida e a carga. As **skills** ficam num painel na direita (no lugar da mochila: com a mochila aberta, ele some).
@@ -445,3 +445,4 @@ O tempo do jogo anda por quadro: se a máquina virtual desenhar menos de 60 quad
 - [x] RPG, fase 2.8 e 2.9 (parte 1): sombras; lobo e urso animados do designer
 - [x] RPG, fase 2.4: barra do inimigo no topo
 - [x] RPG, fase 2.5: grupos, campeões e chefes
+- [x] RPG, fase 2.3: XP pelo nível do bicho
