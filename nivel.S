@@ -2,8 +2,8 @@
 //  nivel.S - nivel e experiencia (RPG, fase 1)
 //
 //  - Comeca no nivel 1. Para passar do nivel N para o N+1 sao precisos
-//    round(1,5^(N-1)) pontos de XP: 1, 2, 2, 3, 5, 8, 11, 17, 26, 38...
-//    Sem nivel maximo; XP e a conta guardados em 64 bits.
+//    round(10 x 1,25^(N-1)) pontos de XP: 10, 13, 16, 20, 24, 31, 38...
+//    (xp_need, em C: c/nivel.c). Sem nivel maximo; XP em 64 bits.
 //  - Por enquanto o XP vem de abater bichos (animais.S): coelho, cervo,
 //    cabra e caranguejo 1, lobo 2, urso 3. Na fase 2 o XP passa a ser o
 //    nivel do inimigo.
@@ -32,20 +32,7 @@
     .text
     .p2align 2
 
-// xp_need(w0 = nivel) -> x0 = XP para passar desse nivel ao proximo
-//   round(1,5^(nivel-1))   folha
-    .globl xp_need
-xp_need:
-    fmov    d0, #1.0
-    fmov    d1, #1.5
-    subs    w9, w0, #1
-    b.le    2f
-1:  fmul    d0, d0, d1
-    subs    w9, w9, #1
-    b.ne    1b
-2:  frinta  d0, d0
-    fcvtzu  x0, d0
-    ret
+// xp_need: em C (c/nivel.c), curva 10 x 1,25^(nivel-1)
 
 // xp_reset: nivel 1, sem XP, atributos em 10
     .globl xp_reset
@@ -61,7 +48,7 @@ xp_reset:
     mov     w9, #1
     str     w9, [x28, #G_LEVEL]
     str     xzr, [x28, #G_XP]
-    mov     x9, #1
+    mov     x9, #10                     // xp_need(1) (c/nivel.c)
     str     x9, [x28, #G_XPNEED]
     str     wzr, [x28, #G_LVLT]
     ret
@@ -114,7 +101,7 @@ xp_gain:
     ldr     w0, [x28, #G_LEVEL]
     add     w0, w0, #1
     str     w0, [x28, #G_LEVEL]
-    bl      xp_need
+    bl      F(xp_need)
     str     x0, [x28, #G_XPNEED]
     mov     w20, #1
     b       1b
@@ -648,7 +635,7 @@ xp_selftest:
     mov     w19, #1
 1:  mov     x20, x0
     mov     w0, w19
-    bl      xp_need
+    bl      F(xp_need)
     mov     x1, x0
     mov     x0, x20
     bl      numcat64
@@ -662,7 +649,7 @@ xp_selftest:
     bl      strcat_cur
     mov     x20, x0
     mov     w0, #20
-    bl      xp_need
+    bl      F(xp_need)
     mov     x1, x0
     mov     x0, x20
     bl      numcat64
@@ -670,7 +657,7 @@ xp_selftest:
     bl      strcat_cur
     mov     x20, x0
     mov     w0, #40
-    bl      xp_need
+    bl      F(xp_need)
     mov     x1, x0
     mov     x0, x20
     bl      numcat64

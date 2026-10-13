@@ -212,7 +212,7 @@ Os animais aparecem longe da vista, cada um no seu terreno, e somem quando ficam
 **Nível e experiência**
 
 - Você começa no **nível 1** e ganha **XP** abatendo bichos. O XP é o **nível do bicho** (metade nos pacíficos), ×2 no campeão e ×4 no chefe. Bicho acima do seu nível dá +10% por nível (até +50%); bem abaixo dá menos: 5 a 6 níveis abaixo, 50%; 7 a 9, 25%; 10 ou mais, 10% (sempre pelo menos 1).
-- Para subir do nível N para o N+1 são precisos round(1,5^(N−1)) de XP: 1, 2, 2, 3, 5, 8, 11, 17, 26, 38… (nível 20: 2.217; nível 40: 7.371.555). Não tem nível máximo; o XP é guardado em 64 bits.
+- Para subir do nível N para o N+1 são precisos round(10 × 1,25^(N−1)) de XP: 10, 13, 16, 20, 24, 31, 38, 48, 60, 75… (nível 20: 694; nível 40: 60.185). Não tem nível máximo; o XP é guardado em 64 bits.
 - O painel mostra **Nv** e a barra roxa de XP (com "atual/precisa"). Ao subir aparece "Você subiu para o nível N!" e o nível pisca em dourado.
 - **Janela do personagem (C):** a desenhada pelo designer (pedido 1.0): retrato do herói com o equipamento, nível, barra de XP, os 4 atributos com ícone e botão **+** (acende com o mouse em cima, afunda ao apertar, fica apagado sem pontos), os pontos livres, a vida e a carga. As **skills** ficam num painel na direita (no lugar da mochila: com a mochila aberta, ele some).
 - **Barra de XP da tela:** a do designer, sempre visível em cima da barra "na mão", enchendo de roxo. Ao subir de nível, uma **luz dourada** sobe em volta do herói (8 quadros, brilha de noite).
@@ -373,7 +373,7 @@ O mundo é difícil de propósito: comida é pouca e estraga, o inverno pesa e a
 | `personagens.S` | os desenhos do personagem (e dos moradores da vila antiga) em 8 direções e 3 poses (gerado por `arte/personagens.py`) |
 | `nivel.S` | nível e XP: a curva 1,5x, subir de nível, o teste |
 | `heroi.S` | desenha o herói camada por camada (corpo, cabelo, botas, peitoral, capacete, espada) pela direção e pelo quadro |
-| `c/` | **código em C** (o jogo está migrando de assembly para C aos poucos): `ermo.h` (base: o estado `G`, que o registrador x28 aponta, e `ASM(nome)` para chamar o assembly), `ermo_equ.h` (as constantes do assembly, geradas por `arte/equ2h.py`), `inimigos.c` (XP dos bichos). Compilado com `-ffixed-x28` para não mexer no x28; o assembly chama funções em C com `bl F(nome)`. |
+| `c/` | **código em C** (o jogo está migrando de assembly para C aos poucos): `ermo.h` (base: o estado `G`, que o registrador x28 aponta, e `ASM(nome)` para chamar o assembly), `ermo_equ.h` (as constantes do assembly, geradas por `arte/equ2h.py`), `inimigos.c` (XP dos bichos), `nivel.c` (a curva de XP). Compilado com `-ffixed-x28` para não mexer no x28; o assembly chama funções em C com `bl F(nome)`. |
 | (estilo 2) | `arte/pixel.py` entende `"densidade": 2` no json: cada quadro tem o dobro de pixels e vem com uma cópia pela metade; o jogo desenha a metade da escala (zoom par) ou a cópia (zoom ímpar), e o chão vira 64 × 32 (`TL_D` no `pixel.h`). `python3 arte/pixel.py --dobro ...` amplia a arte de hoje 2× para testar: o jogo sai igual. `ERMO_SEED=123 ./ermo` sempre gera o mesmo mundo. |
 | `pixel.S` | os desenhos em pixel art do designer: herói em camadas, lobo, árvore, pinheiro, pedra, tocha e penhasco e as imagens da interface da fase 1 (janela C, botão +, ícones, barras de XP) e o efeito de subir de nível; o lobo e o urso animados e as sombras. Gerado por `arte/pixel.py` a partir do `design/estilo/designer/ermo_estilo.json`, do `design/fase1/designer/ermo_fase1.json` e do `design/fase2/designer/ermo_fase2.json`; paleta em `pixpal.inc`, áreas da janela em `pixel.h` |
 | `pilhas.S` | pilhas de itens no chão: que item é, quanto cabe, comida que estraga no chão |
@@ -454,3 +454,4 @@ O tempo do jogo anda por quadro: se a máquina virtual desenhar menos de 60 quad
 - [x] Estilo 2, etapa 0.7 (motor): arte com o dobro de detalhe (densidade 2)
 - [ ] Estilo 2: trocar a arte quando o pedido 0.7 do designer voltar
 - [x] Migração para C, etapa 1: C e assembly no mesmo executável (primeira função: XP dos bichos)
+- [x] RPG, fase 1.8: curva de XP nova (10 no primeiro nível, ×1,25), em C

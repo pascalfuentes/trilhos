@@ -349,6 +349,7 @@ load_game:
     bl      ash_reset                   // as cinzas
     bl      xp_fix                      // salvo antes do nivel: nivel 1
     bl      animals_fix                 // salvo antes do nivel dos bichos
+    bl      F(xp_curve_fix)             // curva de XP nova (c/nivel.c)
     ldr     w0, [x28, #G_ZOOM]
     bl      set_zoom
     bl      follow_camera
