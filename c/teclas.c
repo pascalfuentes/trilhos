@@ -2,6 +2,7 @@
 //  teclas.c - teclas e ataque parado, como no Diablo (fase 3, etapa 3.4)
 //
 //  - R liga e desliga o correr (antes era segurar Shift).
+//  - [ e ] mudam a velocidade do jogo (c/tempo.c).
 //  - Shift + clique: ataca parado, sem andar ate o bicho nem coletar;
 //    segurando, continua golpeando ali mesmo (so acerta quem estiver ao
 //    alcance). Com o arco na mao, o Shift nao muda nada (ja atira parado).
@@ -23,8 +24,12 @@ static int shift_apertado(void)
 }
 
 // tecla apertada -> 1 se tratou aqui (o assembly segue com as outras)
+extern int speed_key(int scancode);
+
 int key_c(int scancode)
 {
+    if (speed_key(scancode))            // [ e ]: velocidade (c/tempo.c)
+        return 1;
     if (scancode == SC_R) {
         G_I32(G_RUNTOG) = !G_I32(G_RUNTOG);
         set_msg(G_I32(G_RUNTOG) ? "Correr: ligado (R)" : "Correr: desligado (R)");

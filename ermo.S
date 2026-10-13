@@ -147,8 +147,16 @@ F(main):
 
 main_loop:
     bl      handle_events
+    bl      F(frame_steps)              // passos a 60 por segundo (c/tempo.c)
+    mov     w19, w0
+1:  cbz     w19, 3f
     bl      update
-    bl      draw_all
+    ldr     w9, [x28, #G_FRAME]
+    add     w9, w9, #1
+    str     w9, [x28, #G_FRAME]
+    sub     w19, w19, #1
+    b       1b
+3:  bl      draw_all
     ldr     w9, [x28, #G_WANTSHOT]
     cbz     w9, 2f
     str     wzr, [x28, #G_WANTSHOT]
@@ -156,9 +164,6 @@ main_loop:
     bl      save_bmp
 2:  ldr     x0, [x28, #G_REN]
     bl      F(SDL_RenderPresent)
-    ldr     w9, [x28, #G_FRAME]
-    add     w9, w9, #1
-    str     w9, [x28, #G_FRAME]
     ldr     w9, [x28, #G_RUNNING]
     cbnz    w9, main_loop
 

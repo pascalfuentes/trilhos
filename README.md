@@ -23,6 +23,7 @@ Você chega sozinho num mundo gerado aleatoriamente: terreno contínuo, mar, pra
 | F9 | carrega o jogo salvo (também na tela de título e depois de morrer) |
 | WASD / setas | andar |
 | R | liga e desliga o correr |
+| [ e ] | velocidade do jogo, de 10% em 10% (50% a 150%) |
 | Shift + clique | ataca parado |
 | segurar o botão esquerdo | coletar a árvore, pedra ou arbusto sob o mouse (até 3 células de distância) |
 | E | comer (o que encher mais primeiro: carne assada, pão, frutas assadas, peixe assado...) |
@@ -383,7 +384,7 @@ O mundo é difícil de propósito: comida é pouca e estraga, o inverno pesa e a
 | `personagens.S` | os desenhos do personagem (e dos moradores da vila antiga) em 8 direções e 3 poses (gerado por `arte/personagens.py`) |
 | `nivel.S` | nível e XP: a curva 1,5x, subir de nível, o teste |
 | `heroi.S` | desenha o herói camada por camada (corpo, cabelo, botas, peitoral, capacete, espada) pela direção e pelo quadro |
-| `c/` | **código em C** (o jogo está migrando de assembly para C aos poucos): `ermo.h` (base: o estado `G`, que o registrador x28 aponta, e `ASM(nome)` para chamar o assembly), `ermo_equ.h` (as constantes do assembly, geradas por `arte/equ2h.py`), `inimigos.c` (XP dos bichos), `nivel.c` (a curva de XP), `movimento.c` (clicar para andar, ir até o inimigo, segurar para atacar), `alvo.c` (o bicho sob o mouse pelo desenho), `teclas.c` (R corre, Shift ataca parado), `combate.c` (acerto e dano), `numeros.c` (números de dano subindo). Compilado com `-ffixed-x28` para não mexer no x28; o assembly chama funções em C com `bl F(nome)`. |
+| `c/` | **código em C** (o jogo está migrando de assembly para C aos poucos): `ermo.h` (base: o estado `G`, que o registrador x28 aponta, e `ASM(nome)` para chamar o assembly), `ermo_equ.h` (as constantes do assembly, geradas por `arte/equ2h.py`), `inimigos.c` (XP dos bichos), `nivel.c` (a curva de XP), `movimento.c` (clicar para andar, ir até o inimigo, segurar para atacar), `alvo.c` (o bicho sob o mouse pelo desenho), `teclas.c` (R corre, Shift ataca parado), `combate.c` (acerto e dano), `numeros.c` (números de dano subindo), `tempo.c` (60 passos por segundo em qualquer tela; velocidade no [ e ]). Compilado com `-ffixed-x28` para não mexer no x28; o assembly chama funções em C com `bl F(nome)`. |
 | (estilo 2) | `arte/pixel.py` entende `"densidade": 2` no json: cada quadro tem o dobro de pixels e vem com uma cópia pela metade; o jogo desenha a metade da escala (zoom par) ou a cópia (zoom ímpar), e o chão vira 64 × 32 (`TL_D` no `pixel.h`). `python3 arte/pixel.py --dobro ...` amplia a arte de hoje 2× para testar: o jogo sai igual. `ERMO_SEED=123 ./ermo` sempre gera o mesmo mundo. |
 | `pixel.S` | os desenhos em pixel art do designer: herói em camadas, lobo, árvore, pinheiro, pedra, tocha e penhasco e as imagens da interface da fase 1 (janela C, botão +, ícones, barras de XP) e o efeito de subir de nível; o lobo e o urso animados e as sombras. Gerado por `arte/pixel.py` a partir do `design/estilo/designer/ermo_estilo.json`, do `design/fase1/designer/ermo_fase1.json` e do `design/fase2/designer/ermo_fase2.json`; paleta em `pixpal.inc`, áreas da janela em `pixel.h` |
 | `pilhas.S` | pilhas de itens no chão: que item é, quanto cabe, comida que estraga no chão |
@@ -465,4 +466,5 @@ O tempo do jogo anda por quadro: se a máquina virtual desenhar menos de 60 quad
 - [ ] Estilo 2: trocar a arte quando o pedido 0.7 do designer voltar
 - [x] Migração para C, etapa 1: C e assembly no mesmo executável (primeira função: XP dos bichos)
 - [x] RPG, fase 1.8: curva de XP nova (10 no primeiro nível, ×1,25), em C
+- [x] O jogo anda a 60 passos por segundo em qualquer tela (antes, numa tela de 120 Hz, tudo andava 2× mais rápido); [ e ] mudam a velocidade
 - [x] RPG, fase 3.1 a 3.6: clique esquerdo anda até o ponto; clique no inimigo vai até ele e ataca; segurar continua atacando; zona de clique pelo desenho; Shift ataca parado e R corre; acerto e dano pelos atributos; números de dano (em C)
