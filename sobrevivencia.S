@@ -1670,12 +1670,14 @@ surv_key:
     LA      x0, m_wokeup
     bl      set_msg
     b       9f
-0:  str     w0, [sp, #-16]!
+0:  ldr     w9, [x28, #G_NOPEOPLE]      // RPG: sem a vila, P e Z nao
+    cbnz    w9, 18f                     // fazem nada
+    str     w0, [sp, #-16]!
     bl      people_key                  // P: pessoas, Z: zonas
     mov     w9, w0
     ldr     w0, [sp], #16
     cbnz    w9, 9f
-    cmp     w0, #8                      // E
+18: cmp     w0, #8                      // E
     b.ne    1f
     bl      eat_best
     b       9f
@@ -8057,7 +8059,7 @@ s_paren2:       .asciz ")"
 s_far:          .asciz " - longe"
 s_fire:         .asciz "Fogueira: "
 s_firehint:     .asciz " s (botao direito: +lenha)"
-s_hint:         .asciz "WASD andar  E comer  F fogo  Tab fabricar  I/C/P janelas  Z zonas  F5 salva"
+s_hint:         .asciz "WASD andar  E comer  F fogo  Tab fabricar  I mochila  C personagem  F5 salva"
 s_dead1:        .asciz "FIM DE JOGO"
 s_dead2:        .asciz "Voce sobreviveu "
 s_dead3:        .asciz " noite(s)"
