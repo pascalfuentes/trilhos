@@ -22,6 +22,10 @@
 //    andar, atacar (logo depois da mordida), golpe (ferido) e morrer. Ao
 //    morrer viram um corpo (corpses) que cai e fica 6 s no chao. Os dois
 //    tem sombra (pixshadow).
+//  - Grupos (etapa 2.5): lobos vem em grupos de 2 a 4. As vezes o lider e
+//    um campeao (+2 niveis, vida x1,5, anel azul) ou um chefe (+4 a +5
+//    niveis, vida x2, anel dourado, nome proprio); o urso, sozinho, tambem
+//    pode ser campeao ou chefe. A barra do topo usa a placa de cada um.
 // =====================================================================
 
 #include "comum.h"
@@ -37,6 +41,7 @@
 .equ AN_TYPE,  16
 .equ AN_HP,    28                      // vida (u16)
 .equ AN_LVL,   27                      // nivel (1..255)
+.equ AN_RANK,  30                      // 0 normal, 1 campeao, 2 chefe
 .equ AN_HURT,  19
 .equ AN_TIMER, 20
 .equ AN_CD,    22
@@ -169,6 +174,7 @@ animal_spawn:
     strh    w11, [x9, #AN_HP]
     mov     w11, #1
     strb    w11, [x9, #AN_LVL]
+    strb    wzr, [x9, #AN_RANK]
     strb    wzr, [x9, #AN_HURT]
     strb    wzr, [x9, #18]              // grupo (desafio.S)
     strb    wzr, [x9, #AN_DIR]
@@ -273,7 +279,60 @@ try_spawn:
     add     w1, w1, w9
     mov     w0, w19
     bl      an_setlevel
+    str     w19, [sp, #56]
+    cmp     w20, #A_BEAR                // urso: 1/8 chefe, 1/8 campeao
+    b.ne    5f
+    bl      rng
+    and     w9, w0, #7
+    cmp     w9, #2
+    b.hs    8f
+    mov     w1, #2
+    sub     w1, w1, w9
     mov     w0, w19
+    bl      an_setrank
+    b       8f
+5:  cmp     w20, #A_WOLF                // lobo: grupo de 2 a 4
+    b.ne    8f
+    bl      rng
+    and     w9, w0, #3
+    cmp     w9, #3
+    csel    w9, wzr, w9, eq
+    add     w9, w9, #1
+    str     w9, [sp, #52]
+6:  ldr     w9, [sp, #52]
+    cbz     w9, 7f
+    sub     w9, w9, #1
+    str     w9, [sp, #52]
+    LA      x10, grpofs                 // em volta do primeiro
+    add     x10, x10, x9, lsl #3
+    ldr     s0, [x10]
+    ldr     s1, [x10, #4]
+    fadd    s0, s0, s8
+    fadd    s1, s1, s9
+    mov     w0, #A_WOLF
+    bl      animal_spawn
+    tbnz    w0, #31, 7f
+    mov     w19, w0
+    bl      rng
+    and     w9, w0, #1
+    ldr     w1, [sp, #48]
+    add     w1, w1, w9
+    mov     w0, w19
+    bl      an_setlevel
+    b       6b
+7:  bl      rng                         // o lider: 1/12 chefe, 2/12 campeao
+    mov     w9, #12
+    udiv    w10, w0, w9
+    msub    w9, w10, w9, w0
+    cmp     w9, #3
+    b.hs    8f
+    mov     w1, #1
+    cmp     w9, #0
+    b.ne    71f
+    mov     w1, #2
+71: ldr     w0, [sp, #56]
+    bl      an_setrank
+8:  ldr     w0, [sp, #56]
     cmp     w20, #A_DEER                // cervo: vem em manada
     b.ne    9f
     tbnz    w0, #31, 9f
@@ -381,12 +440,9 @@ au_loop:
     b.ge    4f
     fmov    s2, #0.5
     fmul    s12, s12, s2
-4:  ldrb    w10, [x22, #AT_HP]          // ferido: furioso
-    ldrb    w9, [x20, #AN_LVL]
-    add     w9, w9, #4
-    mul     w10, w10, w9
-    mov     w9, #5
-    udiv    w10, w10, w9
+4:  mov     x0, x20                     // ferido: furioso
+    bl      an_maxhp                    // (usa so x0, x9, x10)
+    mov     w10, w0
     ldrh    w9, [x20, #AN_HP]
     cmp     w9, w10
     b.ge    5f
@@ -578,7 +634,13 @@ an_maxhp:
     ldrb    w10, [x0, #AN_LVL]
     add     w10, w10, #4
     mul     w9, w9, w10
-    mov     w10, #5
+    ldrb    w10, [x0, #AN_RANK]         // campeao x1,5, chefe x2
+    cmp     w10, #2
+    b.ls    1f
+    mov     w10, #0
+1:  add     w10, w10, #2
+    mul     w9, w9, w10
+    mov     w10, #10
     udiv    w0, w9, w10
     ret
 
@@ -602,6 +664,35 @@ an_setlevel:
     ldp     x29, x30, [sp], #16
     ret
 
+// an_setrank(w0 = animal, w1 = 1 campeao / 2 chefe): sobe o nivel (+2,
+// ou +4 a +5 o chefe) e enche a vida
+    .globl an_setrank
+an_setrank:
+    stp     x29, x30, [sp, #-32]!
+    mov     x29, sp
+    stp     x19, x20, [sp, #16]
+    mov     w19, w0
+    mov     w20, w1
+    LA      x9, animals
+    add     x9, x9, x19, lsl #5
+    strb    w20, [x9, #AN_RANK]
+    ldrb    w1, [x9, #AN_LVL]
+    add     w1, w1, #2
+    cmp     w20, #2
+    b.ne    1f
+    bl      rng
+    and     w9, w0, #1
+    LA      x10, animals
+    add     x10, x10, x19, lsl #5
+    ldrb    w1, [x10, #AN_LVL]
+    add     w1, w1, #4
+    add     w1, w1, w9
+1:  mov     w0, w19
+    bl      an_setlevel
+    ldp     x19, x20, [sp, #16]
+    ldp     x29, x30, [sp], #32
+    ret
+
 // animals_fix: save de antes do nivel: nivel 1, vida do byte antigo
     .globl animals_fix
 animals_fix:
@@ -610,8 +701,13 @@ animals_fix:
 1:  ldrb    w11, [x9, #AN_TYPE]
     cmp     w11, #255
     b.eq    2f
-    ldrb    w11, [x9, #AN_LVL]
+    ldrb    w11, [x9, #AN_RANK]
+    cmp     w11, #2
+    b.ls    4f
+    strb    wzr, [x9, #AN_RANK]
+4:  ldrb    w11, [x9, #AN_LVL]
     cbnz    w11, 2f
+    strb    wzr, [x9, #AN_RANK]
     mov     w11, #1
     strb    w11, [x9, #AN_LVL]
     ldrb    w11, [x9, #17]
@@ -878,11 +974,21 @@ an_bar:
     ldrb    w9, [x19, #AN_TYPE]
     cmp     w9, #255
     b.eq    9f
+    ldrb    w10, [x19, #AN_RANK]
     LA      x0, barbuf
     LA      x1, animnames
     add     x1, x1, x9, lsl #4
+    cmp     w10, #2                     // chefe: nome proprio
+    b.ne    1f
+    LA      x1, bossnames
+    add     x1, x1, x9, lsl #4
+1:  bl      strcat_cur
+    ldrb    w10, [x19, #AN_RANK]
+    cmp     w10, #1
+    b.ne    2f
+    LA      x1, s_champ
     bl      strcat_cur
-    LA      x1, s_barnv
+2:  LA      x1, s_barnv
     bl      strcat_cur
     ldrb    w1, [x19, #AN_LVL]
     bl      numcat
@@ -891,7 +997,10 @@ an_bar:
     mov     w2, w0
     ldrh    w1, [x19, #AN_HP]
     LA      x0, barbuf
-    mov     w3, #0                      // campeao e chefe: etapa 2.5
+    ldrb    w3, [x19, #AN_RANK]         // placa normal, campeao ou chefe
+    cmp     w3, #2
+    mov     w9, #0
+    csel    w3, w9, w3, hi
     bl      enemy_bar
 9:  ldp     x19, x20, [sp, #16]
     ldp     x29, x30, [sp], #32
@@ -1194,7 +1303,32 @@ animals_draw:
     bl      char_dir                    // (heroi.S; so usa w0, w9, s0-s7)
     strb    w0, [x19, #AN_DIR]
     mov     w22, w0
-    mov     w0, w21
+    ldrb    w9, [x19, #AN_RANK]         // campeao / chefe: anel no chao
+    cbz     w9, 55f
+    cmp     w9, #2
+    b.hi    55f
+    sub     w9, w9, #1
+    lsl     w9, w9, #3
+    cmp     w21, #A_BEAR
+    b.ne    54f
+    add     w9, w9, #4
+54: ldr     w10, [x28, #G_FRAME]
+    lsr     w10, w10, #3
+    and     w10, w10, #3
+    add     w9, w9, w10
+    LA      x10, pixmark
+    ldr     x0, [x10, x9, lsl #3]
+    mov     w1, w24
+    mov     w2, w25
+    ldr     w3, [x28, #G_Z256]
+    lsr     w3, w3, #10
+    cmp     w3, #1
+    mov     w9, #1
+    csel    w3, w9, w3, lt
+    mov     w4, w26
+    mov     w5, #0
+    bl      blit
+55: mov     w0, w21
     mov     w1, w24
     mov     w2, w25
     mov     w3, w26
@@ -1467,6 +1601,22 @@ s_ant4:     .asciz " | nivel da regiao (0/64/200 celulas)="
     .p2align 2
 regdist:    .word 0, 64, 200
 s_barnv:    .asciz " - Nv "
+s_champ:    .asciz " campeao"
+    .p2align 4
+bossnames:  .asciz "Lebre Branca"
+    .space 3
+    .asciz "Galhada Antiga"
+    .space 1
+    .asciz "Chifre Torto"
+    .space 3
+    .asciz "Presa Cinzenta"
+    .space 1
+    .asciz "Garra Velha"
+    .space 4
+    .asciz "Pinca de Ferro"
+    .space 1
+    .p2align 2
+grpofs:     .float 1.2, 0.4, -0.5, 1.1, 0.6, -1.2
 s_anv:      .asciz " Nv "
 s_avida:    .asciz " (vida "
 s_danger:   .asciz " - perigoso!"

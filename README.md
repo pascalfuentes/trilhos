@@ -226,6 +226,7 @@ Os animais aparecem longe da vista, cada um no seu terreno, e somem quando ficam
 - **Defesa:** a cada 4 níveis o bicho tira 1 ponto de cada golpe seu (o golpe mínimo é 1).
 - **Nível pela região:** o nível de um bicho é 1 + 1 a cada 16 células de distância de onde a partida começou, mais 0 a 2 de sorte. Perto do começo: 1 a 3; a 64 células: 5 a 7; a 200 células: 13 a 15. (Quando houver cidades, a conta passa a ser a partir da primeira cidade.)
 
+- **Grupos, campeões e chefes:** lobos vêm em grupos de 2 a 4. Às vezes o líder é um **campeão** (+2 níveis, vida ×1,5, anel azul no chão e placa azul) ou um **chefe** (+4 a +5 níveis, vida ×2, anel dourado, placa dourada e nome próprio, como "Presa Cinzenta"). O urso anda sozinho, mas também pode ser campeão ou chefe ("Garra Velha").
 - **Lobo e urso do designer (pedido 2.0):** animados, com parado, andar, atacar logo depois da mordida, levar golpe quando ferido e morrer. O corpo cai e fica 6 s no chão.
 - **Sombra:** o herói, o lobo e o urso têm uma sombra oval no chão, que escurece o que está embaixo.
 
@@ -443,3 +444,4 @@ O tempo do jogo anda por quadro: se a máquina virtual desenhar menos de 60 quad
 - [x] RPG, fase 2.2: nível pela região
 - [x] RPG, fase 2.8 e 2.9 (parte 1): sombras; lobo e urso animados do designer
 - [x] RPG, fase 2.4: barra do inimigo no topo
+- [x] RPG, fase 2.5: grupos, campeões e chefes

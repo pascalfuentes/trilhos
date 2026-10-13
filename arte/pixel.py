@@ -221,6 +221,23 @@ else:
     for i in range(0, len(lobo), 8):
         w('    .quad ' + ', '.join(lobo[i:i + 8]))
 
+# ---- marcas de campeao e chefe (pedido 2.0): aneis no chao, 4 quadros;
+#      pixmark: (posto - 1) * 8 + grande * 4 + quadro
+if f2:
+    ml = []
+    for k in ('marca_campeao', 'marca_chefe'):
+        for t in ('pequena', 'grande'):
+            m = f2[k][t]
+            mw, mh = m['quadro']
+            max_, may = m['ancora']
+            for q in m['quadros']:
+                ml.append(emit(check(q, mw, mh, k), max_, may))
+    w('    .p2align 3')
+    w('    .globl pixmark')
+    w('pixmark:')
+    for i in range(0, len(ml), 8):
+        w('    .quad ' + ', '.join(ml[i:i + 8]))
+
 # ---- sombras: ovais no chao (indice 254), heroi, lobo e urso ----
 def oval(wd, ht):
     rows = []

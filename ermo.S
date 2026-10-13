@@ -384,9 +384,18 @@ shot_mode:
     bl      save_bmp
     ldr     x0, [x28, #G_REN]
     bl      F(SDL_RenderPresent)
-    mov     w0, #A_BEAR                 // o mouse em cima do urso: a barra
+    mov     w0, #A_WOLF                 // um lobo campeao (anel azul)
     bl      an_first
+    tbnz    w0, #31, 1f
+    mov     w1, #1
+    bl      an_setrank
+1:  mov     w0, #A_BEAR                 // o urso chefe e o mouse em cima:
+    bl      an_first                    // a placa dourada no topo
     str     w0, [x28, #G_HOVANIM]
+    tbnz    w0, #31, 2f
+    mov     w1, #2
+    bl      an_setrank
+2:
     bl      draw_all
     LA      x0, s_shot_bar
     bl      save_bmp
