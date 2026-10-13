@@ -3,7 +3,11 @@
 //
 //  - Clique esquerdo no chao (sem nada para coletar, atacar ou pescar
 //    ali, e sem enxada ou sementes na mao): o personagem anda ate o
-//    ponto. (Clicar num bicho longe e ir ate ele: etapa 3.2.) Segurando o botao, o destino
+//    ponto.
+//  - Clique num bicho longe (etapa 3.2): vai ate ele, seguindo se ele
+//    andar, e ao chegar a 1,6 celula da o golpe (melee_attack, ate 2
+//    celulas). Desiste se ele sumir ou se nao conseguir chegar perto.
+//    Com o arco ou a vara na mao, o clique atira/pesca de onde esta. Segurando o botao, o destino
 //    acompanha o mouse.
 //  - WASD continua funcionando e cancela o clique. Shift corre.
 //  - Para ao chegar (a 0,15 celula) ou se empacar uns 0,75 s (agua,
@@ -17,7 +21,15 @@
 #include "ermo.h"
 
 #define CHEGOU      0.15f
+#define ALCANCE     1.6f                // perto o bastante para o golpe
 #define EMPACOU     45                  // quadros sem chegar mais perto
+
+// bichos (animais.S): 32 bytes cada; u, v em float; tipo 255 = vaga
+extern uint8_t animals[] ASM(animals);
+#define AN_U     0
+#define AN_V     4
+#define AN_TYPE  16
+extern int melee_attack(int animal) ASM(melee_attack);
 
 static void alvo_do_mouse(void)
 {
@@ -35,6 +47,17 @@ void moveto_click(void)
     if (mao == IT_HOE || mao == IT_SEED)
         return;
     alvo_do_mouse();
+    G_I32(G_MTANIM) = -1;
+    G_I32(G_MOVETO) = 1;
+    G_F32(G_MTDIST) = 1e9f;
+}
+
+// clique num bicho fora do alcance: vai ate ele e ataca
+void moveto_enemy(int animal)
+{
+    if (animal < 0)
+        return;
+    G_I32(G_MTANIM) = animal;
     G_I32(G_MOVETO) = 1;
     G_F32(G_MTDIST) = 1e9f;
 }
@@ -49,13 +72,29 @@ int moveto_dir(void)
         G_I32(G_MOVETO) = 0;
         return 0;
     }
-    // segurando o botao no chao: o destino segue o mouse
-    if (G_I32(G_LMB) && G_I32(G_HOVOK) && G_I32(G_HOVOBJ) < 0)
-        alvo_do_mouse();
+    int alvo = G_I32(G_MTANIM);
+    if (alvo >= 0) {                    // indo atras de um bicho
+        uint8_t *a = animals + alvo * 32;
+        if (a[AN_TYPE] == 255) {        // sumiu ou morreu
+            G_I32(G_MOVETO) = 0;
+            G_I32(G_MTANIM) = -1;
+            return 0;
+        }
+        G_F32(G_MTU) = *(float *)(a + AN_U);
+        G_F32(G_MTV) = *(float *)(a + AN_V);
+    } else if (G_I32(G_LMB) && G_I32(G_HOVOK) && G_I32(G_HOVOBJ) < 0) {
+        alvo_do_mouse();                // segurando no chao: segue o mouse
+    }
 
     float du = G_F32(G_MTU) - G_F32(G_PU);
     float dv = G_F32(G_MTV) - G_F32(G_PV);
     float d = __builtin_sqrtf(du * du + dv * dv);
+    if (alvo >= 0 && d < ALCANCE) {     // chegou no bicho: golpe
+        G_I32(G_MOVETO) = 0;
+        G_I32(G_MTANIM) = -1;
+        melee_attack(alvo);
+        return 0;
+    }
     if (d < CHEGOU) {
         G_I32(G_MOVETO) = 0;
         return 0;
@@ -63,6 +102,7 @@ int moveto_dir(void)
     if (d >= G_F32(G_MTDIST) - 0.001f) {   // nao chegou mais perto
         if (++st > EMPACOU) {
             G_I32(G_MOVETO) = 0;
+            G_I32(G_MTANIM) = -1;
             return 0;
         }
     } else {
@@ -105,5 +145,33 @@ void moveto_selftest(void)
                      "movimento: clique 3 celulas a frente -> andou %.2f em u, %.2f em v, "
                      "em %d quadros (parou=%d)\n",
                      du, dv, quadros, G_I32(G_MOVETO) == 0);
+    if (write(1, buf, n) < 0) {}
+
+    // um cervo parado 5 celulas a frente: clica nele, vai e golpeia
+    extern int animal_spawn(int tipo, float u, float v) ASM(animal_spawn);
+    u0 = G_F32(G_PU);
+    v0 = G_F32(G_PV);
+    int c = animal_spawn(A_DEER, u0 + 5.0f, v0);
+    int golpe = 0;
+    quadros = 0;
+    if (c >= 0) {
+        uint8_t *a = animals + c * 32;
+        int vida0 = *(uint16_t *)(a + 28);
+        G_I32(G_ATKCD) = 0;
+        moveto_enemy(c);
+        while (G_I32(G_MOVETO) && quadros < 600) {
+            *(float *)(a + 8) = 0;      // fica parado (du, dv)
+            *(float *)(a + 12) = 0;
+            *(float *)(a + AN_U) = u0 + 5.0f;
+            *(float *)(a + AN_V) = v0;
+            surv_update();
+            quadros++;
+        }
+        golpe = a[AN_TYPE] == 255 || *(uint16_t *)(a + 28) < vida0;
+        a[AN_TYPE] = 255;               // some
+    }
+    n = snprintf(buf, sizeof buf,
+                 "movimento: clique num cervo a 5 celulas -> andou %.2f, golpeou=%d, em %d quadros\n",
+                 G_F32(G_PU) - u0, golpe, quadros);
     if (write(1, buf, n) < 0) {}
 }

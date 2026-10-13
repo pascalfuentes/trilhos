@@ -2529,6 +2529,9 @@ surv_mouse:
     tbnz    w0, #31, 72f
     bl      melee_attack
     cbnz    w0, sm_ret
+    ldr     w0, [x28, #G_HOVANIM]       // longe: vai ate ele (c/movimento.c)
+    bl      F(moveto_enemy)
+    b       sm_ret
 72: mov     w9, #1                      // senao: coletar
     str     w9, [x28, #G_LMB]
     ldr     w9, [x28, #G_HOVOBJ]        // chao vazio: anda ate la (C)

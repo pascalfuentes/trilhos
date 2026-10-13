@@ -182,6 +182,7 @@
 #define G_MTDU (940)
 #define G_MTDV (944)
 #define G_MTDIST (948)
+#define G_MTANIM (1172)
 #define G_NEARFURN (952)
 #define G_FULL (956)
 #define G_INV (960)

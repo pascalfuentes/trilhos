@@ -221,7 +221,7 @@ Os animais aparecem longe da vista, cada um no seu terreno, e somem quando ficam
 
 **Andar com o mouse (fase 3)**
 
-- **Clique esquerdo no chão** e o personagem anda até lá, como no Diablo; segurando o botão, ele segue o mouse. **WASD** continua funcionando e cancela o clique; **Shift** corre também andando pelo mouse. Ele para ao chegar ou se empacar (água, pedra, cerca). Clicar num bicho ou numa fogueira, ou com a enxada ou as sementes na mão, faz o que fazia antes.
+- **Clique esquerdo no chão** e o personagem anda até lá, como no Diablo; segurando o botão, ele segue o mouse. **WASD** continua funcionando e cancela o clique; **Shift** corre também andando pelo mouse. Ele para ao chegar ou se empacar (água, pedra, cerca). **Clique num bicho longe:** o personagem vai até ele (seguindo se ele andar) e dá o golpe ao chegar; desiste se o bicho sumir ou se não der para chegar. Com o **arco** ou a **vara** na mão, o clique atira ou pesca de onde você está. Clicar numa fogueira, ou no chão com a enxada ou as sementes na mão, faz o que fazia antes.
 
 **Inimigos com nível (fase 2)**
 
@@ -459,4 +459,4 @@ O tempo do jogo anda por quadro: se a máquina virtual desenhar menos de 60 quad
 - [ ] Estilo 2: trocar a arte quando o pedido 0.7 do designer voltar
 - [x] Migração para C, etapa 1: C e assembly no mesmo executável (primeira função: XP dos bichos)
 - [x] RPG, fase 1.8: curva de XP nova (10 no primeiro nível, ×1,25), em C
-- [x] RPG, fase 3.1: clique esquerdo anda até o ponto (em C)
+- [x] RPG, fase 3.1 e 3.2: clique esquerdo anda até o ponto; clique no inimigo vai até ele e ataca (em C)
