@@ -448,6 +448,7 @@ shot_mode:
     bl      F(SDL_RenderPresent)
     mov     w0, #2
     bl      desafio_selftest
+    bl      xp_selftest                 // nivel: a curva e subir de nivel
     bl      save_selftest               // salva, bagunca e carrega de volta
     bl      road_selftest               // estradas: voce arrasta e desfaz
 

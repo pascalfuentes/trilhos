@@ -347,6 +347,7 @@ load_game:
 2:  mov     x0, x19
     bl      F(fclose)
     bl      ash_reset                   // as cinzas
+    bl      xp_fix                      // salvo antes do nivel: nivel 1
     ldr     w0, [x28, #G_ZOOM]
     bl      set_zoom
     bl      follow_camera

@@ -421,6 +421,8 @@ sr_found:
     LA      x0, m_start
     bl      set_msg
     bl      iron_reset                  // lampioes, fornalha
+    bl      xp_reset                    // nivel 1 (nivel.S; depois de
+                                        // zerar o fim de G)
     ldp     d10, d11, [sp, #48]
     ldp     d8, d9, [sp, #32]
     ldp     x19, x20, [sp, #16]
@@ -806,6 +808,7 @@ surv_update:
     stp     x21, x22, [sp, #32]
     stp     d8, d9, [sp, #48]
     stp     d10, d11, [sp, #64]
+    bl      xp_tick                     // brilho de "subiu de nivel"
     ldr     w9, [x28, #G_MSGT]
     cbz     w9, 1f
     sub     w9, w9, #1
@@ -2365,7 +2368,15 @@ surv_mouse:
 1:  bl      mouse_ui
     bl      ui_hit
     mov     w21, w1                     // quadrado / receita
-    cmp    w0, #1                      // botao Mochila
+    cmp     w0, #9                      // atributos: o botao + (nivel.S)
+    b.ne    292f
+    cmp     w19, #1
+    b.ne    sm_ret
+    tbnz    w21, #31, sm_ret
+    mov     w0, w21
+    bl      attr_add
+    b       sm_ret
+292: cmp    w0, #1                      // botao Mochila
     b.ne    2f
     ldr     w9, [x28, #G_INVOPEN]
     eor     w9, w9, #1
@@ -3409,7 +3420,7 @@ surv_ui:
     mov     w0, #4
     mov     w1, #16
     mov     w2, #252
-    mov     w3, #73
+    mov     w3, #86
     bl      fillrect
     LA      x0, lbuf
     LA      x1, s_wood
@@ -3501,8 +3512,45 @@ surv_ui:
     mov     w1, #75
     LA      x2, lbuf
     bl      text
-    // ---- avisos embaixo das barras (empilhados a partir de y = 94) ----
-    mov     w20, #94
+    // nivel e XP: "Nv 3" e a barra roxa com "12/26" (nivel.S)
+    LA      x0, lbuf2
+    LA      x1, s_nv
+    bl      strcat_cur
+    ldr     w1, [x28, #G_LEVEL]
+    bl      numcat
+    bl      xp_pct
+    mov     w0, #88
+    LA      x1, lbuf2
+    mov     w2, #170
+    mov     w3, #100
+    mov     w4, #230
+    bl      bar
+    ldr     w9, [x28, #G_LVLT]          // subiu: o nivel brilha em dourado
+    cbz     w9, 3f
+    tbz     w9, #3, 3f
+    RGBA    255, 220, 90, 255
+    mov     w0, #10
+    mov     w1, #88
+    LA      x2, lbuf2
+    bl      text
+3:  LA      x0, lbuf
+    ldr     x1, [x28, #G_XP]
+    bl      numcat64
+    mov     w9, #47
+    strb    w9, [x0], #1
+    ldr     x1, [x28, #G_XPNEED]
+    bl      numcat64
+    LA      x0, lbuf
+    bl      mystrlen
+    lsl     w19, w0, #3
+    RGBA    40, 20, 60, 255
+    mov     w0, #188
+    sub     w0, w0, w19
+    mov     w1, #88
+    LA      x2, lbuf
+    bl      text
+    // ---- avisos embaixo das barras (empilhados a partir de y = 107) ----
+    mov     w20, #107
     ldr     w9, [x28, #G_WATER]         // na agua?
     cbz     w9, ui_heavy
     LA      x10, waternames
@@ -3945,7 +3993,12 @@ calc_stats:
 2:  ldr     w10, [x28, #(G_INV + 4 * IT_LBAG)]
     cbz     w10, 3f
     add     w9, w9, #200                // mochila de couro: +20 kg
-3:  str     w9, [x28, #G_CAP]
+3:  ldr     w10, [x28, #G_STR]          // atributo Forca: +1 kg por ponto
+    subs    w10, w10, #10               // acima de 10 (nivel.S)
+    csel    w10, wzr, w10, lt
+    mov     w11, #10
+    madd    w9, w10, w11, w9
+    str     w9, [x28, #G_CAP]
     ret
 
 // skills_tick: cada skill sem treino ha mais de 2 min cai devagar   folha
@@ -4159,7 +4212,28 @@ ui_hit:
     mov     w0, #0
     ldr     w9, [x28, #G_CHAROPEN]
     cbz     w9, 9f
-    sub     w9, w2, #CHR_X
+    sub     w9, w2, #ATR_X              // atributos: 9 (w1 = linha do +)
+    cmp     w9, #ATR_W
+    b.hs    6f
+    sub     w10, w3, #ATR_Y
+    cmp     w10, #ATR_H
+    b.hs    6f
+    mov     w0, #9
+    sub     w11, w9, #(ATR_W - 20)      // o + ocupa 13 x 13 na direita
+    cmp     w11, #13
+    b.hs    9f
+    subs    w10, w10, #22
+    b.lt    9f
+    mov     w11, #20
+    udiv    w12, w10, w11
+    msub    w13, w12, w11, w10
+    cmp     w13, #13
+    b.hs    9f
+    cmp     w12, #4
+    b.hs    9f
+    mov     w1, w12
+    b       9f
+6:  sub     w9, w2, #CHR_X
     cmp     w9, #CHR_W
     b.hs    9f
     sub     w10, w3, #CHR_Y
@@ -5323,6 +5397,7 @@ draw_char:
     mov     w1, #(CHR_Y + CHR_H - 16)
     LA      x2, s_legend
     bl      text
+    bl      attr_draw                   // atributos (nivel.S)
     ldr     d8, [sp, #48]
     ldp     x21, x22, [sp, #32]
     ldp     x19, x20, [sp, #16]
@@ -8156,6 +8231,7 @@ bt_wdir:    .byte 3, 0,  0, 3,  -3, 0,  0, -3
 GBSS fires,    512
 GBSS cellight, 262144                   // luz de cada celula de noite (0..224)
 GBSS lbuf,     128
+GBSS lbuf2,    32                      // "Nv 3" (nivel)
 GBSS msgbuf,   64
 GBSS popbuf,   64
 GBSS chests,   16384                    // 64 baus x 48 contadores (256 bytes)

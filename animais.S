@@ -534,6 +534,9 @@ animal_hit:
     bl      strcat_cur
     LA      x0, msgbuf
     bl      set_msg
+    LA      x9, animxp                  // XP (nivel.S): por enquanto, pelo bicho
+    ldrb    w0, [x9, x20]
+    bl      xp_gain
 9:  ldp     x21, x22, [sp, #32]
     ldp     x19, x20, [sp, #16]
     ldp     x29, x30, [sp], #48
@@ -1001,6 +1004,8 @@ adirtab:
     .hword -64, 0,  -59, -24, -45, -45, -24, -59
     .hword 0, -64,   24, -59,  45, -45,  59, -24
 
+// XP de abater cada bicho (coelho, cervo, cabra, lobo, urso, caranguejo)
+animxp:     .byte 1, 1, 1, 2, 3, 1
     .p2align 3
 killmsg:
     .quad 0, 0, 0, m_wolf, m_bear, 0

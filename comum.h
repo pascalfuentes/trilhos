@@ -227,7 +227,17 @@
 .equ G_GRIDREACH, 864        // alcance^2 (linhas mais fortes); -1 = so a grade
 .equ GRIDR2,     400         // a grade aparece ate 20 celulas (some aos poucos)
 .equ G_FARMMODE, 840         // nesta segurada a enxada: 0 nada, 1 ara, 2 desfaz, 3 colhe
-// 868..951 e 1172..1183, 1204: livres (eram da vila)
+// nivel e experiencia (nivel.S)
+.equ G_LEVEL,    868         // nivel (comeca no 1)
+.equ G_XP,       872         // XP dentro do nivel (64 bits)
+.equ G_XPNEED,   880         // XP para o proximo nivel (64 bits)
+.equ G_LVLT,     888         // quadros do brilho de "subiu de nivel"
+.equ G_STR,      892         // atributos (nivel.S): forca,
+.equ G_DEX,      896         //   destreza,
+.equ G_VIT,      900         //   vitalidade
+.equ G_ENE,      904         //   e energia (comecam em 10)
+.equ G_APTS,     908         // pontos de atributo para distribuir
+// 912..951 e 1172..1183, 1204: livres (eram da vila)
 .equ G_NEARFURN, 952         // perto de uma fornalha (receitas de ferro)
 .equ G_FULL,     956         // tela cheia
 .equ G_INV,      960         // mochila: um contador (u32) por item, 48 vagas
@@ -421,6 +431,10 @@
 .equ CHR_Y,      118
 .equ CHR_W,      216
 .equ CHR_H,      220
+.equ ATR_X,      224         // janela dos atributos (do lado da do personagem)
+.equ ATR_Y,      118
+.equ ATR_W,      152
+.equ ATR_H,      112
 .equ BTNF_X,     284         // botao "Fabricar"
 .equ BTNF_W,     116
 .equ CRF_X,      224         // janela de fabricar (e do bau, no mesmo lugar)

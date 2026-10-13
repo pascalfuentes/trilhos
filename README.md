@@ -209,6 +209,13 @@ Os animais aparecem longe da vista, cada um no seu terreno, e somem quando ficam
 
 ![Plantação](screenshots/plantacao.png)
 
+**Nível e experiência**
+
+- Você começa no **nível 1** e ganha **XP** abatendo bichos (por enquanto: coelho, cervo, cabra e caranguejo 1, lobo 2, urso 3; na fase 2 o XP passa a ser o nível do inimigo).
+- Para subir do nível N para o N+1 são precisos round(1,5^(N−1)) de XP: 1, 2, 2, 3, 5, 8, 11, 17, 26, 38… (nível 20: 2.217; nível 40: 7.371.555). Não tem nível máximo; o XP é guardado em 64 bits.
+- O painel mostra **Nv** e a barra roxa de XP (com "atual/precisa"). Ao subir aparece "Você subiu para o nível N!" e o nível pisca em dourado.
+- **Atributos:** Força, Destreza, Vitalidade e Energia, começando em 10. Cada nível dá **5 pontos**: abra a janela **C** e clique no **+** do atributo, no painel "Atributos" do lado. Por enquanto só a **Força** tem efeito: **+1 kg** de carga por ponto acima de 10. Vitalidade (vida) e Energia (mana) vêm na etapa 1.5; Destreza no combate (fase 3).
+
 **Sobrevivência**
 
 - **Fome:** quando enche (comendo), fica **cheia por 4 minutos** antes de começar a cair. Comer de novo com ela cheia renova esse tempo. Depois cai de cheia a vazia em uns 16 minutos. Sem comida, a vida cai.
@@ -348,6 +355,7 @@ O mundo é difícil de propósito: comida é pouca e estraga, o inverno pesa e a
 | `desafio.S` | pedreiras e minas, comida que estraga, manadas e as alcateias da noite |
 | `salvar.S` | salvar e carregar o jogo (F5 / F9) e o "continuar" da tela de título |
 | `personagens.S` | os desenhos do personagem (e dos moradores da vila antiga) em 8 direções e 3 poses (gerado por `arte/personagens.py`) |
+| `nivel.S` | nível e XP: a curva 1,5x, subir de nível, o teste |
 | `heroi.S` | desenha o herói camada por camada (corpo, cabelo, botas, peitoral, capacete, espada) pela direção e pelo quadro |
 | `pixel.S` | os desenhos em pixel art do designer: herói em camadas, lobo, árvore, pinheiro, pedra, tocha e penhasco (gerado por `arte/pixel.py` a partir do `design/estilo/designer/ermo_estilo.json`; paleta em `pixpal.inc`) |
 | `pilhas.S` | pilhas de itens no chão: que item é, quanto cabe, comida que estraga no chão |
@@ -415,4 +423,6 @@ O tempo do jogo anda por quadro: se a máquina virtual desenhar menos de 60 quad
 - [x] RPG, fase 0: a vila saiu (o jogo começa com você sozinho)
 - [x] RPG, fase 0.6 (parte 1): herói, lobo, árvores e pedras do designer, zoom inteiro e luz por bloco
 - [x] RPG, fase 0.6 (parte 2): o chão em losangos do designer
-- [ ] RPG, fase 1: nível, XP e atributos
+- [x] RPG, fase 1.1 e 1.2: nível, barra de XP e a curva 1,5x
+- [x] RPG, fase 1.3 e 1.4: atributos e 5 pontos por nível
+- [ ] RPG, fase 1.5: vida pela Vitalidade, mana pela Energia
