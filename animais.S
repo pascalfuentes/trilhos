@@ -482,7 +482,10 @@ au_loop:
     cbz     w9, 1f
     fmov    s3, #0.5
     fmul    s2, s2, s3
-1:  ldr     s3, [x28, #G_HP]
+1:  fmov    s0, s2                      // o dano sobe em vermelho do heroi
+    bl      F(hero_bitten)              // (c/numeros.c; devolve o mesmo s0)
+    fmov    s2, s0
+    ldr     s3, [x28, #G_HP]
     fsub    s3, s3, s2
     str     s3, [x28, #G_HP]
     LA      x9, killmsg
@@ -1300,10 +1303,7 @@ melee_attack:
     mov     w0, w19                     // acerto e dano pelos atributos
     mov     w2, #0                      // (golpe; c/combate.c)
     bl      F(player_hit)
-    cbz     w0, 2f                      // errou: o "Errou!" ja apareceu
-    LA      x0, p_hit
-    bl      popup
-2:
+                                        // (o numero sobe: c/numeros.c)
     mov     w0, #1
 9:  ldr     x19, [sp, #16]
     ldp     x29, x30, [sp], #32

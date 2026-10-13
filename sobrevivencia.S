@@ -3440,6 +3440,7 @@ surv_ui:
     stp     x19, x20, [sp, #16]
     stp     x21, x22, [sp, #32]
     bl      weather_overlay             // cor do clima e relampago
+    bl      F(dmgnum_draw)              // numeros de dano subindo (C)
     // ---- painel: inventario e barras ----
     mov     w0, #0
     mov     w1, #0

@@ -474,6 +474,7 @@ shot_mode:
     bl      F(pick_selftest)            // zona de clique dos bichos (c/alvo.c)
     bl      F(keys_selftest)            // R corre, Shift ataca parado (c/teclas.c)
     bl      F(combat_selftest)          // acerto e dano (c/combate.c)
+    bl      F(numbers_shot)             // foto dos numeros de dano (c/numeros.c)
     mov     w9, #165                    // e a luz de subir de nivel (quadro 4)
     str     w9, [x28, #G_LVLT]
     mov     w9, #1                      // janela C com pontos para gastar
@@ -2228,6 +2229,7 @@ b_next:
 // =====================================================================
 //  Composicao final + interface
 // =====================================================================
+    .globl draw_all
 draw_all:
     stp     x29, x30, [sp, #-16]!
     mov     x29, sp

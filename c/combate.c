@@ -8,6 +8,7 @@
 //  Destreza na flecha; arredondado, minimo 1. A defesa do bicho vem
 //  depois, no animal_hit.
 //  Nos testes (--shot) sempre acerta, para os numeros nao variarem.
+//  O dano (ou "Errou") sobe da cabeca do bicho: c/numeros.c.
 // =====================================================================
 #include "ermo.h"
 
@@ -17,6 +18,17 @@ extern uint32_t rng(void) ASM(rng);
 extern uint8_t animals[] ASM(animals);
 
 #define AN_LVL 27
+#define AN_TYPE 16
+#define AN_HP  28
+
+extern void dmgnum_add(float u, float v, int altura, int cor, const char *txt);
+extern void dmgnum_value(float u, float v, int altura, int cor, int valor);
+
+// altura da cabeca do bicho (px de arte): lobo 34, urso 42, os outros 16
+static int altura(int tipo)
+{
+    return tipo == A_WOLF ? 34 : tipo == A_BEAR ? 42 : 16;
+}
 
 static int sempre_acerta;
 
@@ -42,11 +54,18 @@ int hit_damage(int base, int distancia)
 // golpe (distancia 0) ou flecha (1) no bicho -> 1 se acertou
 int player_hit(int animal, int base, int distancia)
 {
+    uint8_t *a = animals + animal * 32;
+    float u = *(float *)a, v = *(float *)(a + 4);
+    int tipo = a[AN_TYPE];
     if (!sempre_acerta && (int)(rng() % 100) >= hit_chance(animal)) {
-        popup("Errou!");
+        dmgnum_add(u, v, altura(tipo), 2, "Errou");
         return 0;
     }
+    int antes = *(uint16_t *)(a + AN_HP);
     animal_hit(animal, hit_damage(base, distancia));
+    int morreu = a[AN_TYPE] == 255;
+    int dano = morreu ? antes : antes - *(uint16_t *)(a + AN_HP);
+    dmgnum_value(u, v, altura(tipo), morreu ? 1 : 0, dano);
     return 1;
 }
 
@@ -78,8 +97,8 @@ void combat_selftest(void)
 {
     int str0 = G_I32(G_STR), dex0 = G_I32(G_DEX), lvl0 = G_I32(G_LEVEL);
     int c = animal_spawn(A_BEAR, G_F32(G_PU) + 30.0f, G_F32(G_PV));
-    char buf[200];
-    int n = 0;
+    char buf[240];
+    int n = 0, numeros = 0;
     if (c >= 0) {
         G_I32(G_LEVEL) = 1;
         G_I32(G_DEX) = 10;
@@ -105,10 +124,13 @@ void combat_selftest(void)
         }
         sempre_acerta = 1;
         animals[c * 32 + 16] = 255;
+        extern int dmgnum_count(void);
+        numeros = dmgnum_count();
         n = snprintf(buf, sizeof buf,
                      "combate: acerto nv1 x bicho nv1=%d%% nv6=%d%% (destreza 30: %d%%) | "
-                     "golpe 6 com forca 10=%d forca 30=%d | 100 golpes a 50%% acertaram %d\n",
-                     a1, a2, a3, d1, d2, acertos);
+                     "golpe 6 com forca 10=%d forca 30=%d | 100 golpes a 50%% acertaram %d "
+                     "(numeros na tela: %d)\n",
+                     a1, a2, a3, d1, d2, acertos, numeros);
     }
     G_I32(G_STR) = str0;
     G_I32(G_DEX) = dex0;
