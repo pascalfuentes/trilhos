@@ -241,7 +241,13 @@
 .equ G_HOMEU,    916         // onde a partida comecou (float; nivel da regiao)
 .equ G_HOMEV,    920
 .equ G_ELITET,   924         // quadros ate a proxima chance de invasao de elite
-// 928..951 e 1172..1183, 1204: livres (eram da vila)
+.equ G_MOVETO,   928         // clique para andar: 0 parado, 1+ indo (c/movimento.c)
+.equ G_MTU,      932         // ponto de destino (float, celulas)
+.equ G_MTV,      936
+.equ G_MTDU,     940         // direcao deste quadro (float)
+.equ G_MTDV,     944
+.equ G_MTDIST,   948         // distancia no quadro anterior (empacou?)
+// 1172..1183, 1204: livres (eram da vila)
 .equ G_NEARFURN, 952         // perto de uma fornalha (receitas de ferro)
 .equ G_FULL,     956         // tela cheia
 .equ G_INV,      960         // mochila: um contador (u32) por item, 48 vagas

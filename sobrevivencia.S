@@ -929,7 +929,15 @@ surv_update:
 7:  tbz     w22, #3, 8f                 // D: direita = +u -v
     fadd    s8, s8, s0
     fsub    s9, s9, s0
-8:  str     wzr, [x28, #G_RUN]
+8:  tst     w22, #15                    // WASD: cancela o clique para andar
+    b.eq    47f
+    str     wzr, [x28, #G_MOVETO]
+    b       48f
+47: bl      F(moveto_dir)               // clique para andar (c/movimento.c)
+    cbz     w0, 48f
+    ldr     s8, [x28, #G_MTDU]
+    ldr     s9, [x28, #G_MTDV]
+48: str     wzr, [x28, #G_RUN]
     fmul    s10, s8, s8
     fmadd   s10, s9, s9, s10
     fcmp    s10, #0.0
@@ -2523,6 +2531,9 @@ surv_mouse:
     cbnz    w0, sm_ret
 72: mov     w9, #1                      // senao: coletar
     str     w9, [x28, #G_LMB]
+    ldr     w9, [x28, #G_HOVOBJ]        // chao vazio: anda ate la (C)
+    tbz     w9, #31, sm_ret
+    bl      F(moveto_click)
     b       sm_ret
 8:  cmp     w19, #3
     b.ne    sm_ret
