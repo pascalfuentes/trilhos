@@ -53,8 +53,8 @@
 //  Comeco do jogo
 // =====================================================================
 
-// people_reset: 3 familias em volta do personagem, sem zonas nem caminhos;
-// um bau com comida e sementes do lado (no teste --shot ficam paradas)
+// people_reset: o jogo comeca sem a vila (RPG). No teste --shot as 12
+// pessoas sao criadas paradas, e o teste liga a vila quando precisa
     .globl people_reset
 people_reset:
     stp     x29, x30, [sp, #-16]!
@@ -100,15 +100,11 @@ people_reset:
     subs    w11, w11, #1
     b.ne    6b
     bl      vila_reset
-    bl      ppl_spawn_all
-    ldr     w9, [x28, #G_SHOT]
-    cbz     w9, 4f
-    mov     w9, #1                      // teste: so quando o teste pedir
+    mov     w9, #1                      // RPG: o jogo comeca sem a vila
     str     w9, [x28, #G_NOPEOPLE]
-    b       9f
-4:  str     wzr, [x28, #G_NOPEOPLE]
-    bl      ppl_camp
-    bl      vila_found                  // um barraco para cada familia
+    ldr     w9, [x28, #G_SHOT]
+    cbz     w9, 9f
+    bl      ppl_spawn_all               // teste: a vila so quando o teste pedir
 9:  ldp     x29, x30, [sp], #16
     ret
 

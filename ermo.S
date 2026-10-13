@@ -46,6 +46,16 @@ F(main):
     cmp     w0, #1
     cset    w9, gt
     str     w9, [x28, #G_SHOT]
+    b.le    0f
+    ldr     x0, [x1, #8]                // ./ermo --novo: um jogo novo de
+    LA      x1, s_novoarg               // verdade, sem tela, por 2 dias
+    bl      F(strcmp)
+    cbnz    w0, 0f
+    str     wzr, [x28, #G_SHOT]
+    mov     w9, #1
+    LA      x10, novo
+    str     w9, [x10]
+0:
     LA      x0, s_leveenv               // ERMO_LEVE=1: modo leve
     bl      F(getenv)
     cbz     x0, 1f
@@ -129,6 +139,9 @@ F(main):
 
     ldr     w9, [x28, #G_SHOT]
     cbnz    w9, shot_mode
+    LA      x9, novo
+    ldr     w9, [x9]
+    cbnz    w9, novo_mode
     bl      save_title                  // tem jogo salvo: o titulo mostra o mundo dele
 
 main_loop:
@@ -182,6 +195,50 @@ main_fail:
     mov     x2, #1
     bl      F(write)
     mov     w20, #1
+    b       main_exit
+
+// ---- ./ermo --novo: comeca um jogo novo como o jogador, salva a foto
+// dos primeiros 10 s (shot_novo.bmp), deixa o tempo correr 2 dias sem
+// tocar em nada e diz quantas pessoas vivem (confere o comeco do jogo
+// sem os atalhos do --shot)
+novo_mode:
+    bl      start_game
+    mov     w21, #600                   // 10 s de jogo: a foto do comeco
+3:  bl      update
+    subs    w21, w21, #1
+    b.ne    3b
+    bl      draw_all
+    LA      x0, s_shot_novo
+    bl      save_bmp
+    MOVI32  w21, 2 * DAYLEN
+1:  bl      update
+    subs    w21, w21, #1
+    b.ne    1b
+    LA      x9, people
+    mov     w10, #0
+    mov     w11, #MAXPEOPLE
+2:  ldrb    w12, [x9, #16]               // P_ALIVE
+    add     w10, w10, w12
+    add     x9, x9, #PSIZE
+    subs    w11, w11, #1
+    b.ne    2b
+    mov     w21, w10
+    LA      x0, txt
+    LA      x1, s_novo1
+    bl      strcat_cur
+    mov     w1, w21
+    bl      numcat
+    LA      x1, s_novo2
+    bl      strcat_cur
+    ldr     w1, [x28, #G_DAY]
+    bl      numcat
+    LA      x1, s_nl
+    bl      strcat_cur
+    LA      x9, txt
+    sub     x2, x0, x9
+    mov     x1, x9
+    mov     w0, #1
+    bl      F(write)
     b       main_exit
 
 // ---- modo screenshot / benchmark (para testar sem tela) -------------
@@ -3454,6 +3511,10 @@ s_bench:        .asciz "tempo por quadro: "
 s_bench2:       .asciz " us\n"
 s_shot_f12:     .asciz "ermo.bmp"
 s_shot_title:   .asciz "shot_titulo.bmp"
+s_shot_novo:    .asciz "shot_novo.bmp"
+s_novoarg:      .asciz "--novo"
+s_novo1:        .asciz "novo jogo: pessoas vivas="
+s_novo2:        .asciz " dia="
 s_shot_game:    .asciz "shot_jogo.bmp"
 s_shot_far:     .asciz "shot_longe.bmp"
 s_shot_near:    .asciz "shot_perto.bmp"
@@ -3509,3 +3570,4 @@ GBSS parfunc, 16
 GBSS zb, 1843200
 GBSS fb, 3686400
 GBSS leve, 16                           // modo leve (F10 / ERMO_LEVE=1)
+GBSS novo, 16                           // ./ermo --novo

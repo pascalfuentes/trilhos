@@ -423,7 +423,7 @@ sr_found:
     LA      x0, m_start
     bl      set_msg
     bl      iron_reset                  // lampioes, fornalha
-    bl      people_reset                // 3 familias e o bau da vila
+    bl      people_reset                // sem a vila
     ldp     d10, d11, [sp, #48]
     ldp     d8, d9, [sp, #32]
     ldp     x19, x20, [sp, #16]
