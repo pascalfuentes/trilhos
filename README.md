@@ -9,7 +9,7 @@ Você chega sozinho num mundo gerado aleatoriamente: terreno contínuo, mar, pra
 ![Dia](screenshots/jogo.png)
 ![Noite](screenshots/noite.png)
 
-**Pixel art (em andamento):** o herói, o lobo, as árvores, os pinheiros e as pedras já são os desenhos do designer (`design/estilo/designer/ermo_estilo.json`, pixel art no estilo do Terraria). O herói é desenhado em **camadas** nas 8 direções, respirando parado: com a **armadura** na mochila aparecem o peitoral e o capacete (o cabelo fica curto embaixo dele), com a **roupa de couro**, as botas, e com a **espada** na mão, a espada. O zoom vai em passos inteiros (1 pixel do desenho = 1, 2, 3 ou 4 pixels na tela) e nada é suavizado. De noite a luz é **por bloco**: cada célula recebe um nível de luz em degraus de 1/8, e o fogo e os olhos dos lobos brilham no escuro. O chão e os outros desenhos ainda são os antigos.
+**Pixel art (em andamento):** o herói, o lobo, as árvores, os pinheiros e as pedras já são os desenhos do designer (`design/estilo/designer/ermo_estilo.json`, pixel art no estilo do Terraria). O herói é desenhado em **camadas** nas 8 direções, respirando parado: com a **armadura** na mochila aparecem o peitoral e o capacete (o cabelo fica curto embaixo dele), com a **roupa de couro**, as botas, e com a **espada** na mão, a espada. O zoom vai em passos inteiros (1 pixel do desenho = 1, 2, 3 ou 4 pixels na tela) e nada é suavizado. De noite a luz é **por bloco**: cada célula recebe um nível de luz em degraus de 1/8, e o fogo e os olhos dos lobos brilham no escuro. O **chão** também é do designer: cada célula é um losango de 32 × 16 (grama em 4 variações, floresta, campo seco, areia, rocha, neve, água rasa e funda, estrada, terra arada, caminho e buraco de pedreira), escolhido pela célula inteira, então as bordas seguem os losangos. O relevo continua contínuo (os degraus de penhasco vêm na fase do planeta). Os outros desenhos (arbustos, bichos, construções, interface) ainda são os antigos.
 
 **As construções** (desenho do designer, em `design/estruturas/estruturas.json`) estão em isométrica, com volume, na mesma resolução do personagem: fogueira com chama animada (e as cinzas quando apaga, que somem em 1 dia), baú que abre, abrigo, cerca que liga nos vizinhos, portão que **abre quando você passa**, fornalha que acende quando você está do lado, lampião aceso de noite e as pilhas no chão em 3 tamanhos (pouco, metade, cheia). De noite, a chama e o vidro do lampião não escurecem.
 
@@ -414,5 +414,5 @@ O tempo do jogo anda por quadro: se a máquina virtual desenhar menos de 60 quad
 - [x] Construções novas do designer e estradas de pedra
 - [x] RPG, fase 0: a vila saiu (o jogo começa com você sozinho)
 - [x] RPG, fase 0.6 (parte 1): herói, lobo, árvores e pedras do designer, zoom inteiro e luz por bloco
-- [ ] RPG, fase 0.6 (parte 2): o chão em losangos do designer
+- [x] RPG, fase 0.6 (parte 2): o chão em losangos do designer
 - [ ] RPG, fase 1: nível, XP e atributos

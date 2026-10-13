@@ -180,6 +180,56 @@ w('    .globl pixobj')
 w('pixobj:')
 w('    .quad ' + ', '.join(olabs))
 
+
+# ---- chao: azulejos de 32 x 16 em ARGB, lidos pelo terreno (ermo.S) ----
+HEX = {}
+for r in pal['rampas']:
+    for t in r['tons']:
+        HEX[t['c']] = 0xFF000000 | int(t['hex'].lstrip('#'), 16)
+
+def fill(rows):
+    """o losango vira um retangulo: cada '.' pega a cor mais perto na
+    mesma linha (o terreno le pelo ponto dentro da celula; nas bordas o
+    arredondamento pode cair fora do losango). A 16a linha copia a 15a."""
+    rows = [list(r) for r in rows]
+    rows[15] = list(rows[14])
+    for r in rows:
+        cols = [i for i, c in enumerate(r) if c != '.']
+        for i in range(len(r)):
+            if r[i] == '.':
+                j = min(cols, key=lambda c: abs(c - i))
+                r[i] = r[j]
+    return [''.join(r) for r in rows]
+
+def recolor(rows, m):
+    return [''.join(m.get(c, c) for c in r) for r in rows]
+
+V = lambda peca, i=0: src[peca]['variacoes'][i]
+TILES = [
+    ('TL_GRAMA', V('chao_grama', 0)), ('TL_GRAMA1', V('chao_grama', 1)),
+    ('TL_GRAMA2', V('chao_grama', 2)), ('TL_GRAMA3', V('chao_grama', 3)),
+    ('TL_FLORESTA', recolor(V('chao_grama', 0), {'G': 'H', 'H': 'I', 'I': 'J'})),
+    ('TL_SECO', recolor(V('chao_grama', 2), {'H': 'G', 'I': 'H', 'J': 'I'})),
+    ('TL_AREIA', V('chao_areia')), ('TL_NEVE', V('chao_neve')),
+    ('TL_ROCHA', recolor(V('chao_neve'), {'N': 'P', 'O': 'Q', 'Y': 'R', 'Z': 'S'})),
+    ('TL_AGUA_RASA', V('chao_agua_rasa')), ('TL_AGUA_FUNDA', V('chao_agua_funda')),
+    ('TL_ESTRADA', V('chao_estrada')),
+    ('TL_ARADA', recolor(V('chao_grama', 0), {'G': 'T', 'H': 'T', 'I': 'U', 'J': 'V'})),
+    ('TL_ARADA_MOLHADA', recolor(V('chao_grama', 0), {'G': 'U', 'H': 'U', 'I': 'V', 'J': 'V'})),
+    ('TL_CAMINHO', recolor(V('chao_areia'), {'A': 'T', 'B': 'T', 'C': 'U', 'D': 'U'})),
+    ('TL_BURACO', recolor(V('chao_estrada'), {'P': 'Q', 'Q': 'R', 'R': 'S'})),
+]
+w('')
+w('// pixtiles: azulejos do chao, 32 x 16 ARGB (2048 bytes cada)')
+w('    .p2align 4')
+w('    .globl pixtiles')
+w('pixtiles:')
+for cod, rows in TILES:
+    rows = fill(check(rows, 32, 16, cod) if len(rows) == 16 else rows)
+    w('// %s' % cod)
+    for r in rows:
+        w('    .word ' + ', '.join('0x%08X' % HEX[c] for c in r))
+
 open(os.path.join(out, 'pixel.S'), 'w').write('\n'.join(S) + '\n')
 
 H = ['// pixel.h - camadas do heroi e objetos em pixel art (GERADO por',
@@ -190,6 +240,8 @@ H.append('.equ PL_N, %d' % len(CAMADAS))
 for i, o in enumerate(OBJ):
     H.append('.equ %s, %d' % (o[0], i))
 H.append('.equ PX_K, %d' % K)
+for i, (cod, _) in enumerate(TILES):
+    H.append('.equ %s, %d' % (cod, i))
 open(os.path.join(out, 'pixel.h'), 'w').write('\n'.join(H) + '\n')
 
 P = ['// pixpal.inc - paleta-mestra do designer, indices %d..%d' % (PAL0, PAL0 + len(cores) - 1),

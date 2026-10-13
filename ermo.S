@@ -19,6 +19,7 @@
 // =====================================================================
 
 #include "comum.h"
+#include "pixel.h"
 
 .equ SDL_INIT_VIDEO,        0x20
 .equ SDL_EVENT_QUIT,        0x100
@@ -1666,155 +1667,68 @@ terrain_color:
     mov     w13, w3
     cmp     w12, #0
     b.lt    tc_water
-    // ruido fino (tabela 256x256) deixa as transicoes de cor naturais
-    ubfx    w0, w10, #13, #8
-    ubfx    w1, w11, #13, #8
-    add     w0, w0, w1, lsl #8
-    LA      x9, noisetab
-    ldrb    w0, [x9, w0, uxtw]
-    lsl     w7, w0, #4                  // bits 8..11 = ruido da umidade
-    and     w0, w0, #31
-    sub     w0, w0, #16
-    add     w14, w12, w0
     asr     w1, w10, #16
     asr     w2, w11, #16
     add     w15, w1, w2, lsl #9         // celula
+    // pixel art: cada celula e um azulejo do designer (pixel.S), escolhido
+    // pela celula inteira (sem ruido: as bordas seguem os losangos)
     LA      x9, pitgrid                 // buraco de pedreira ou de mina
     ldrb    w9, [x9, w15, uxtw]
     cbz     w9, 13f
-    ubfx    w1, w10, #13, #2
-    LA      x2, pitcolors               // 1 buraco, 2 mina, 3 e 4 o chao
-    sub     w9, w9, #1
-    add     x2, x2, x9, lsl #3
-    ldr     w0, [x2]
-    cbnz    w1, tc_light
-    ldr     w0, [x2, #4]
-    b       tc_light
-13: LA      x9, overlay
-    ldrb    w9, [x9, w15, uxtw]
-    cbz     w9, 1f
-    cmp     w9, #4                      // estrada de pedra (estradas.S)
-    b.eq    14f
     cmp     w9, #1
-    b.ne    11f
-    MOVI32  w0, 0xFF9A7A52              // caminho de terra batida
-    ubfx    w1, w10, #14, #2
-    cbnz    w1, tc_light
-    MOVI32  w0, 0xFF8C6E48
-    b       tc_light
-11: ubfx    w1, w10, #13, #2            // terra arada: com sulcos
-    cmp     w9, #3
-    b.eq    12f
-    MOVI32  w0, 0xFF8E6438              // seca
-    cbnz    w1, tc_light
-    MOVI32  w0, 0xFF6E4A28
-    b       tc_light
-12: MOVI32  w0, 0xFF5C3C20              // molhada (agua a ate 4 quadrados)
-    cbnz    w1, tc_light
-    MOVI32  w0, 0xFF46301A
-    b       tc_light
-    // estrada: o azulejo pelos vizinhos (+u 1, +v 2, -u 4, -v 8), lido no
-    // ponto da celula (o azulejo de 24 x 12 cobre o losango)
-14: LA      x9, overlay
-    add     x9, x9, w15, uxtw
-    mov     w2, #0
-    ldrb    w1, [x9, #1]
+    mov     w9, #TL_BURACO
+    mov     w1, #TL_CAMINHO
+    csel    w9, w9, w1, eq
+    b       tc_tile
+13: LA      x9, overlay
+    ldrb    w1, [x9, w15, uxtw]
+    cbz     w1, 1f
+    mov     w9, #TL_ESTRADA             // estrada de pedra (estradas.S)
     cmp     w1, #4
-    cinc    w2, w2, eq
-    ldrb    w1, [x9, #512]
-    cmp     w1, #4
-    mov     w3, #2
-    csel    w3, w3, wzr, eq
-    orr     w2, w2, w3
-    ldurb   w1, [x9, #-1]
-    cmp     w1, #4
-    mov     w3, #4
-    csel    w3, w3, wzr, eq
-    orr     w2, w2, w3
-    sub     x9, x9, #512
-    ldrb    w1, [x9]
-    cmp     w1, #4
-    mov     w3, #8
-    csel    w3, w3, wzr, eq
-    orr     w2, w2, w3
-    and     w3, w10, #0xFFFF            // onde, dentro da celula
-    and     w4, w11, #0xFFFF
-    sub     w5, w3, w4
-    mov     w6, #12
-    mul     w5, w5, w6
-    asr     w5, w5, #16
-    add     w5, w5, #12                 // x no azulejo
-    add     w6, w3, w4
-    mov     w8, #6
-    mul     w6, w6, w8
-    lsr     w6, w6, #16                 // y
-    cmp     w5, #0
-    csel    w5, wzr, w5, lt
-    mov     w8, #23
-    cmp     w5, w8
-    csel    w5, w8, w5, gt
-    mov     w8, #11
-    cmp     w6, w8
-    csel    w6, w8, w6, hi
-    mov     w8, #288
-    mul     w2, w2, w8
-    mov     w8, #24
-    madd    w2, w6, w8, w2
-    add     w2, w2, w5
-    LA      x9, roadtiles
-    ldr     w0, [x9, w2, uxtw #2]
-    cbnz    w0, tc_light
-    MOVI32  w0, 0xFF9A7A52              // fora das pedras: terra batida
-    b       tc_light
-1:  LA      x9, moist                   // umidade interpolada + ruido
-    add     x9, x9, w15, uxtw
-    ldrb    w3, [x9]
-    ldrb    w4, [x9, #1]
-    ldrb    w5, [x9, #512]
-    ldrb    w6, [x9, #513]
-    ubfx    w1, w10, #8, #8
-    ubfx    w2, w11, #8, #8
-    sub     w4, w4, w3
-    mul     w4, w4, w1
-    add     w3, w3, w4, asr #8
-    sub     w6, w6, w5
-    mul     w6, w6, w1
-    add     w5, w5, w6, asr #8
-    sub     w5, w5, w3
-    mul     w5, w5, w2
-    add     w3, w3, w5, asr #8
-    ubfx    w9, w7, #8, #4
-    add     w9, w9, w3
-    sub     w9, w9, #8
+    b.eq    tc_tile
+    mov     w9, #TL_CAMINHO             // caminho de terra batida
+    cmp     w1, #1
+    b.eq    tc_tile
+    mov     w9, #TL_ARADA               // terra arada: seca ou molhada
+    cmp     w1, #3
+    b.ne    tc_tile
+    mov     w9, #TL_ARADA_MOLHADA
+    b       tc_tile
+1:  LA      x9, elev                    // altura e umidade da celula
+    ldrsh   w14, [x9, w15, uxtw #1]
+    LA      x9, moist
+    ldrb    w3, [x9, w15, uxtw]
+    mov     w1, #0x9E37                 // grama: uma das 4 variacoes
+    mul     w1, w15, w1
+    lsr     w1, w1, #9
+    and     w1, w1, #3                  // (TL_GRAMA .. TL_GRAMA3)
+    mov     w9, #TL_AREIA               // praia
     cmp     w14, #E_SAND
-    b.ge    2f
-    MOVI32  w0, 0xFFDCC88A              // praia
-    b       tc_light
-2:  cmp     w14, #E_GRASS
+    b.lt    tc_tile
+    cmp     w14, #E_GRASS
     b.ge    3f
-    cmp     w9, #150
-    b.ge    tc_forest
-    cmp     w9, #95
-    b.ge    21f
-    MOVI32  w0, 0xFF8DAE4E              // campo seco
-    b       tc_light
-21: MOVI32  w0, 0xFF62A83E              // campo
-    b       tc_light
+    mov     w9, #TL_FLORESTA
+    cmp     w3, #150
+    b.ge    tc_tile
+    mov     w9, w1                      // campo
+    cmp     w3, #95
+    b.ge    tc_tile
+    mov     w9, #TL_SECO                // campo seco
+    b       tc_tile
 3:  cmp     w14, #E_HILL
     b.ge    4f
-    cmp     w9, #140
-    b.ge    tc_forest
-    MOVI32  w0, 0xFF7E9A4A              // colinas
-    b       tc_light
-4:  mov     w9, #E_ROCK
-    cmp     w14, w9
-    b.ge    5f
-    MOVI32  w0, 0xFF8E877E              // rocha
-    b       tc_light
-5:  MOVI32  w0, 0xFFEEF2F6              // neve
-    b       tc_light
-tc_forest:
-    MOVI32  w0, 0xFF3F7A2E              // chao de floresta
+    mov     w9, #TL_FLORESTA
+    cmp     w3, #140
+    b.ge    tc_tile
+    mov     w9, w1                      // colinas
+    b       tc_tile
+4:  mov     w9, #TL_ROCHA
+    mov     w2, #E_ROCK
+    cmp     w14, w2
+    b.lt    tc_tile
+    mov     w9, #TL_NEVE
+tc_tile:
+    bl      tc_tex
 tc_light:
     ubfx    w1, w10, #8, #8
     ubfx    w2, w11, #8, #8
@@ -1833,6 +1747,9 @@ tc_light:
     sub     w5, w5, w3
     mul     w5, w5, w2
     add     w3, w3, w5, asr #8          // luz interpolada (128 = normal)
+    sub     w3, w3, #128                // pixel art: o relevo so meio forte,
+    asr     w3, w3, #1                  // para as cores do designer ficarem
+    add     w3, w3, #128                // perto do que ele desenhou
     cbz     w13, 6f
     sub     w3, w3, w3, lsr #2          // curva de nivel: 25% mais escuro
 6:  mov     w7, #255
@@ -1906,44 +1823,39 @@ tc_light:
 
 tc_water:
     neg     w12, w12                    // profundidade
-    cmp     w12, #20
-    b.ge    1f
-    MOVI32  w5, 0xFF8CC3E4              // espuma na beira
-    b       3f
-1:  lsr     w14, w12, #2
-    mov     w9, #256
-    cmp     w14, w9
-    csel    w14, w14, w9, lo
-    mov     w1, #-40                    // raso (3D86C6) -> fundo (15386A)
-    mul     w1, w1, w14
-    mov     w2, #0x3D
-    add     w2, w2, w1, asr #8
-    mov     w1, #-78
-    mul     w1, w1, w14
-    mov     w3, #0x86
-    add     w3, w3, w1, asr #8
-    mov     w1, #-92
-    mul     w1, w1, w14
-    mov     w4, #0xC6
-    add     w4, w4, w1, asr #8
-    orr     w5, w4, w3, lsl #8
-    orr     w5, w5, w2, lsl #16
-    orr     w5, w5, #0xFF000000
-3:  ubfx    w0, w10, #15, #8            // brilhos que piscam na agua
-    asr     w1, w11, #15
-    ldr     w2, [x28, #G_FRAME]
-    lsr     w2, w2, #3
-    mov     w3, #7
-    madd    w1, w2, w3, w1
-    and     w1, w1, #255
-    add     w0, w0, w1, lsl #8
-    LA      x9, noisetab
-    ldrb    w0, [x9, w0, uxtw]
-    cbnz    w0, 4f
-    MOVI32  w0, 0x00202020
-    add     w5, w5, w0
-4:  mov     w0, w5
+    mov     w9, #TL_AGUA_RASA
+    cmp     w12, #60
+    b.lt    1f
+    mov     w9, #TL_AGUA_FUNDA
+1:  bl      tc_tex
     ldp     x29, x30, [sp], #16
+    ret
+
+// tc_tex(w9 = azulejo, w10, w11 = u, v 16.16) -> w0 = cor ARGB do pixel do
+// azulejo nesse ponto da celula: o losango 32 x 16 cobre a celula inteira
+// (x = 16 + (fu - fv) * 16, y = (fu + fv) * 8)   folha: usa x1-x6
+tc_tex:
+    and     w1, w10, #0xFFFF
+    and     w2, w11, #0xFFFF
+    sub     w3, w1, w2
+    asr     w3, w3, #12
+    add     w3, w3, #16
+    cmp     w3, #0
+    csel    w3, wzr, w3, lt
+    mov     w4, #31
+    cmp     w3, w4
+    csel    w3, w4, w3, gt
+    add     w4, w1, w2
+    subs    w4, w4, #4096               // - meia linha: o meio cai na linha 7
+    csel    w4, wzr, w4, lt
+    lsr     w4, w4, #13
+    mov     w5, #15
+    cmp     w4, w5
+    csel    w4, w5, w4, gt
+    LA      x5, pixtiles
+    add     x5, x5, x9, lsl #11
+    add     w6, w3, w4, lsl #5
+    ldr     w0, [x5, w6, uxtw #2]
     ret
 
 // =====================================================================
