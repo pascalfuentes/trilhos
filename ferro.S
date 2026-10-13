@@ -87,14 +87,13 @@ lamp_add:
     str     w9, [x28, #G_NLAMP]
 9:  ret
 
-// lamps_light(w0 = escala * 256): luz de cada lampiao (de noite)
+// lamps_light: luz de cada lampiao (de noite), por bloco
     .globl lamps_light
 lamps_light:
     stp     x29, x30, [sp, #-48]!
     mov     x29, sp
     stp     x19, x20, [sp, #16]
     stp     x21, x22, [sp, #32]
-    mov     w21, w0
     mov     w19, #0
 1:  ldr     w9, [x28, #G_NLAMP]
     cmp     w19, w9
@@ -113,17 +112,9 @@ lamps_light:
     FC      s2, F_INV64
     fmul    s0, s0, s2
     fmul    s1, s1, s2
-    ldrsh   w0, [x20, #4]
-    bl      proj
-    mov     w9, #9                      // a luz fica la em cima (o vidro)
-    mul     w9, w9, w21
-    asr     w9, w9, #8
-    sub     w1, w1, w9
-    mov     w2, #28                     // 7 celulas
-    mul     w2, w2, w21
-    lsr     w2, w2, #8
+    mov     w2, #28                     // 7 celulas (em 1/4 de celula)
     mov     w3, #230
-    bl      add_light
+    bl      cell_light
 8:  add     w19, w19, #1
     b       1b
 9:  ldp     x21, x22, [sp, #32]

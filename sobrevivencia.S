@@ -2644,25 +2644,8 @@ surv_draw:
     and     w10, w10, #1
     add     w9, w9, w10
     b       3f
-21: cmp     w21, #2                     // perto: o profeta em 8 direcoes
-    b.lt    22f
-    sub     sp, sp, #16
-    stp     w1, w2, [sp]
-    str     w4, [sp, #8]
-    bl      player_sprite
-    ldp     w1, w2, [sp]
-    ldr     w4, [sp, #8]
-    add     sp, sp, #16
-    lsr     w3, w21, #1
-    mov     w5, #0
-    bl      blit
+21: bl      hero_draw                   // o heroi do designer (heroi.S)
     b       23f
-22: ldr     w10, [x28, #G_PMOVING]
-    cbz     w10, 3f
-    ldr     w10, [x28, #G_PFRAME]
-    lsr     w10, w10, #3
-    and     w10, w10, #1
-    add     w9, w9, w10
 3:  LA      x0, sprites
     add     x0, x0, x9, lsl #7
     mov     w3, w21
@@ -2795,57 +2778,73 @@ surv_draw:
 //  Noite: escurece a imagem e soma a luz do fogo
 // =====================================================================
 
-// add_light(w0 cx, w1 cy, w2 raio x, w3 intensidade): elipse de luz
-// no buffer de luz (o raio vertical e a metade, como no chao isometrico)
-// folha: usa x0-x15
-    .globl add_light
-add_light:
-    cmp     w2, #2
+// cell_light(s0 = u, s1 = v em celulas, w2 = raio em 1/4 de celula,
+// w3 = intensidade 0..255): luz por bloco, como no Terraria. Cada celula
+// a ate o raio recebe intensidade * (1 - d^2/R^2) em degraus de 1/8, e
+// fica com a maior luz que chegar nela.   folha: usa x2-x15, s2-s7, s16-s19
+    .globl cell_light
+cell_light:
+    cmp     w2, #4
     b.lt    9f
-    lsr     w4, w2, #1                  // raio y
-    sub     w5, w0, w2
-    cmp     w5, #0
-    csel    w5, wzr, w5, lt             // x0
-    add     w6, w0, w2
-    mov     w7, #(SCRW - 1)
-    cmp     w6, w7
-    csel    w6, w7, w6, gt              // x1
-    sub     w7, w1, w4
-    cmp     w7, #0
-    csel    w7, wzr, w7, lt             // y0
-    add     w8, w1, w4
-    mov     w9, #(SCRH - 1)
-    cmp     w8, w9
-    csel    w8, w9, w8, gt              // y1
-    cmp     w5, w6
+    scvtf   s2, w2
+    fmov    s3, #0.25
+    fmul    s2, s2, s3                  // R em celulas
+    fmul    s4, s2, s2                  // R^2
+    fsub    s5, s0, s2
+    fcvtms  w4, s5                      // u0
+    fadd    s5, s0, s2
+    fcvtms  w5, s5                      // u1
+    fsub    s5, s1, s2
+    fcvtms  w6, s5                      // v0
+    fadd    s5, s1, s2
+    fcvtms  w7, s5                      // v1
+    mov     w9, #511
+    cmp     w4, #0
+    csel    w4, wzr, w4, lt
+    cmp     w6, #0
+    csel    w6, wzr, w6, lt
+    cmp     w5, w9
+    csel    w5, w9, w5, gt
+    cmp     w7, w9
+    csel    w7, w9, w7, gt
+    scvtf   s6, w3                      // intensidade
+    fmov    s7, #0.5
+    LA      x15, cellight
+    mov     w8, w6
+1:  cmp     w8, w7
     b.gt    9f
-    cmp     w7, w8
-    b.gt    9f
-    mul     w2, w2, w2                  // R^2
-    LA      x15, lightbuf
-1:  sub     w9, w7, w1
-    lsl     w9, w9, #1
-    mul     w9, w9, w9                  // (2*dy)^2
-    mov     w10, w5
-2:  sub     w11, w10, w0
-    madd    w11, w11, w11, w9           // d^2
-    cmp     w11, w2
+    scvtf   s16, w8
+    fadd    s16, s16, s7
+    fsub    s16, s16, s1                // dv
+    fmul    s16, s16, s16
+    mov     w10, w4
+2:  cmp     w10, w5
+    b.gt    4f
+    scvtf   s17, w10
+    fadd    s17, s17, s7
+    fsub    s17, s17, s0                // du
+    fmadd   s17, s17, s17, s16          // d^2
+    fcmp    s17, s4
     b.ge    3f
-    sub     w11, w2, w11
-    mul     w11, w11, w3
-    udiv    w11, w11, w2                // intensidade * (1 - d^2/R^2)
-    add     w12, w10, w7, lsl #10
-    add     w12, w12, w7, lsl #8
+    fdiv    s18, s17, s4
+    fmov    s19, #1.0
+    fsub    s18, s19, s18
+    fmul    s18, s18, s6
+    fcvtzs  w11, s18
+    add     w11, w11, #16               // degraus de 32 (1/8)
+    mov     w12, #255
+    cmp     w11, w12
+    csel    w11, w12, w11, gt
+    and     w11, w11, #0xE0
+    add     w12, w10, w8, lsl #9
     ldrb    w13, [x15, w12, uxtw]
     cmp     w11, w13
     b.ls    3f
     strb    w11, [x15, w12, uxtw]
 3:  add     w10, w10, #1
-    cmp     w10, w6
-    b.le    2b
-    add     w7, w7, #1
-    cmp     w7, w8
-    b.le    1b
+    b       2b
+4:  add     w8, w8, #1
+    b       1b
 9:  ret
 
     .globl surv_light
@@ -2860,28 +2859,20 @@ surv_light:
     ldr     w9, [x28, #G_AMBB]
     cmp     w9, #255
     b.ge    sl_post                     // de dia: so a neblina
-1:  LA      x9, lightbuf                // zera o buffer de luz
-    mov     w10, #(SCRW * SCRH / 16)
+1:  LA      x9, cellight                // zera a luz das celulas
+    mov     w10, #(MAPN * MAPN / 16)
 2:  stp     xzr, xzr, [x9], #16
     subs    w10, w10, #1
     b.ne    2b
-    ldr     w21, [x28, #G_Z256]
-    // luz das fogueiras (9 celulas, tremulando)
+    // luz das fogueiras (9 celulas, tremulando), por bloco
     mov     w19, #0
 3:  ldr     w9, [x28, #G_NFIRE]
     cmp     w19, w9
     b.ge    4f
     LA      x20, fires
     add     x20, x20, x19, lsl #4
-    ldr     s0, [x20]
-    ldr     s1, [x20, #4]
-    ldr     w0, [x20, #8]
-    bl      proj
-    mov     w22, #36                    // 9 celulas
-    mul     w22, w22, w21
-    lsr     w22, w22, #8                // raio base
     ldr     w9, [x28, #G_FRAME]
-    lsr     w9, w9, #2
+    lsr     w9, w9, #3
     mov     w10, #29
     madd    w9, w19, w10, w9
     and     w9, w9, #0xFFFF
@@ -2889,44 +2880,31 @@ surv_light:
     ldrb    w9, [x10, w9, uxtw]
     and     w9, w9, #7
     sub     w9, w9, #3
-    mul     w9, w9, w21
-    asr     w9, w9, #8
-    add     w2, w22, w9
-    mov     w9, #4
-    mul     w9, w9, w21
-    asr     w9, w9, #8
-    sub     w1, w1, w9                  // centro um pouco acima do chao
+    add     w2, w9, #36                 // raio em 1/4 de celula
+    ldr     s0, [x20]
+    ldr     s1, [x20, #4]
     mov     w3, #255
-    bl      add_light
+    bl      cell_light
     add     w19, w19, #1
     b       3b
     // lampioes
-4:  mov     w0, w21
-    bl      lamps_light
+4:  bl      lamps_light
     // lanterna fraca do personagem (com tocha: bem mais forte)
-4:  ldr     s0, [x28, #G_PU]
-    ldr     s1, [x28, #G_PV]
-    ldr     w0, [x28, #G_PE]
-    bl      proj
     mov     w2, #10
     mov     w3, #110
     ldr     w9, [x28, #G_TORCHLIT]
     cbz     w9, 41f
     ldr     w9, [x28, #G_FRAME]         // tremula um pouco
-    lsr     w9, w9, #2
+    lsr     w9, w9, #3
     and     w9, w9, #0xFFFF
     LA      x10, noisetab
     ldrb    w9, [x10, w9, uxtw]
     and     w9, w9, #3
     add     w2, w9, #26                 // ~7 celulas
     mov     w3, #235
-41: mul     w2, w2, w21
-    lsr     w2, w2, #8
-    mov     w9, #4
-    mul     w9, w9, w21
-    asr     w9, w9, #8
-    sub     w1, w1, w9
-    bl      add_light
+41: ldr     s0, [x28, #G_PU]
+    ldr     s1, [x28, #G_PV]
+    bl      cell_light
     // passada final (neblina + luz) dividida entre as threads
 sl_post:
     LA      x0, post_cols
@@ -2972,7 +2950,7 @@ post_cols:
     str     wzr, [sp, #32]
     LA      x16, fb
     LA      x17, zb
-    LA      x15, lightbuf
+    LA      x15, cellight
     LA      x14, vis
     LA      x13, seen
     mov     w12, #0                     // y
@@ -3007,6 +2985,7 @@ pc_px:
     lsr     w4, w2, #6
     lsr     w5, w3, #6
     add     w4, w4, w5, lsl #9          // celula
+    str     w4, [sp, #44]               // (a luz da noite e por celula)
     and     w2, w2, #63
     lsl     w2, w2, #2                  // fracao u (0..252)
     and     w3, w3, #63
@@ -3083,7 +3062,8 @@ pc_color:
     lsr     w5, w0, #24
     cmp     w5, #0xFE
     b.eq    pc_store
-    ldrb    w5, [x15, w10, uxtw]        // luz das fogueiras
+    ldr     w4, [sp, #44]
+    ldrb    w5, [x15, w4, uxtw]         // luz da celula (fogo, lampiao, voce)
     mov     w8, #255
     ldr     w7, [sp, #16]
     mov     w4, #294
@@ -8174,7 +8154,7 @@ bt_wdir:    .byte 3, 0,  0, 3,  -3, 0,  0, -3
 
 // ---- memoria ------------------------------------------------------------
 GBSS fires,    512
-GBSS lightbuf, 921600
+GBSS cellight, 262144                   // luz de cada celula de noite (0..224)
 GBSS lbuf,     128
 GBSS msgbuf,   64
 GBSS popbuf,   64

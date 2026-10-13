@@ -1,12 +1,13 @@
 // =====================================================================
-//  heroi.S - o desenho do personagem em 8 direcoes
+//  heroi.S - o desenho do heroi em 8 direcoes
 //
-//  Os quadros estao em personagens.S (gerado por arte/personagens.py).
-//  player_sprite escolhe o quadro pela direcao em que voce andou e pelo
-//  passo; sem o cajado quando tem algo na mao ou a tocha acesa.
+//  Os quadros estao em pixel.S (gerado por arte/pixel.py a partir do guia
+//  de estilo do designer): o corpo e cada peca de equipamento sao uma
+//  camada, no mesmo quadro e com a mesma ancora.
 // =====================================================================
 
 #include "comum.h"
+#include "pixel.h"
 
     .text
     .p2align 2
@@ -57,26 +58,23 @@ char_dir:
     csel    w0, w0, w9, gt
 9:  ret
 
-// char_ptr(w0 = conjunto, w1 = direcao, w2 = pose) -> x0 = quadro   folha
-    .globl char_ptr
-char_ptr:
-    mov     w9, #24
-    mov     w10, #3
-    madd    w9, w0, w9, w2
-    madd    w9, w1, w10, w9
-    mov     w10, #320
-    mul     w9, w9, w10
-    LA      x0, charspr
-    add     x0, x0, x9
-    ret
-
-// player_sprite -> x0 = o quadro do profeta (direcao em que andou; sem o
-// cajado quando tem algo na mao ou a tocha acesa)
-    .globl player_sprite
-player_sprite:
-    stp     x29, x30, [sp, #-16]!
+// hero_draw(w1 = x, w2 = y do ponto do chao, w4 = profundidade): o heroi
+// do designer (pixel.S) virado para onde andou, camada por camada na
+// ordem da direcao. Parado ele respira; andando, os quadros correm.
+// Roupa de couro na mochila: botas; armadura: peitoral e capacete (e o
+// cabelo cortado embaixo dele); espada na mao: a espada.
+    .globl hero_draw
+hero_draw:
+    stp     x29, x30, [sp, #-80]!
     mov     x29, sp
-    LA      x9, pllast
+    stp     x19, x20, [sp, #16]
+    stp     x21, x22, [sp, #32]
+    stp     x23, x24, [sp, #48]
+    stp     x25, x26, [sp, #64]
+    mov     w19, w1
+    mov     w20, w2
+    mov     w21, w4
+    LA      x9, pllast                  // direcao: para onde andou
     ldp     s2, s3, [x9]
     ldr     s0, [x28, #G_PU]
     ldr     s1, [x28, #G_PV]
@@ -88,26 +86,70 @@ player_sprite:
     bl      char_dir
     LA      x9, pldir
     strb    w0, [x9]
-    mov     w1, w0
-    mov     w2, #0
-    ldr     w10, [x28, #G_PMOVING]
-    cbz     w10, 1f
-    ldr     w10, [x28, #G_PFRAME]
-    lsr     w10, w10, #3
-    and     w10, w10, #3
-    LA      x11, poseseq
-    ldrb    w2, [x11, x10]
-1:  ldr     w9, [x28, #G_HAND]
-    ldr     w10, [x28, #G_TORCHLIT]
-    orr     w9, w9, w10
-    cmp     w9, #0
-    cset    w0, ne
-    bl      char_ptr
-    ldp     x29, x30, [sp], #16
+    mov     w22, w0
+    ldr     w10, [x28, #G_FRAME]        // parado: respira devagar
+    lsr     w10, w10, #5
+    ldr     w11, [x28, #G_PMOVING]
+    cbz     w11, 1f
+    ldr     w10, [x28, #G_PFRAME]       // andando: mais depressa
+    lsr     w10, w10, #2
+1:  and     w10, w10, #3
+    add     w24, w10, w22, lsl #2       // direcao * 4 + quadro
+    ldr     w25, [x28, #G_Z256]         // escala: 1 pixel do desenho
+    lsr     w25, w25, #10               // = Z256 / 1024 pixels
+    cmp     w25, #1
+    mov     w9, #1
+    csel    w25, w9, w25, lt
+    LA      x23, pixorder
+    add     x23, x23, x22, lsl #3
+    mov     w26, #0
+2:  cmp     w26, #8
+    b.ge    9f
+    ldrb    w0, [x23, x26]
+    cmp     w0, #255
+    b.eq    9f
+    ldr     w9, [x28, #(G_INV + 4 * IT_ARMOR)]
+    cmp     w0, #PL_CABELO              // com o capacete, o cabelo curto
+    b.ne    3f
+    cbz     w9, 6f
+    mov     w0, #PL_CABELO_ELMO
+    b       6f
+3:  cmp     w0, #PL_PEITO
+    b.eq    4f
+    cmp     w0, #PL_CAPACETE
+    b.ne    5f
+4:  cbz     w9, 8f                      // sem armadura: nada
+    b       6f
+5:  cmp     w0, #PL_BOTAS
+    b.ne    51f
+    ldr     w9, [x28, #(G_INV + 4 * IT_COAT)]
+    cbz     w9, 8f
+    b       6f
+51: cmp     w0, #PL_ARMA
+    b.ne    6f
+    ldr     w9, [x28, #G_HAND]
+    cmp     w9, #(IT_SWORD + 1)
+    b.ne    8f
+6:  lsl     w0, w0, #5                  // camada * 32 + quadro
+    add     w0, w0, w24
+    LA      x9, pixhero
+    ldr     x0, [x9, x0, lsl #3]
+    mov     w1, w19
+    mov     w2, w20
+    mov     w3, w25
+    mov     w4, w21
+    mov     w5, #0
+    bl      blit
+8:  add     w26, w26, #1
+    b       2b
+9:  ldp     x25, x26, [sp, #64]
+    ldp     x23, x24, [sp, #48]
+    ldp     x21, x22, [sp, #32]
+    ldp     x19, x20, [sp, #16]
+    ldp     x29, x30, [sp], #80
     ret
 
     .data
-poseseq:    .byte 0, 1, 0, 2            // o ciclo de passos
 pldir:      .byte 0
     .p2align 3
 pllast:     .space 8

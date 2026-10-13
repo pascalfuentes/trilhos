@@ -9,7 +9,7 @@ Você chega sozinho num mundo gerado aleatoriamente: terreno contínuo, mar, pra
 ![Dia](screenshots/jogo.png)
 ![Noite](screenshots/noite.png)
 
-**O personagem** (capuz marrom, barba branca e o cajado com a pedra amarela) é desenhado em **8 direções**, com passos, virado para onde está andando. Ele guarda o cajado quando segura uma ferramenta ou a tocha. De perto o desenho tem o dobro de detalhe; no zoom mais afastado volta o boneco simples. O chão é desenhado **1,5x maior** que as coisas em cima dele (bonecos, árvores, pilhas), para o mundo não ficar abarrotado.
+**Pixel art (em andamento):** o herói, o lobo, as árvores, os pinheiros e as pedras já são os desenhos do designer (`design/estilo/designer/ermo_estilo.json`, pixel art no estilo do Terraria). O herói é desenhado em **camadas** nas 8 direções, respirando parado: com a **armadura** na mochila aparecem o peitoral e o capacete (o cabelo fica curto embaixo dele), com a **roupa de couro**, as botas, e com a **espada** na mão, a espada. O zoom vai em passos inteiros (1 pixel do desenho = 1, 2, 3 ou 4 pixels na tela) e nada é suavizado. De noite a luz é **por bloco**: cada célula recebe um nível de luz em degraus de 1/8, e o fogo e os olhos dos lobos brilham no escuro. O chão e os outros desenhos ainda são os antigos.
 
 **As construções** (desenho do designer, em `design/estruturas/estruturas.json`) estão em isométrica, com volume, na mesma resolução do personagem: fogueira com chama animada (e as cinzas quando apaga, que somem em 1 dia), baú que abre, abrigo, cerca que liga nos vizinhos, portão que **abre quando você passa**, fornalha que acende quando você está do lado, lampião aceso de noite e as pilhas no chão em 3 tamanhos (pouco, metade, cheia). De noite, a chama e o vidro do lampião não escurecem.
 
@@ -348,7 +348,8 @@ O mundo é difícil de propósito: comida é pouca e estraga, o inverno pesa e a
 | `desafio.S` | pedreiras e minas, comida que estraga, manadas e as alcateias da noite |
 | `salvar.S` | salvar e carregar o jogo (F5 / F9) e o "continuar" da tela de título |
 | `personagens.S` | os desenhos do personagem (e dos moradores da vila antiga) em 8 direções e 3 poses (gerado por `arte/personagens.py`) |
-| `heroi.S` | escolhe o desenho do personagem pela direção e pelo passo |
+| `heroi.S` | desenha o herói camada por camada (corpo, cabelo, botas, peitoral, capacete, espada) pela direção e pelo quadro |
+| `pixel.S` | os desenhos em pixel art do designer: herói em camadas, lobo, árvore, pinheiro, pedra, tocha e penhasco (gerado por `arte/pixel.py` a partir do `design/estilo/designer/ermo_estilo.json`; paleta em `pixpal.inc`) |
 | `pilhas.S` | pilhas de itens no chão: que item é, quanto cabe, comida que estraga no chão |
 | `construcoes.S` | escolhe o desenho de cada construção (aberto/fechado, aceso/apagado, vizinhos, tamanho da pilha) e as cinzas da fogueira |
 | `estruturas.S` | os desenhos das construções, pilhas e estrada (gerado por `arte/estruturas.py` a partir do `design/estruturas/estruturas.json`) |
@@ -412,5 +413,6 @@ O tempo do jogo anda por quadro: se a máquina virtual desenhar menos de 60 quad
 - [x] Salvar e carregar o jogo
 - [x] Construções novas do designer e estradas de pedra
 - [x] RPG, fase 0: a vila saiu (o jogo começa com você sozinho)
-- [ ] RPG, fase 0.6: motor pronto para pixel art
+- [x] RPG, fase 0.6 (parte 1): herói, lobo, árvores e pedras do designer, zoom inteiro e luz por bloco
+- [ ] RPG, fase 0.6 (parte 2): o chão em losangos do designer
 - [ ] RPG, fase 1: nível, XP e atributos

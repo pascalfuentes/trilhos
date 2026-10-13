@@ -476,15 +476,16 @@ shot_mode:
 //  Utilitarios
 // =====================================================================
 
-// set_zoom(w0 = 0..3): 0 = longe ... 3 = perto. O chao e 1,5x maior que
-// os sprites (G_Z256 = 192 << zoom; os sprites usam 128 << zoom), para
-// as coisas ficarem mais espacadas. G_K = 1/64 de celula por pixel, em
-// 1/256 (G_K * G_Z256 = 2^20).
+// set_zoom(w0 = 0..3): 0 = longe ... 3 = perto. Pixel art: o losango do
+// chao (32 x 16 no desenho) fica com 32, 64, 96 ou 128 pixels de largura
+// na tela: 1 pixel do desenho = 1, 2, 3 ou 4 pixels (G_Z256 = 1024 x
+// esse numero). Os sprites antigos usam G_Z256 / 384. G_K = 1/64 de
+// celula por pixel, em 1/256 (G_K * G_Z256 = 2^20).
     .globl set_zoom
 set_zoom:
     str     w0, [x28, #G_ZOOM]
-    mov     w9, #192
-    lsl     w9, w9, w0
+    add     w9, w0, #1
+    lsl     w9, w9, #10
     str     w9, [x28, #G_Z256]
     mov     w10, #2000
     mul     w10, w10, w9
@@ -1328,7 +1329,7 @@ start_game:
     mov     x29, sp
     mov     w9, #1
     str     w9, [x28, #G_STATE]
-    mov     w0, #3                      // camera perto do personagem
+    mov     w0, #1                      // pixel art a 2x
     bl      set_zoom
     ldr     w9, [x28, #G_INGAME]
     cbnz    w9, 1f
@@ -2002,17 +2003,26 @@ do_loop:
     mul     w0, w0, w21
     asr     w0, w0, #12
     add     w2, w0, #360                // y na tela (base)
-    cmn     w1, #64
+    cmn     w1, #256
     b.lt    do_skip
-    mov     w9, #1344
+    mov     w9, #1536
     cmp     w1, w9
     b.gt    do_skip
     cmp     w2, #0
     b.lt    do_skip
-    mov     w9, #800
+    mov     w9, #1100
     cmp     w2, w9
     b.gt    do_skip
     add     w4, w10, w11                // profundidade
+    cmp     w13, #O_ROCK                // arvore, pinheiro e pedra: pixel
+    b.hi    65f                         // art do designer (pixel.S)
+    LA      x9, pixobj                  // (O_TREE, O_PINE, O_ROCK = PX_*)
+    ldr     x0, [x9, x13, lsl #3]
+    lsr     w3, w21, #10
+    mov     w5, #0
+    bl      blit
+    b       do_skip
+65:
     sub     sp, sp, #32                 // construcoes: o desenho novo
     stp     w1, w2, [sp]
     stp     w4, w10, [sp, #8]
@@ -2476,6 +2486,8 @@ palette:
     .word 0xFF3D3C44, 0xFF36291A, 0xFF453929, 0xFF30281C  // 60-63 pe, cabelo, calca
     .word 0xFF5A3A28, 0xFF6B4426                          // 64-65 cinto, cabelo
 #include "estrpal.inc"
+    .word 0, 0                                            // 128-129 livres
+#include "pixpal.inc"
 
 roofc:
     .word 0xFFB5443A, 0xFF8C3029

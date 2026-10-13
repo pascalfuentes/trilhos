@@ -30,6 +30,7 @@
 .equ AN_TIMER, 20
 .equ AN_CD,    22
 .equ AN_ANIM,  24
+.equ AN_DIR,   26                      // direcao em que anda (lobo do designer)
 
 // flecha (32 bytes): u, v, du, dv (float), vida (quadros), altura
 .equ AR_LIFE,  16
@@ -146,6 +147,7 @@ animal_spawn:
     strb    w11, [x9, #AN_HP]
     strb    wzr, [x9, #AN_HURT]
     strb    wzr, [x9, #18]              // grupo (desafio.S)
+    strb    wzr, [x9, #AN_DIR]
     strh    wzr, [x9, #AN_TIMER]
     strh    wzr, [x9, #AN_CD]
     strh    wzr, [x9, #AN_ANIM]
@@ -892,7 +894,25 @@ animals_draw:
     add     w4, w4, #20
     mov     w2, w1
     mov     w1, w0
-    LA      x9, atypes
+    cmp     w21, #A_WOLF                // lobo: o do designer (pixel.S),
+    b.ne    5f                          // virado para onde anda
+    ldr     s0, [x19, #AN_DU]
+    ldr     s1, [x19, #AN_DV]
+    ldrb    w0, [x19, #AN_DIR]
+    bl      char_dir                    // (heroi.S; so usa w0, w9, s0-s7)
+    strb    w0, [x19, #AN_DIR]
+    ldrh    w10, [x19, #AN_ANIM]
+    lsr     w10, w10, #3
+    and     w10, w10, #3
+    add     w10, w10, w0, lsl #2
+    LA      x9, pixwolf
+    ldr     x0, [x9, x10, lsl #3]
+    ldr     w3, [x28, #G_Z256]
+    lsr     w3, w3, #10
+    mov     w5, #0
+    bl      blit
+    b       8f
+5:  LA      x9, atypes
     add     x9, x9, x21, lsl #4
     ldrb    w9, [x9, #AT_SPR]
     ldrh    w10, [x19, #AN_ANIM]        // dois quadros andando
