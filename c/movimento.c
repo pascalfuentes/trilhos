@@ -138,8 +138,11 @@ void attack_release(void)
 }
 
 // a cada quadro: segurando num bicho, golpeia de novo ou vai atras dele
+extern void bow_tick(void);
+
 void attack_hold_tick(void)
 {
+    bow_tick();                         // arco: puxando a corda (c/arco.c)
     int alvo = G_I32(G_ATKHOLD) - 1;
     if (alvo < 0)
         return;

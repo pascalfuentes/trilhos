@@ -87,9 +87,11 @@ hdr_ok:
     ldr     w11, [x9, #8]
     cmp     w11, #SAVVER
     b.ne    8f
-    ldr     w11, [x9, #24]
-    cmp     w11, #GSIZE
-    b.ne    8f
+    ldr     w11, [x9, #24]              // G do arquivo: ate GSIZE (menor:
+    cmp     w11, #GSIZE                 // save de antes de G crescer)
+    b.hi    8f
+    cmp     w11, #1216
+    b.lo    8f
     ldr     w11, [x9, #20]              // objetos
     MOVI32  w12, MAXOBJ
     cmp     w11, w12
@@ -299,8 +301,12 @@ load_game:
     str     w9, [x24, #16]
     ldr     w9, [x28, #G_FULL]
     str     w9, [x24, #20]
+    LA      x9, hdr                     // o tamanho de G do arquivo; o
+    ldr     w0, [x9, #24]               // resto fica 0 (c/morte.c)
+    bl      F(g_load_tail)
+    LA      x9, hdr
+    ldr     w1, [x9, #24]
     mov     x0, x28
-    mov     x1, #GSIZE
     bl      sav_read
     str     x20, [x28, #G_REN]
     str     x21, [x28, #G_WIN]

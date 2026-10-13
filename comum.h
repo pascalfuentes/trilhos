@@ -263,7 +263,8 @@
 .equ G_PACKU,    1192        // para onde vai a alcateia da noite (float)
 .equ G_PACKV,    1196
 .equ G_HERDID,   1200        // ultimo grupo de manada
-.equ GSIZE,      1216
+.equ G_MAXLVL,   1216        // o maior nivel ja alcancado (pontos so ao passar dele)
+.equ GSIZE,      1232        // (saves antigos, menores, carregam: o resto fica 0)
 
 .equ W_SUN,      0
 .equ W_CLOUDY,   1

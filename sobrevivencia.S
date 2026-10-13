@@ -2378,6 +2378,7 @@ surv_mouse:
     b.ne    sm_ret
     str     wzr, [x28, #G_LMB]
     str     wzr, [x28, #G_ATKHOLD]      // e de atacar (c/movimento.c)
+    bl      F(bow_release)              // arco: solta a flecha (c/arco.c)
     str     wzr, [x28, #G_FARMLAST]     // enxada/sementes: de novo em qualquer celula
     str     wzr, [x28, #G_FARMMODE]
     bl      fence_commit                // soltou uma fileira de cercas
@@ -2529,7 +2530,7 @@ surv_mouse:
     ldr     w9, [x28, #G_HAND]          // arco na mao: atira
     cmp     w9, #(IT_BOW + 1)
     b.ne    70f
-    bl      shoot_arrow
+    bl      F(bow_press)                // puxa a corda; solta = atira (c/arco.c)
     b       sm_ret
 70: cmp     w9, #(IT_ROD + 1)           // vara na mao: pesca
     b.ne    71f
@@ -3441,6 +3442,7 @@ surv_ui:
     stp     x21, x22, [sp, #32]
     bl      weather_overlay             // cor do clima e relampago
     bl      F(dmgnum_draw)              // numeros de dano subindo (C)
+    bl      F(bow_draw)                 // o quanto puxou a corda (c/arco.c)
     // ---- painel: inventario e barras ----
     mov     w0, #0
     mov     w1, #0
@@ -8081,10 +8083,10 @@ s_far:          .asciz " - longe"
 s_fire:         .asciz "Fogueira: "
 s_firehint:     .asciz " s (botao direito: +lenha)"
 s_hint:         .asciz "WASD andar  E comer  F fogo  Tab fabricar  I mochila  C personagem  F5 salva"
-s_dead1:        .asciz "FIM DE JOGO"
+s_dead1:        .asciz "VOCE MORREU"
 s_dead2:        .asciz "Voce sobreviveu "
 s_dead3:        .asciz " noite(s)"
-s_dead4:        .asciz "ENTER: novo mundo     F9: carregar     ESC: menu"
+s_dead4:        .asciz "ENTER: renascer (-1 nivel)  N: mundo novo  F9: carregar  ESC: menu"
 s_nl:           .asciz "\n"
 p_axe:          .asciz "+1 machado"
 p_pick:         .asciz "+1 picareta"

@@ -95,9 +95,8 @@ xp_gain:
     b.lo    2f
     sub     x9, x9, x10
     str     x9, [x28, #G_XP]
-    ldr     w9, [x28, #G_APTS]      // 5 pontos de atributo por nivel
-    add     w9, w9, #5
-    str     w9, [x28, #G_APTS]
+    bl      F(level_up_points)          // 5 pontos, so acima do maior nivel
+                                        // ja alcancado (c/morte.c)
     ldr     w0, [x28, #G_LEVEL]
     add     w0, w0, #1
     str     w0, [x28, #G_LEVEL]

@@ -97,7 +97,7 @@ void combat_selftest(void)
 {
     int str0 = G_I32(G_STR), dex0 = G_I32(G_DEX), lvl0 = G_I32(G_LEVEL);
     int c = animal_spawn(A_BEAR, G_F32(G_PU) + 30.0f, G_F32(G_PV));
-    char buf[240];
+    char buf[300];
     int n = 0, numeros = 0;
     if (c >= 0) {
         G_I32(G_LEVEL) = 1;
@@ -126,11 +126,17 @@ void combat_selftest(void)
         animals[c * 32 + 16] = 255;
         extern int dmgnum_count(void);
         numeros = dmgnum_count();
+        extern int bow_selftest(int quadros);
+        int inv = G_I32(G_INV + 4 * IT_ARROW);
+        G_I32(G_INV + 4 * IT_ARROW) = 5;
+        int arco0 = bow_selftest(0), arco30 = bow_selftest(30), arco60 = bow_selftest(80);
+        G_I32(G_INV + 4 * IT_ARROW) = inv;
+        G_I32(G_ATKCD) = 0;
         n = snprintf(buf, sizeof buf,
                      "combate: acerto nv1 x bicho nv1=%d%% nv6=%d%% (destreza 30: %d%%) | "
                      "golpe 6 com forca 10=%d forca 30=%d | 100 golpes a 50%% acertaram %d "
-                     "(numeros na tela: %d)\n",
-                     a1, a2, a3, d1, d2, acertos, numeros);
+                     "(numeros na tela: %d) | arco: clique=%d meio s=%d 1 s=%d\n",
+                     a1, a2, a3, d1, d2, acertos, numeros, arco0, arco30, arco60);
     }
     G_I32(G_STR) = str0;
     G_I32(G_DEX) = dex0;

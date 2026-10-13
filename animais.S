@@ -1421,8 +1421,11 @@ arrows_update:
     fcmp    s2, s3
     b.gt    3f
     mov     w0, w22
-    mov     w1, #4                      // dano da flecha (com a Destreza
-    mov     w2, #1                      // e o acerto: c/combate.c)
+    ldr     w1, [x19, #24]              // dano da flecha (c/arco.c; 0 = 4)
+    cbnz    w1, 21f
+    mov     w1, #4
+21: mov     w2, #1                      // (com a Destreza e o acerto:
+                                        // c/combate.c)
     bl      F(player_hit)
     b       4f
 3:  add     x21, x21, #32
@@ -1848,6 +1851,7 @@ animnames:
 
 m_wolf:     .asciz "Um lobo pegou voce"
 m_bear:     .asciz "Um urso pegou voce"
+    .globl m_noarrow
 m_noarrow:  .asciz "Sem flechas (fabrique: Tab)"
 p_bite:     .asciz "Mordida!"
 p_hit:      .asciz "Pow!"

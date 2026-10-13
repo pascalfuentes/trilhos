@@ -480,6 +480,7 @@ shot_mode:
     bl      F(keys_selftest)            // R corre, Shift ataca parado (c/teclas.c)
     bl      F(combat_selftest)          // acerto e dano (c/combate.c)
     bl      F(numbers_shot)             // foto dos numeros de dano (c/numeros.c)
+    bl      F(death_selftest)           // morrer custa 1 nivel (c/morte.c)
     mov     w9, #165                    // e a luz de subir de nivel (quadro 4)
     str     w9, [x28, #G_LVLT]
     mov     w9, #1                      // janela C com pontos para gastar
@@ -1278,12 +1279,16 @@ he_key_game:
     b       he_loop
 1:  ldr     w9, [x28, #G_DEAD]
     cbz     w9, 2f
-    cmp     w20, #40                    // morto: ENTER = mundo novo
-    b.eq    11f
+    cmp     w20, #40                    // morto: ENTER = renasce (-1 nivel,
+    b.eq    12f                         // c/morte.c)
     cmp     w20, #88
+    b.eq    12f
+    cmp     w20, #17                    // N = mundo novo
     b.ne    he_loop
 11: bl      new_world
     bl      start_game
+    b       he_loop
+12: bl      F(player_respawn)
     b       he_loop
 2:  cmp     w20, #10                    // G: grade liga/desliga
     b.ne    21f
