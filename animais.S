@@ -350,6 +350,7 @@ au_loop:
     strh    w9, [x20, #AN_CD]
     ldrb    w9, [x22, #AT_DMG]
     scvtf   s2, w9
+    bl      hp_scale                    // em % da vida maxima (Vitalidade)
     ldr     w9, [x28, #(G_INV + 4 * IT_ARMOR)] // armadura: metade
     cbz     w9, 1f
     fmov    s3, #0.5

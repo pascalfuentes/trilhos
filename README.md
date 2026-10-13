@@ -216,7 +216,8 @@ Os animais aparecem longe da vista, cada um no seu terreno, e somem quando ficam
 - O painel mostra **Nv** e a barra roxa de XP (com "atual/precisa"). Ao subir aparece "Você subiu para o nível N!" e o nível pisca em dourado.
 - **Janela do personagem (C):** a desenhada pelo designer (pedido 1.0): retrato do herói com o equipamento, nível, barra de XP, os 4 atributos com ícone e botão **+** (acende com o mouse em cima, afunda ao apertar, fica apagado sem pontos), os pontos livres, a vida e a carga. As **skills** ficam num painel na direita (no lugar da mochila: com a mochila aberta, ele some).
 - **Barra de XP da tela:** a do designer, sempre visível em cima da barra "na mão", enchendo de roxo. Ao subir de nível, uma **luz dourada** sobe em volta do herói (8 quadros, brilha de noite).
-- **Atributos:** Força, Destreza, Vitalidade e Energia, começando em 10. Cada nível dá **5 pontos**: abra a janela **C** e clique no **+** do atributo. Por enquanto só a **Força** tem efeito: **+1 kg** de carga por ponto acima de 10. Vitalidade (vida) e Energia (mana) vêm na etapa 1.5; Destreza no combate (fase 3).
+- **Atributos:** Força, Destreza, Vitalidade e Energia, começando em 10. Cada nível dá **5 pontos**: abra a janela **C** e clique no **+** do atributo. Efeitos: **Força** dá **+1 kg** de carga por ponto acima de 10; **Vitalidade** dá vida máxima = 50 + 5 por ponto (100 no começo); **Energia** dá mana máxima = 5 por ponto (50 no começo); a **Destreza** entra no combate (fase 3).
+- **Vida e mana:** o painel mostra a vida e a mana com os números ("150/150"). A vida fica guardada em porcentagem: fome e frio tiram a mesma fatia, mas a mordida dos bichos tira pontos de vida, então com mais Vitalidade ela pesa menos. A mana enche sozinha em 30 s (vai ser gasta nas skills, fase 9). Os globos estilo Diablo vêm com a arte da fase de Interface.
 
 **Sobrevivência**
 
@@ -427,4 +428,4 @@ O tempo do jogo anda por quadro: se a máquina virtual desenhar menos de 60 quad
 - [x] RPG, fase 0.6 (parte 2): o chão em losangos do designer
 - [x] RPG, fase 1.1 e 1.2: nível, barra de XP e a curva 1,5x
 - [x] RPG, fase 1.3 e 1.4: atributos e 5 pontos por nível
-- [ ] RPG, fase 1.5: vida pela Vitalidade, mana pela Energia
+- [x] RPG, fase 1.5 e 1.6: vida pela Vitalidade, mana pela Energia; o save já guarda tudo

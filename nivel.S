@@ -12,7 +12,10 @@
 //  - Atributos: Forca, Destreza, Vitalidade e Energia, comecando em 10.
 //    Cada nivel da 5 pontos para distribuir no + da janela C (do lado da
 //    janela do personagem). Forca: +1 kg de carga por ponto acima de 10
-//    (calc_stats). Os outros efeitos vem nas proximas etapas.
+//    (calc_stats). Vitalidade: vida maxima = 50 + 5 por ponto (100 no
+//    comeco); a vida fica guardada em % (G_HP), e a mordida dos bichos
+//    tira pontos de vida de verdade (hp_scale). Energia: mana maxima =
+//    5 por ponto (50 no comeco), enche sozinha em 30 s. Destreza: fase 3.
 // =====================================================================
 
 #include "comum.h"
@@ -53,6 +56,8 @@ xp_reset:
     str     w9, [x28, #G_VIT]
     str     w9, [x28, #G_ENE]
     str     wzr, [x28, #G_APTS]
+    FC      s0, F_HUNDRED               // mana cheia
+    str     s0, [x28, #G_MP]
     mov     w9, #1
     str     w9, [x28, #G_LEVEL]
     str     xzr, [x28, #G_XP]
@@ -136,11 +141,48 @@ xp_gain:
 // xp_tick: o brilho do nivel apaga   folha
     .globl xp_tick
 xp_tick:
+    ldr     s0, [x28, #G_MP]            // mana: de vazia a cheia em 30 s
+    ldr     s1, mp_step
+    fadd    s0, s0, s1
+    FC      s1, F_HUNDRED
+    fmin    s0, s0, s1
+    str     s0, [x28, #G_MP]
     ldr     w9, [x28, #G_LVLT]
     cbz     w9, 1f
     sub     w9, w9, #1
     str     w9, [x28, #G_LVLT]
 1:  ret
+
+mp_step: .float 0.0555556                // 100 / (30 s * 60 quadros)
+
+// hp_max -> w0 = vida maxima (50 + 5 x Vitalidade)   folha
+    .globl hp_max
+hp_max:
+    ldr     w0, [x28, #G_VIT]
+    add     w0, w0, w0, lsl #2
+    add     w0, w0, #50
+    ret
+
+// mp_max -> w0 = mana maxima (5 x Energia)   folha
+    .globl mp_max
+mp_max:
+    ldr     w0, [x28, #G_ENE]
+    add     w0, w0, w0, lsl #2
+    ret
+
+// hp_scale(s2 = dano em pontos de vida) -> s2 = dano em % da vida (G_HP)
+// folha; usa w9, w10, s3
+    .globl hp_scale
+hp_scale:
+    ldr     w9, [x28, #G_VIT]
+    add     w9, w9, w9, lsl #2
+    add     w9, w9, #50
+    scvtf   s3, w9                      // vida maxima
+    fdiv    s2, s2, s3
+    mov     w10, #100
+    scvtf   s3, w10
+    fmul    s2, s2, s3
+    ret
 
 // xp_pct -> s0 = quanto do nivel ja foi (0..100)   folha
     .globl xp_pct
@@ -343,16 +385,30 @@ char_window:
     mov     w1, #(WY + UA_PONTOS_VALOR_Y)
     LA      x2, xpbuf
     bl      wtext_r
-    // derivados: por enquanto a vida e a carga (mana, dano, acerto e
+    // derivados: vida e mana maximas e a carga (dano, acerto e
     // defesa vem na etapa 1.5 e na fase 3)
-    LA      x0, xpbuf                          // "Vida 100"
+    LA      x0, xpbuf                          // "Vida 100" (maxima)
     LA      x1, s_vida
     bl      strcat_cur
-    ldr     s0, [x28, #G_HP]
-    fcvtns  w1, s0
+    mov     x19, x0
+    bl      hp_max
+    mov     w1, w0
+    mov     x0, x19
     bl      numcat
     mov     w0, #(WX + UA_VIDA_X)
     mov     w1, #(WY + UA_VIDA_Y)
+    LA      x2, xpbuf
+    bl      wtext
+    LA      x0, xpbuf                          // "Mana 50" (maxima)
+    LA      x1, s_mana
+    bl      strcat_cur
+    mov     x19, x0
+    bl      mp_max
+    mov     w1, w0
+    mov     x0, x19
+    bl      numcat
+    mov     w0, #(WX + UA_MANA_X)
+    mov     w1, #(WY + UA_MANA_Y)
     LA      x2, xpbuf
     bl      wtext
     LA      x0, xpbuf                          // "Carga 30.1"
@@ -360,8 +416,8 @@ char_window:
     bl      strcat_cur
     ldr     w1, [x28, #G_CAP]
     bl      kgcat
-    mov     w0, #(WX + UA_MANA_X)
-    mov     w1, #(WY + UA_MANA_Y)
+    mov     w0, #(WX + UA_ACERTO_X)
+    mov     w1, #(WY + UA_ACERTO_Y)
     LA      x2, xpbuf
     bl      wtext
     ldp     x23, x24, [sp, #48]
@@ -417,6 +473,42 @@ xp_hudbar:
     mov     w3, #0
     bl      ui_img
 9:  ldr     x19, [sp, #16]
+    ldp     x29, x30, [sp], #32
+    ret
+
+// hud_num(w0 y, s0 = %, w1 maximo): "152/152" dentro da barra do painel,
+// a direita (como na stamina)
+    .globl hud_num
+hud_num:
+    stp     x29, x30, [sp, #-32]!
+    mov     x29, sp
+    stp     x19, x20, [sp, #16]
+    mov     w19, w0
+    scvtf   s1, w1
+    fmul    s0, s0, s1
+    FC      s1, F_HUNDRED
+    fdiv    s0, s0, s1
+    fcvtns  w9, s0
+    cmp     w9, #0
+    csel    w9, wzr, w9, lt
+    mov     w20, w1
+    LA      x0, hudbuf
+    mov     w1, w9
+    bl      numcat
+    mov     w9, #47
+    strb    w9, [x0], #1
+    mov     w1, w20
+    bl      numcat
+    LA      x0, hudbuf
+    bl      mystrlen
+    lsl     w20, w0, #3
+    RGBA    30, 16, 20, 255
+    mov     w0, #188
+    sub     w0, w0, w20
+    mov     w1, w19
+    LA      x2, hudbuf
+    bl      text
+    ldp     x19, x20, [sp, #16]
     ldp     x29, x30, [sp], #32
     ret
 
@@ -553,6 +645,39 @@ xp_selftest:
     bl      strcat_cur
     ldr     w1, [x28, #G_APTS]
     bl      numcat
+    mov     x20, x0                     // Vitalidade e Energia 20
+    mov     w9, #20
+    str     w9, [x28, #G_VIT]
+    str     w9, [x28, #G_ENE]
+    LA      x1, s_t12
+    mov     x0, x20
+    bl      strcat_cur
+    mov     x20, x0
+    bl      hp_max
+    mov     w1, w0
+    mov     x0, x20
+    bl      numcat
+    LA      x1, s_t13
+    bl      strcat_cur
+    mov     x20, x0
+    bl      mp_max
+    mov     w1, w0
+    mov     x0, x20
+    bl      numcat
+    LA      x1, s_t14
+    bl      strcat_cur
+    mov     x20, x0
+    mov     w9, #30                     // mordida de 30 pontos
+    scvtf   s2, w9
+    bl      hp_scale
+    fcvtns  w1, s2
+    mov     x0, x20
+    bl      numcat
+    LA      x1, s_t15
+    bl      strcat_cur
+    mov     w9, #10
+    str     w9, [x28, #G_VIT]
+    str     w9, [x28, #G_ENE]
     LA      x1, s_nl
     bl      strcat_cur
     bl      sk_write
@@ -571,6 +696,10 @@ s_comma:    .asciz ", "
 s_t9:       .asciz " pontos="
 s_t10:      .asciz " | +2 Forca -> forca="
 s_t11:      .asciz " pontos="
+s_t12:      .asciz " | vit/ene 20: vida max="
+s_t13:      .asciz " mana max="
+s_t14:      .asciz " mordida de 30 tira "
+s_t15:      .asciz "%"
 s_nl:       .asciz "\n"
 s_t1:       .asciz "nivel: XP por nivel 1-10 = "
 s_t2:       .asciz " | nivel 20 = "
@@ -588,6 +717,7 @@ s_nivel:    .asciz "Nivel "
 s_xptxt:    .asciz "XP "
 s_slash:    .asciz " / "
 s_vida:     .asciz "Vida "
+s_mana:     .asciz "Mana "
 s_carga2:   .asciz "Carga "
 m_nopts:    .asciz "Sem pontos de atributo: suba de nivel"
     .p2align 4
@@ -601,4 +731,5 @@ attrnames:
     .asciz "Energia"
     .space 8
 xpbuf:      .space 32
+hudbuf:     .space 32
 lvlbuf:     .space 96

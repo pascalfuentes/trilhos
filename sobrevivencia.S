@@ -3421,7 +3421,7 @@ surv_ui:
     mov     w0, #4
     mov     w1, #16
     mov     w2, #252
-    mov     w3, #86
+    mov     w3, #87
     bl      fillrect
     LA      x0, lbuf
     LA      x1, s_wood
@@ -3445,14 +3445,19 @@ surv_ui:
     mov     w1, #21
     LA      x2, lbuf
     bl      text
-    mov     w0, #36
+    mov     w0, #33
     LA      x1, s_hp
     ldr     s0, [x28, #G_HP]
     mov     w2, #215
     mov     w3, #60
     mov     w4, #50
     bl      bar
-    mov     w0, #49
+    bl      hp_max                      // "100/100" (Vitalidade, nivel.S)
+    mov     w1, w0
+    mov     w0, #33
+    ldr     s0, [x28, #G_HP]
+    bl      hud_num
+    mov     w0, #57
     LA      x1, s_food
     ldr     s0, [x28, #G_FOOD]
     mov     w2, #235
@@ -3464,7 +3469,7 @@ surv_ui:
     cbz     w19, 2f
     RGBA    70, 40, 10, 255             // "cheia" escrito dentro da barra
     mov     w0, #(190 - 5 * 8 - 2)
-    mov     w1, #49
+    mov     w1, #57
     LA      x2, s_full
     bl      text
     RGBA    255, 240, 170, 255
@@ -3474,17 +3479,17 @@ surv_ui:
     udiv    w2, w2, w9
     cbz     w2, 2f
     mov     w0, #70
-    mov     w1, #57
+    mov     w1, #65
     mov     w3, #2
     bl      fillrect
-2:  mov     w0, #62
+2:  mov     w0, #69
     LA      x1, s_warm
     ldr     s0, [x28, #G_WARM]
     mov     w2, #80
     mov     w3, #160
     mov     w4, #240
     bl      bar
-    mov     w0, #75                     // stamina: barra = atual / maximo
+    mov     w0, #81                     // stamina: barra = atual / maximo
     LA      x1, s_stamina
     ldr     s0, [x28, #G_STAMINA]
     ldr     s1, [x28, #G_STAMAX]
@@ -3510,7 +3515,7 @@ surv_ui:
     RGBA    20, 50, 50, 255
     mov     w0, #188
     sub     w0, w0, w19
-    mov     w1, #75
+    mov     w1, #81
     LA      x2, lbuf
     bl      text
     // nivel e XP: "Nv 3" e a barra roxa com "12/26" (nivel.S)
@@ -3520,7 +3525,7 @@ surv_ui:
     ldr     w1, [x28, #G_LEVEL]
     bl      numcat
     bl      xp_pct
-    mov     w0, #88
+    mov     w0, #93
     LA      x1, lbuf2
     mov     w2, #170
     mov     w3, #100
@@ -3531,7 +3536,7 @@ surv_ui:
     tbz     w9, #3, 3f
     RGBA    255, 220, 90, 255
     mov     w0, #10
-    mov     w1, #88
+    mov     w1, #93
     LA      x2, lbuf2
     bl      text
 3:  LA      x0, lbuf
@@ -3544,14 +3549,26 @@ surv_ui:
     LA      x0, lbuf
     bl      mystrlen
     lsl     w19, w0, #3
-    RGBA    40, 20, 60, 255
+    RGBA    235, 225, 255, 255          // claro: le no trilho escuro
     mov     w0, #188
     sub     w0, w0, w19
-    mov     w1, #88
+    mov     w1, #93
     LA      x2, lbuf
     bl      text
-    // ---- avisos embaixo das barras (empilhados a partir de y = 107) ----
-    mov     w20, #107
+    mov     w0, #45                    // mana (Energia, nivel.S)
+    LA      x1, s_mana
+    ldr     s0, [x28, #G_MP]
+    mov     w2, #70
+    mov     w3, #110
+    mov     w4, #235
+    bl      bar
+    bl      mp_max
+    mov     w1, w0
+    mov     w0, #45
+    ldr     s0, [x28, #G_MP]
+    bl      hud_num
+    // ---- avisos embaixo das barras (empilhados a partir de y = 108) ----
+    mov     w20, #108
     ldr     w9, [x28, #G_WATER]         // na agua?
     cbz     w9, ui_heavy
     LA      x10, waternames
@@ -8022,6 +8039,7 @@ s_wood:         .asciz "Madeira "
 s_stone:        .asciz "   Pedra "
 s_berry:        .asciz "   Frutas "
 s_hp:           .asciz "Vida"
+s_mana:         .asciz "Mana"
 s_food:         .asciz "Fome"
 s_warm:         .asciz "Calor"
 s_stamina:      .asciz "Stamina"
