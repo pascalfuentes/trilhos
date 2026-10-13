@@ -1642,11 +1642,19 @@ animals_draw:
     add     w9, w9, #EN_PARADO
 56: mov     w10, #EN_NF
     madd    w9, w22, w10, w9
+    str     w9, [sp, #80]               // o quadro (para o contorno)
     mov     w0, w21
     mov     w1, w24
     mov     w2, w25
     mov     w3, w26
     bl      en_blit
+    mov     w0, w20                     // alvo: contorno dourado (c/contorno.c)
+    mov     w1, w21
+    mov     w2, w24
+    mov     w3, w25
+    mov     w4, w26
+    ldr     w5, [sp, #80]
+    bl      F(target_outline)
     b       8f
 5:  LA      x9, atypes
     add     x9, x9, x21, lsl #4

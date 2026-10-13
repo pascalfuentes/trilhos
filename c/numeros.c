@@ -140,7 +140,12 @@ void numbers_shot(void)
     G_I32(G_FRAME) = f0 - 4;
     hero_bitten(12.0f);
     G_I32(G_FRAME) = f0;
+    c = animal_spawn(A_WOLF, u + 0.3f, v + 1.5f);   // outro lobo, com o mouse
+    G_I32(G_HOVANIM) = c;                           // em cima: contorno dourado
     draw_all();
     save_bmp("shot_dano.bmp");
+    G_I32(G_HOVANIM) = -1;
+    if (c >= 0)
+        animals[c * 32 + 16] = 255;
     animals[c * 32 + 16] = 255;
 }
