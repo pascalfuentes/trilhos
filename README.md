@@ -22,7 +22,8 @@ Você chega sozinho num mundo gerado aleatoriamente: terreno contínuo, mar, pra
 | F5 | salva o jogo (em `ermo.sav`, na pasta do jogo) |
 | F9 | carrega o jogo salvo (também na tela de título e depois de morrer) |
 | WASD / setas | andar |
-| Shift (segurando) | correr |
+| R | liga e desliga o correr |
+| Shift + clique | ataca parado |
 | segurar o botão esquerdo | coletar a árvore, pedra ou arbusto sob o mouse (até 3 células de distância) |
 | E | comer (o que encher mais primeiro: carne assada, pão, frutas assadas, peixe assado...) |
 | F | fabricar uma fogueira e escolher onde montar |
@@ -141,7 +142,7 @@ Os animais aparecem longe da vista, cada um no seu terreno, e somem quando ficam
 - Os bichos são **poucos** (no máximo 10 por perto) e no **inverno** quase não aparecem bichos de caça.
 - Bichos pacíficos fogem quando você chega perto ou quando são feridos. Ferir um cervo espanta a manada toda.
 - Lobos e ursos perseguem: de dia só se você chegar perto, de noite de bem mais longe. Um animal ferido fica furioso.
-- Correndo (Shift), você escapa de um lobo.
+- Correndo (R), você escapa de um lobo.
 - Nenhum animal entra na água, e os perigosos têm medo de fogo: perto de uma fogueira acesa, ou dentro do abrigo, você está seguro.
 - **Flecha** tira 4 de vida. Golpe com machado tira 3, com picareta 2 e com as mãos 1.
 - O animal abatido deixa pilhas de **carne** e **couro** no chão; segure o botão esquerdo para recolher.
@@ -221,8 +222,9 @@ Os animais aparecem longe da vista, cada um no seu terreno, e somem quando ficam
 
 **Andar com o mouse (fase 3)**
 
-- **Clique esquerdo no chão** e o personagem anda até lá, como no Diablo; segurando o botão, ele segue o mouse. **WASD** continua funcionando e cancela o clique; **Shift** corre também andando pelo mouse. Ele para ao chegar ou se empacar (água, pedra, cerca). **Clique num bicho longe:** o personagem vai até ele (seguindo se ele andar) e dá o golpe ao chegar; desiste se o bicho sumir ou se não der para chegar. Com o **arco** ou a **vara** na mão, o clique atira ou pesca de onde você está. Clicar numa fogueira, ou no chão com a enxada ou as sementes na mão, faz o que fazia antes.
+- **Clique esquerdo no chão** e o personagem anda até lá, como no Diablo; segurando o botão, ele segue o mouse. **WASD** continua funcionando e cancela o clique. **R** liga e desliga o **correr** (vale também andando pelo mouse). Ele para ao chegar ou se empacar (água, pedra, cerca). **Clique num bicho longe:** o personagem vai até ele (seguindo se ele andar) e dá o golpe ao chegar; desiste se o bicho sumir ou se não der para chegar. Com o **arco** ou a **vara** na mão, o clique atira ou pesca de onde você está. Clicar numa fogueira, ou no chão com a enxada ou as sementes na mão, faz o que fazia antes.
 - **Segurar o botão num bicho:** continua atacando, golpe atrás de golpe (meio segundo entre eles), indo atrás se ele se afastar, até ele morrer ou você soltar.
+- **Shift + clique: ataca parado**, como no Diablo: não anda até o bicho nem coleta; segurando, golpeia ali mesmo (só acerta quem estiver ao alcance). Com o arco, o clique já atira parado.
 - **Zona de clique:** vale o desenho inteiro do bicho na tela (com 4 px de folga), não só os pés; se dois se sobrepõem, vale o da frente.
 
 **Inimigos com nível (fase 2)**
@@ -247,7 +249,7 @@ Os animais aparecem longe da vista, cada um no seu terreno, e somem quando ficam
 
 **Stamina e corrida**
 
-- Correr deixa o personagem ~1,7x mais rápido e gasta **stamina** (de cheia a vazia em uns 5 s, no começo).
+- Correr (liga e desliga no **R**) deixa o personagem ~1,7x mais rápido e gasta **stamina** (de cheia a vazia em uns 5 s, no começo).
 - A **stamina máxima** começa em 100 e cresce com as skills Corrida e Natação: +0,4 por ponto de cada uma, até 180. O HUD mostra atual/máximo.
 - Nadar também gasta a mesma stamina.
 - Ela volta parado em terra (rápido), andando (devagar) e na água rasa (mais devagar).
@@ -379,7 +381,7 @@ O mundo é difícil de propósito: comida é pouca e estraga, o inverno pesa e a
 | `personagens.S` | os desenhos do personagem (e dos moradores da vila antiga) em 8 direções e 3 poses (gerado por `arte/personagens.py`) |
 | `nivel.S` | nível e XP: a curva 1,5x, subir de nível, o teste |
 | `heroi.S` | desenha o herói camada por camada (corpo, cabelo, botas, peitoral, capacete, espada) pela direção e pelo quadro |
-| `c/` | **código em C** (o jogo está migrando de assembly para C aos poucos): `ermo.h` (base: o estado `G`, que o registrador x28 aponta, e `ASM(nome)` para chamar o assembly), `ermo_equ.h` (as constantes do assembly, geradas por `arte/equ2h.py`), `inimigos.c` (XP dos bichos), `nivel.c` (a curva de XP), `movimento.c` (clicar para andar, ir até o inimigo, segurar para atacar), `alvo.c` (o bicho sob o mouse pelo desenho). Compilado com `-ffixed-x28` para não mexer no x28; o assembly chama funções em C com `bl F(nome)`. |
+| `c/` | **código em C** (o jogo está migrando de assembly para C aos poucos): `ermo.h` (base: o estado `G`, que o registrador x28 aponta, e `ASM(nome)` para chamar o assembly), `ermo_equ.h` (as constantes do assembly, geradas por `arte/equ2h.py`), `inimigos.c` (XP dos bichos), `nivel.c` (a curva de XP), `movimento.c` (clicar para andar, ir até o inimigo, segurar para atacar), `alvo.c` (o bicho sob o mouse pelo desenho), `teclas.c` (R corre, Shift ataca parado). Compilado com `-ffixed-x28` para não mexer no x28; o assembly chama funções em C com `bl F(nome)`. |
 | (estilo 2) | `arte/pixel.py` entende `"densidade": 2` no json: cada quadro tem o dobro de pixels e vem com uma cópia pela metade; o jogo desenha a metade da escala (zoom par) ou a cópia (zoom ímpar), e o chão vira 64 × 32 (`TL_D` no `pixel.h`). `python3 arte/pixel.py --dobro ...` amplia a arte de hoje 2× para testar: o jogo sai igual. `ERMO_SEED=123 ./ermo` sempre gera o mesmo mundo. |
 | `pixel.S` | os desenhos em pixel art do designer: herói em camadas, lobo, árvore, pinheiro, pedra, tocha e penhasco e as imagens da interface da fase 1 (janela C, botão +, ícones, barras de XP) e o efeito de subir de nível; o lobo e o urso animados e as sombras. Gerado por `arte/pixel.py` a partir do `design/estilo/designer/ermo_estilo.json`, do `design/fase1/designer/ermo_fase1.json` e do `design/fase2/designer/ermo_fase2.json`; paleta em `pixpal.inc`, áreas da janela em `pixel.h` |
 | `pilhas.S` | pilhas de itens no chão: que item é, quanto cabe, comida que estraga no chão |
@@ -461,4 +463,4 @@ O tempo do jogo anda por quadro: se a máquina virtual desenhar menos de 60 quad
 - [ ] Estilo 2: trocar a arte quando o pedido 0.7 do designer voltar
 - [x] Migração para C, etapa 1: C e assembly no mesmo executável (primeira função: XP dos bichos)
 - [x] RPG, fase 1.8: curva de XP nova (10 no primeiro nível, ×1,25), em C
-- [x] RPG, fase 3.1 a 3.3: clique esquerdo anda até o ponto; clique no inimigo vai até ele e ataca; segurar continua atacando; zona de clique pelo desenho (em C)
+- [x] RPG, fase 3.1 a 3.4: clique esquerdo anda até o ponto; clique no inimigo vai até ele e ataca; segurar continua atacando; zona de clique pelo desenho; Shift ataca parado e R corre (em C)

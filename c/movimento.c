@@ -124,10 +124,17 @@ void attack_hold(int animal)
     G_I32(G_ATKHOLD) = animal + 1;
 }
 
+// clique sem Shift: o ataque volta a ir atras
+void attack_moving(void)
+{
+    G_I32(G_ATKSTILL) = 0;
+}
+
 // soltou o botao
 void attack_release(void)
 {
     G_I32(G_ATKHOLD) = 0;
+    G_I32(G_ATKSTILL) = 0;
 }
 
 // a cada quadro: segurando num bicho, golpeia de novo ou vai atras dele
@@ -148,7 +155,7 @@ void attack_hold_tick(void)
     if (du * du + dv * dv <= ALCANCE * ALCANCE) {
         if (G_I32(G_ATKCD) == 0)
             melee_attack(alvo);
-    } else {
+    } else if (!G_I32(G_ATKSTILL)) {    // com Shift: fica parado
         moveto_enemy(alvo);
     }
 }

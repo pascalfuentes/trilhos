@@ -13,7 +13,7 @@
 //  - Neblina de guerra: 360 raios saem do personagem (e das fogueiras);
 //    arvores tapam a visao. O raio diminui de noite. O que nunca foi
 //    visto fica preto; o que ja foi visto aparece como foi lembrado.
-//  - Shift corre (gasta stamina, como nadar). 5 skills sobem com o uso
+//  - R liga o correr (gasta stamina, como nadar). 5 skills sobem com o uso
 //    (natacao, corrida, lenhador, mineracao, forca) e caem devagar sem
 //    treino. A mochila tem limite de peso: acima dele, anda devagar.
 //    I abre a mochila, C abre o personagem (ou os botoes no canto).
@@ -882,7 +882,7 @@ surv_update:
     bl      set_msg
 
     // ---- movimento (WASD / setas, na direcao da tela) ----
-    // teclas -> w22: bit 0 W, 1 S, 2 A, 3 D, 4 Shift (o teste soma as suas)
+    // teclas -> w22: bit 0 W, 1 S, 2 A, 3 D, 4 correr (R; o teste soma as suas)
 4:  bl      weather_update              // estacao e clima
     bl      sleep_check                 // dormindo: hora de acordar?
     ldr     x19, [x28, #G_KEYS]
@@ -907,9 +907,7 @@ surv_update:
     orr     w9, w9, w10
     cbz     w9, 44f
     orr     w22, w22, #8
-44: ldrb    w9, [x19, #225]             // Shift esquerdo ou direito
-    ldrb    w10, [x19, #229]
-    orr     w9, w9, w10
+44: ldr     w9, [x28, #G_RUNTOG]        // correr: liga e desliga no R
     cbz     w9, 45f
     orr     w22, w22, #16
 45: ldr     w9, [x28, #G_SLEEP]         // dormindo: nao anda
@@ -964,7 +962,7 @@ surv_update:
     b       94f
 92: LA      x10, waterspeed             // terra 1.0, agua rasa 0.6
     ldr     s0, [x10, x9, lsl #2]
-    // correr (Shift): precisa de stamina e de nao estar sobrecarregado
+    // correr (R): precisa de stamina e de nao estar sobrecarregado
     tbz     w22, #4, 94f
     ldr     w9, [x28, #G_EXHAUST]
     cbnz    w9, 94f
@@ -1648,7 +1646,12 @@ surv_key:
     LA      x0, m_wokeup
     bl      set_msg
     b       9f
-0:  cmp     w0, #8                      // E
+0:  str     x0, [sp, #-16]!             // R e outras teclas em C (c/teclas.c)
+    bl      F(key_c)
+    mov     w9, w0
+    ldr     x0, [sp], #16
+    cbnz    w9, 9f
+    cmp     w0, #8                      // E
     b.ne    1f
     bl      eat_best
     b       9f
@@ -2520,6 +2523,9 @@ surv_mouse:
     b       sm_ret
 7:  cmp     w19, #1
     b.ne    8f
+    bl      F(shift_attack)             // Shift: ataca parado (c/teclas.c)
+    cbnz    w0, sm_ret
+    bl      F(attack_moving)
     ldr     w9, [x28, #G_HAND]          // arco na mao: atira
     cmp     w9, #(IT_BOW + 1)
     b.ne    70f
