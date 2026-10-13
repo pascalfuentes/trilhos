@@ -409,10 +409,11 @@ char_window:
     bl      strcat_cur
     ldr     w1, [x28, #G_CAP]
     bl      kgcat
-    mov     w0, #(WX + UA_ACERTO_X)
-    mov     w1, #(WY + UA_ACERTO_Y)
+    mov     w0, #(WX + UA_DEFESA_X)            // (a defesa vem com os itens)
+    mov     w1, #(WY + UA_DEFESA_Y)
     LA      x2, xpbuf
     bl      wtext
+    bl      F(char_combat_text)                // dano e acerto (c/combate.c)
     ldp     x23, x24, [sp, #48]
     ldp     x21, x22, [sp, #32]
     ldp     x19, x20, [sp, #16]

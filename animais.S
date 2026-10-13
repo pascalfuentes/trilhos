@@ -1297,10 +1297,13 @@ melee_attack:
     cbz     w10, 1f
     mov     w1, #4
 1:
-    mov     w0, w19
-    bl      animal_hit
+    mov     w0, w19                     // acerto e dano pelos atributos
+    mov     w2, #0                      // (golpe; c/combate.c)
+    bl      F(player_hit)
+    cbz     w0, 2f                      // errou: o "Errou!" ja apareceu
     LA      x0, p_hit
     bl      popup
+2:
     mov     w0, #1
 9:  ldr     x19, [sp, #16]
     ldp     x29, x30, [sp], #32
@@ -1418,8 +1421,9 @@ arrows_update:
     fcmp    s2, s3
     b.gt    3f
     mov     w0, w22
-    mov     w1, #4                      // dano da flecha
-    bl      animal_hit
+    mov     w1, #4                      // dano da flecha (com a Destreza
+    mov     w2, #1                      // e o acerto: c/combate.c)
+    bl      F(player_hit)
     b       4f
 3:  add     x21, x21, #32
     add     w22, w22, #1

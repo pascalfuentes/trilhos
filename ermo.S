@@ -235,6 +235,8 @@ novo_mode:
 
 // ---- modo screenshot / benchmark (para testar sem tela) -------------
 shot_mode:
+    mov     w0, #1                      // nos testes o golpe sempre acerta
+    bl      F(hit_sure)                 // (c/combate.c)
     bl      update
     bl      draw_all
     LA      x0, s_shot_title
@@ -471,6 +473,7 @@ shot_mode:
     bl      F(moveto_selftest)          // clique para andar (c/movimento.c)
     bl      F(pick_selftest)            // zona de clique dos bichos (c/alvo.c)
     bl      F(keys_selftest)            // R corre, Shift ataca parado (c/teclas.c)
+    bl      F(combat_selftest)          // acerto e dano (c/combate.c)
     mov     w9, #165                    // e a luz de subir de nivel (quadro 4)
     str     w9, [x28, #G_LVLT]
     mov     w9, #1                      // janela C com pontos para gastar
