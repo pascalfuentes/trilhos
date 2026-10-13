@@ -13,19 +13,24 @@
 //    seguro. Nenhum entra na agua nem passa por cercas e portoes.
 //  - Abatidos, deixam pilhas de carne e couro no chao.
 //  - Flechas voam em linha reta ate acertar um animal ou cair.
+//  - Nivel (RPG, fase 2): cada bicho tem um nivel. Vida e mordida crescem
+//    20% por nivel acima do 1 (an_scale); a defesa tira 1 ponto de cada
+//    golpe a cada 4 niveis (golpe minimo 1). Lobo e urso nascem com
+//    nivel 1 a 3 por enquanto (a regiao vem na etapa 2.2).
 // =====================================================================
 
 #include "comum.h"
 
-// animal (32 bytes): u, v, du, dv (float), tipo (255 = vaga), vida,
-// estado, ferido (quadros), tempo ate mudar de rumo (u16), espera da
-// mordida (u16), passos (u16)
+// animal (32 bytes): u, v, du, dv (float), tipo (255 = vaga), (livre),
+// grupo, ferido (quadros), tempo ate mudar de rumo (u16), espera da
+// mordida (u16), passos (u16), direcao, nivel, vida (u16)
 .equ AN_U,     0
 .equ AN_V,     4
 .equ AN_DU,    8
 .equ AN_DV,    12
 .equ AN_TYPE,  16
-.equ AN_HP,    17
+.equ AN_HP,    28                      // vida (u16)
+.equ AN_LVL,   27                      // nivel (1..255)
 .equ AN_HURT,  19
 .equ AN_TIMER, 20
 .equ AN_CD,    22
@@ -144,7 +149,9 @@ animal_spawn:
     LA      x11, atypes
     add     x11, x11, x0, lsl #4
     ldrb    w11, [x11, #AT_HP]
-    strb    w11, [x9, #AN_HP]
+    strh    w11, [x9, #AN_HP]
+    mov     w11, #1
+    strb    w11, [x9, #AN_LVL]
     strb    wzr, [x9, #AN_HURT]
     strb    wzr, [x9, #18]              // grupo (desafio.S)
     strb    wzr, [x9, #AN_DIR]
@@ -235,7 +242,21 @@ try_spawn:
     fmov    s0, s8
     fmov    s1, s9
     bl      animal_spawn
-    cmp     w20, #A_DEER                // cervo: vem em manada
+    tbnz    w0, #31, 9f
+    cmp     w20, #A_WOLF                // lobo e urso: nivel 1 a 3
+    b.eq    3f
+    cmp     w20, #A_BEAR
+    b.ne    4f
+3:  mov     w19, w0
+    bl      rng
+    and     w9, w0, #3
+    cmp     w9, #3
+    csel    w9, wzr, w9, eq
+    add     w1, w9, #1
+    mov     w0, w19
+    bl      an_setlevel
+    mov     w0, w19
+4:  cmp     w20, #A_DEER                // cervo: vem em manada
     b.ne    9f
     tbnz    w0, #31, 9f
     bl      herd_spawn
@@ -331,8 +352,13 @@ au_loop:
     b.ge    4f
     fmov    s2, #0.5
     fmul    s12, s12, s2
-4:  ldrb    w9, [x20, #AN_HP]           // ferido: furioso
-    ldrb    w10, [x22, #AT_HP]
+4:  ldrb    w10, [x22, #AT_HP]          // ferido: furioso
+    ldrb    w9, [x20, #AN_LVL]
+    add     w9, w9, #4
+    mul     w10, w10, w9
+    mov     w9, #5
+    udiv    w10, w10, w9
+    ldrh    w9, [x20, #AN_HP]
     cmp     w9, w10
     b.ge    5f
     fmov    s12, #15.0
@@ -349,7 +375,12 @@ au_loop:
     mov     w9, #60
     strh    w9, [x20, #AN_CD]
     ldrb    w9, [x22, #AT_DMG]
+    ldrb    w10, [x20, #AN_LVL]         // +20% por nivel
+    add     w10, w10, #4
+    mul     w9, w9, w10
     scvtf   s2, w9
+    fmov    s3, #5.0
+    fdiv    s2, s2, s3
     bl      hp_scale                    // em % da vida maxima (Vitalidade)
     ldr     w9, [x28, #(G_INV + 4 * IT_ARMOR)] // armadura: metade
     cbz     w9, 1f
@@ -488,6 +519,113 @@ au_done:
     ldp     x29, x30, [sp], #128
     ret
 
+// an_maxhp(x0 = animal) -> w0 = vida maxima: base x (4 + nivel) / 5   folha
+    .globl an_maxhp
+an_maxhp:
+    ldrb    w9, [x0, #AN_TYPE]
+    LA      x10, atypes
+    add     x10, x10, x9, lsl #4
+    ldrb    w9, [x10, #AT_HP]
+    ldrb    w10, [x0, #AN_LVL]
+    add     w10, w10, #4
+    mul     w9, w9, w10
+    mov     w10, #5
+    udiv    w0, w9, w10
+    ret
+
+// an_setlevel(w0 = animal, w1 = nivel): muda o nivel e enche a vida
+    .globl an_setlevel
+an_setlevel:
+    stp     x29, x30, [sp, #-16]!
+    mov     x29, sp
+    LA      x9, animals
+    add     x0, x9, x0, lsl #5
+    cmp     w1, #1
+    mov     w9, #1
+    csel    w1, w9, w1, lt
+    cmp     w1, #255
+    mov     w9, #255
+    csel    w1, w9, w1, gt
+    strb    w1, [x0, #AN_LVL]
+    mov     x11, x0                     // an_maxhp nao mexe no x11
+    bl      an_maxhp
+    strh    w0, [x11, #AN_HP]
+    ldp     x29, x30, [sp], #16
+    ret
+
+// animals_fix: save de antes do nivel: nivel 1, vida do byte antigo
+    .globl animals_fix
+animals_fix:
+    LA      x9, animals
+    mov     w10, #MAXANIM
+1:  ldrb    w11, [x9, #AN_TYPE]
+    cmp     w11, #255
+    b.eq    2f
+    ldrb    w11, [x9, #AN_LVL]
+    cbnz    w11, 2f
+    mov     w11, #1
+    strb    w11, [x9, #AN_LVL]
+    ldrb    w11, [x9, #17]
+    strh    w11, [x9, #AN_HP]
+2:  add     x9, x9, #32
+    subs    w10, w10, #1
+    b.ne    1b
+    ret
+
+// an_selftest(x0 = cursor) -> x0: " | lobo nv 1 vida=6 nv 6 vida=12,
+// golpe de 6 tira 5" (um lobo longe, que some depois)
+    .globl an_selftest
+an_selftest:
+    stp     x29, x30, [sp, #-48]!
+    mov     x29, sp
+    stp     x19, x20, [sp, #16]
+    str     x21, [sp, #32]
+    mov     x21, x0
+    mov     w0, #A_WOLF
+    mov     w9, #10
+    scvtf   s0, w9
+    scvtf   s1, w9
+    bl      animal_spawn
+    mov     w19, w0
+    tbnz    w19, #31, 9f
+    LA      x20, animals
+    add     x20, x20, x19, lsl #5
+    mov     x0, x21
+    LA      x1, s_ant1
+    bl      strcat_cur
+    ldrh    w1, [x20, #AN_HP]
+    bl      numcat
+    mov     x21, x0
+    mov     w0, w19
+    mov     w1, #6
+    bl      an_setlevel
+    mov     x0, x21
+    LA      x1, s_ant2
+    bl      strcat_cur
+    ldrh    w1, [x20, #AN_HP]
+    bl      numcat
+    mov     x21, x0
+    ldrh    w9, [x20, #AN_HP]
+    str     w9, [sp, #40]
+    mov     w0, w19
+    mov     w1, #6
+    bl      animal_hit
+    mov     x0, x21
+    LA      x1, s_ant3
+    bl      strcat_cur
+    ldr     w9, [sp, #40]
+    ldrh    w10, [x20, #AN_HP]
+    sub     w1, w9, w10
+    bl      numcat
+    mov     x21, x0
+    mov     w9, #255                    // some
+    strb    w9, [x20, #AN_TYPE]
+9:  mov     x0, x21
+    ldr     x21, [sp, #32]
+    ldp     x19, x20, [sp, #16]
+    ldp     x29, x30, [sp], #48
+    ret
+
 // animal_hit(w0 = animal, w1 = dano): abatido deixa carne e couro
     .globl animal_hit
 animal_hit:
@@ -504,10 +642,18 @@ animal_hit:
     strb    w9, [x19, #AN_HURT]
     mov     x0, x19                     // a manada foge junto
     bl      herd_alarm
-    ldrb    w9, [x19, #AN_HP]
+    ldrb    w9, [x19, #AN_LVL]      // defesa: -1 a cada 4 niveis, min. 1
+    sub     w9, w9, #1
+    lsr     w9, w9, #2
+    subs    w1, w1, w9
+    mov     w9, #1
+    csel    w1, w9, w1, lt
+    cmp     w1, #1
+    csel    w1, w9, w1, lt
+    ldrh    w9, [x19, #AN_HP]
     subs    w9, w9, w1
     csel    w9, wzr, w9, lt
-    strb    w9, [x19, #AN_HP]
+    strh    w9, [x19, #AN_HP]
     cbnz    w9, 9f
     // abatido
     LA      x21, atypes
@@ -598,13 +744,21 @@ animal_desc:
     LA      x1, animnames
     add     x1, x1, x20, lsl #4
     bl      strcat_cur
+    LA      x1, s_anv                   // " Nv 3"
+    bl      strcat_cur
+    ldrb    w1, [x19, #AN_LVL]
+    bl      numcat
     LA      x1, s_avida
     bl      strcat_cur
-    ldrb    w1, [x19, #AN_HP]
+    ldrh    w1, [x19, #AN_HP]
     bl      numcat
     mov     w9, #47
     strb    w9, [x0], #1
-    ldrb    w1, [x21, #AT_HP]
+    mov     x22, x0
+    mov     x0, x19
+    bl      an_maxhp
+    mov     w1, w0
+    mov     x0, x22
     bl      numcat
     mov     w9, #41
     strb    w9, [x0], #1
@@ -1033,6 +1187,10 @@ m_noarrow:  .asciz "Sem flechas (fabrique: Tab)"
 p_bite:     .asciz "Mordida!"
 p_hit:      .asciz "Pow!"
 s_killed:   .asciz "Abateu: "
+s_ant1:     .asciz " | lobo nv 1 vida="
+s_ant2:     .asciz " nv 6 vida="
+s_ant3:     .asciz " golpe de 6 tira "
+s_anv:      .asciz " Nv "
 s_avida:    .asciz " (vida "
 s_danger:   .asciz " - perigoso!"
 

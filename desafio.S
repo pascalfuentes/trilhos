@@ -20,7 +20,7 @@
 .equ AN_DU,     8
 .equ AN_DV,     12
 .equ AN_TYPE,   16
-.equ AN_HP,     17
+.equ AN_HP,     28
 .equ AN_GRP,    18                      // 0 sozinho, 1 alcateia, 2.. manada
 .equ AN_HURT,   19
 .equ AT_WALK,   8

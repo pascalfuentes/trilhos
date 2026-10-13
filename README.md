@@ -219,6 +219,13 @@ Os animais aparecem longe da vista, cada um no seu terreno, e somem quando ficam
 - **Atributos:** Força, Destreza, Vitalidade e Energia, começando em 10. Cada nível dá **5 pontos**: abra a janela **C** e clique no **+** do atributo. Efeitos: **Força** dá **+1 kg** de carga por ponto acima de 10; **Vitalidade** dá vida máxima = 50 + 5 por ponto (100 no começo); **Energia** dá mana máxima = 5 por ponto (50 no começo); a **Destreza** entra no combate (fase 3).
 - **Vida e mana:** o painel mostra a vida e a mana com os números ("150/150"). A vida fica guardada em porcentagem: fome e frio tiram a mesma fatia, mas a mordida dos bichos tira pontos de vida, então com mais Vitalidade ela pesa menos. A mana enche sozinha em 30 s (vai ser gasta nas skills, fase 9). Os globos estilo Diablo vêm com a arte da fase de Interface.
 
+**Inimigos com nível (fase 2)**
+
+- Cada bicho tem um **nível**, que aparece com o mouse em cima ("Lobo Nv 3 (vida 8/8)").
+- A **vida** e a **mordida** crescem 20% por nível acima do 1: um lobo de nível 6 tem o dobro da vida e morde com o dobro da força.
+- **Defesa:** a cada 4 níveis o bicho tira 1 ponto de cada golpe seu (o golpe mínimo é 1).
+- Por enquanto **lobo e urso** nascem com nível 1 a 3; o nível pela região (mais longe, mais forte) vem na etapa 2.2.
+
 **Sobrevivência**
 
 - **Fome:** quando enche (comendo), fica **cheia por 4 minutos** antes de começar a cair. Comer de novo com ela cheia renova esse tempo. Depois cai de cheia a vazia em uns 16 minutos. Sem comida, a vida cai.
@@ -429,3 +436,5 @@ O tempo do jogo anda por quadro: se a máquina virtual desenhar menos de 60 quad
 - [x] RPG, fase 1.1 e 1.2: nível, barra de XP e a curva 1,5x
 - [x] RPG, fase 1.3 e 1.4: atributos e 5 pontos por nível
 - [x] RPG, fase 1.5 e 1.6: vida pela Vitalidade, mana pela Energia; o save já guarda tudo
+- [x] RPG, fase 2.1: bichos com nível (vida, mordida e defesa)
+- [ ] RPG, fase 2.2: nível pela região

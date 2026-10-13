@@ -675,6 +675,7 @@ xp_selftest:
     bl      numcat
     LA      x1, s_t15
     bl      strcat_cur
+    bl      an_selftest                 // bichos com nivel (animais.S)
     mov     w9, #10
     str     w9, [x28, #G_VIT]
     str     w9, [x28, #G_ENE]
