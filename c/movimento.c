@@ -7,7 +7,10 @@
 //  - Clique num bicho longe (etapa 3.2): vai ate ele, seguindo se ele
 //    andar, e ao chegar a 1,6 celula da o golpe (melee_attack, ate 2
 //    celulas). Desiste se ele sumir ou se nao conseguir chegar perto.
-//    Com o arco ou a vara na mao, o clique atira/pesca de onde esta. Segurando o botao, o destino
+//    Com o arco ou a vara na mao, o clique atira/pesca de onde esta.
+//  - Segurar o botao num bicho (etapa 3.3): continua atacando, golpe
+//    atras de golpe (a espera entre golpes e a do melee_attack), indo
+//    atras dele se ele se afastar, ate ele morrer ou voce soltar. Segurando o botao, o destino
 //    acompanha o mouse.
 //  - WASD continua funcionando e cancela o clique. Shift corre.
 //  - Para ao chegar (a 0,15 celula) ou se empacar uns 0,75 s (agua,
@@ -115,6 +118,41 @@ int moveto_dir(void)
     return 1;
 }
 
+// apertou o botao num bicho: segura o ataque nele
+void attack_hold(int animal)
+{
+    G_I32(G_ATKHOLD) = animal + 1;
+}
+
+// soltou o botao
+void attack_release(void)
+{
+    G_I32(G_ATKHOLD) = 0;
+}
+
+// a cada quadro: segurando num bicho, golpeia de novo ou vai atras dele
+void attack_hold_tick(void)
+{
+    int alvo = G_I32(G_ATKHOLD) - 1;
+    if (alvo < 0)
+        return;
+    uint8_t *a = animals + alvo * 32;
+    if (a[AN_TYPE] == 255 || G_I32(G_DEAD) || G_I32(G_SLEEP)) {
+        G_I32(G_ATKHOLD) = 0;
+        return;
+    }
+    if (G_I32(G_MOVETO))                // ainda indo ate ele
+        return;
+    float du = *(float *)(a + AN_U) - G_F32(G_PU);
+    float dv = *(float *)(a + AN_V) - G_F32(G_PV);
+    if (du * du + dv * dv <= ALCANCE * ALCANCE) {
+        if (G_I32(G_ATKCD) == 0)
+            melee_attack(alvo);
+    } else {
+        moveto_enemy(alvo);
+    }
+}
+
 // ---------------------------------------------------------------------
 //  Teste (--shot): clica 3 celulas a frente e deixa o tempo correr
 // ---------------------------------------------------------------------
@@ -173,5 +211,35 @@ void moveto_selftest(void)
     n = snprintf(buf, sizeof buf,
                  "movimento: clique num cervo a 5 celulas -> andou %.2f, golpeou=%d, em %d quadros\n",
                  G_F32(G_PU) - u0, golpe, quadros);
+    if (write(1, buf, n) < 0) {}
+
+    // segurando o botao num urso parado do lado: golpes seguidos
+    u0 = G_F32(G_PU);
+    v0 = G_F32(G_PV);
+    c = animal_spawn(A_BEAR, u0 + 1.0f, v0);
+    int golpes = 0, morreu = 0;
+    if (c >= 0) {
+        uint8_t *a = animals + c * 32;
+        int vida = *(uint16_t *)(a + 28);
+        G_I32(G_ATKCD) = 0;
+        attack_hold(c);
+        for (quadros = 0; quadros < 120; quadros++) {
+            *(float *)(a + 8) = 0;
+            *(float *)(a + 12) = 0;
+            *(float *)(a + AN_U) = u0 + 1.0f;
+            *(float *)(a + AN_V) = v0;
+            *(uint16_t *)(a + 22) = 60;     // nao morde (espera da mordida)
+            G_F32(G_HP) = 100.0f;
+            surv_update();
+            if (a[AN_TYPE] == 255) { morreu = 1; golpes++; break; }
+            int v2 = *(uint16_t *)(a + 28);
+            if (v2 < vida) golpes++;
+            vida = v2;
+        }
+        attack_release();
+        a[AN_TYPE] = 255;
+    }
+    n = snprintf(buf, sizeof buf,
+                 "movimento: segurando num urso por 2 s -> golpes=%d morreu=%d\n", golpes, morreu);
     if (write(1, buf, n) < 0) {}
 }

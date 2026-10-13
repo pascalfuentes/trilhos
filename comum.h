@@ -248,7 +248,8 @@
 .equ G_MTDV,     944
 .equ G_MTDIST,   948         // distancia no quadro anterior (empacou?)
 .equ G_MTANIM,   1172        // clicou num bicho: vai ate ele e ataca (-1; c/movimento.c)
-// 1176..1183, 1204: livres (eram da vila)
+.equ G_ATKHOLD,  1176        // segurando o botao num bicho: numero + 1 (0 = nao; c/movimento.c)
+// 1180..1183, 1204: livres (eram da vila)
 .equ G_NEARFURN, 952         // perto de uma fornalha (receitas de ferro)
 .equ G_FULL,     956         // tela cheia
 .equ G_INV,      960         // mochila: um contador (u32) por item, 48 vagas

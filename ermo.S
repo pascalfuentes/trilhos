@@ -469,6 +469,7 @@ shot_mode:
     bl      desafio_selftest
     bl      xp_selftest                 // nivel: a curva e subir de nivel
     bl      F(moveto_selftest)          // clique para andar (c/movimento.c)
+    bl      F(pick_selftest)            // zona de clique dos bichos (c/alvo.c)
     mov     w9, #165                    // e a luz de subir de nivel (quadro 4)
     str     w9, [x28, #G_LVLT]
     mov     w9, #1                      // janela C com pontos para gastar

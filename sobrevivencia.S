@@ -812,6 +812,7 @@ surv_update:
     stp     d8, d9, [sp, #48]
     stp     d10, d11, [sp, #64]
     bl      xp_tick                     // brilho de "subiu de nivel"
+    bl      F(attack_hold_tick)         // segurando o botao num bicho (C)
     ldr     w9, [x28, #G_MSGT]
     cbz     w9, 1f
     sub     w9, w9, #1
@@ -1090,10 +1091,12 @@ su_after_move:
     bl      mouse_ui                    // mouse em cima de botao ou janela?
     bl      ui_hit
     cbnz    w0, 11f
-    ldr     w0, [x28, #G_HOVU]          // um animal (a vista)?
+    bl      F(animal_pick)              // um animal sob o mouse, pelo desenho
+    tbz     w0, #31, 103f               // na tela (c/alvo.c)
+    ldr     w0, [x28, #G_HOVU]          // senao pelo chao, como antes
     ldr     w1, [x28, #G_HOVV]
     bl      animal_at
-    str     w0, [x28, #G_HOVANIM]
+103: str    w0, [x28, #G_HOVANIM]
     ldr     w0, [x28, #G_HOVU]
     ldr     w1, [x28, #G_HOVV]
     bl      find_obj_near
@@ -2371,6 +2374,7 @@ surv_mouse:
     cmp     w19, #1                     // soltou o esquerdo: para de coletar
     b.ne    sm_ret
     str     wzr, [x28, #G_LMB]
+    str     wzr, [x28, #G_ATKHOLD]      // e de atacar (c/movimento.c)
     str     wzr, [x28, #G_FARMLAST]     // enxada/sementes: de novo em qualquer celula
     str     wzr, [x28, #G_FARMMODE]
     bl      fence_commit                // soltou uma fileira de cercas
@@ -2527,6 +2531,8 @@ surv_mouse:
     b       sm_ret
 71: ldr     w0, [x28, #G_HOVANIM]       // animal ao alcance: golpe
     tbnz    w0, #31, 72f
+    bl      F(attack_hold)              // segurando: golpes seguidos (C)
+    ldr     w0, [x28, #G_HOVANIM]
     bl      melee_attack
     cbnz    w0, sm_ret
     ldr     w0, [x28, #G_HOVANIM]       // longe: vai ate ele (c/movimento.c)
