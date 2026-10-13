@@ -518,8 +518,76 @@ hud_num:
     ldp     x29, x30, [sp], #32
     ret
 
+// enemy_bar(x0 = nome, w1 = vida, w2 = vida maxima, w3 = 0 normal,
+// 1 campeao, 2 chefe): a placa do designer no topo da tela (pedido 2.0)
+// com a vida em vermelho e "Lobo - Nv 7" centrado por cima
+    .globl enemy_bar
+enemy_bar:
+    stp     x29, x30, [sp, #-64]!
+    mov     x29, sp
+    stp     x19, x20, [sp, #16]
+    stp     x21, x22, [sp, #32]
+    str     x23, [sp, #48]
+    mov     x19, x0
+    mov     w20, w1
+    mov     w21, w2
+    LA      x22, uiplacas
+    mov     w9, #40
+    umaddl  x22, w3, w9, x22            // 8 words + 1 quad
+    ldr     x0, [x22, #32]
+    ldr     w1, [x22]
+    ldr     w2, [x22, #4]
+    mov     w3, #0
+    bl      ui_img
+    LA      x0, uivvazia                // trilho vazio
+    ldr     w1, [x22, #8]
+    ldr     w2, [x22, #12]
+    ldr     w3, [x22, #16]
+    bl      ui_stretch
+    cmp     w21, #1                     // colunas = round(largura * vida / max)
+    mov     w9, #1
+    csel    w21, w9, w21, lt
+    ldr     w9, [x22, #16]
+    mul     w9, w9, w20
+    add     w9, w9, w21, lsr #1
+    udiv    w23, w9, w21
+    ldr     w9, [x22, #16]
+    cmp     w23, w9
+    csel    w23, w9, w23, gt
+    cmp     w23, #1
+    b.lt    1f
+    LA      x0, uivcheia
+    ldr     w1, [x22, #8]
+    ldr     w2, [x22, #12]
+    sub     w3, w23, #1
+    cbz     w3, 2f
+    bl      ui_stretch
+2:  LA      x0, uivponta                // a ponta clara na ultima coluna
+    ldr     w1, [x22, #8]
+    add     w1, w1, w23
+    sub     w1, w1, #1
+    ldr     w2, [x22, #12]
+    mov     w3, #0
+    bl      ui_img
+1:  mov     x0, x19                     // nome centrado
+    bl      mystrlen
+    ldr     w9, [x22, #28]
+    sub     w9, w9, w0, lsl #3
+    asr     w9, w9, #1
+    ldr     w0, [x22, #20]
+    add     w0, w0, w9
+    ldr     w1, [x22, #24]
+    mov     x2, x19
+    bl      wtext
+    ldr     x23, [sp, #48]
+    ldp     x21, x22, [sp, #32]
+    ldp     x19, x20, [sp, #16]
+    ldp     x29, x30, [sp], #64
+    ret
+
 // wtext(w0 x, w1 y, x2 texto): texto da janela, cor Í com sombra Ê
 // 1 px para baixo e para a direita (como pede o designer)
+    .globl wtext
 wtext:
     stp     x29, x30, [sp, #-48]!
     mov     x29, sp

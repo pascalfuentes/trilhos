@@ -365,6 +365,26 @@ if f1:
     w('    .globl pixlvl')
     w('pixlvl: .quad ' + ', '.join(elabs))
     UA.append('.equ PX_LVL_N, %d' % len(elabs))
+    if f2:
+        # barra do inimigo no topo (pedido 2.0): 3 placas e a vida
+        bi = f2['barra_inimigo']
+        PL = ['normal', 'campeao', 'chefe']
+        for i, n in enumerate(PL):
+            ui_img('uiplaca%d' % i, bi['placas'][n]['linhas'], bi['cores'])
+        for lab, k in (('uivvazia', 'vida_vazia'), ('uivcheia', 'vida_cheia'), ('uivponta', 'vida_ponta')):
+            ui_img(lab, [c for c in bi[k]], bi['cores'])
+        w('// placas: x, y, vida x, y, largura, nome x, y, largura (na tela),')
+        w('// imagem')
+        w('    .p2align 3')
+        w('    .globl uiplacas')
+        w('uiplacas:')
+        for i, n in enumerate(PL):
+            pl = bi['placas'][n]
+            px, py = pl['posicao']
+            v = pl['areas']['vida']
+            nm = pl['areas']['nome']
+            w('    .word %d, %d, %d, %d, %d, %d, %d, %d' % (px, py, px + v[0], py + v[1], v[2], px + nm[0], py + nm[1], nm[2]))
+            w('    .quad uiplaca%d' % i)
     w('    .p2align 3')
     w('    .globl uibtns, uiicons, uiheros')
     w('uibtns:  .quad uibtn0, uibtn1, uibtn2, uibtn3')

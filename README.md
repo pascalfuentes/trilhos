@@ -221,7 +221,7 @@ Os animais aparecem longe da vista, cada um no seu terreno, e somem quando ficam
 
 **Inimigos com nível (fase 2)**
 
-- Cada bicho tem um **nível**, que aparece com o mouse em cima ("Lobo Nv 3 (vida 8/8)").
+- Cada bicho tem um **nível**. Com o mouse em cima aparece, **no topo da tela**, a placa do designer com "Lobo - Nv 3" e a **vida** em vermelho, como no Diablo.
 - A **vida** e a **mordida** crescem 20% por nível acima do 1: um lobo de nível 6 tem o dobro da vida e morde com o dobro da força.
 - **Defesa:** a cada 4 níveis o bicho tira 1 ponto de cada golpe seu (o golpe mínimo é 1).
 - **Nível pela região:** o nível de um bicho é 1 + 1 a cada 16 células de distância de onde a partida começou, mais 0 a 2 de sorte. Perto do começo: 1 a 3; a 64 células: 5 a 7; a 200 células: 13 a 15. (Quando houver cidades, a conta passa a ser a partir da primeira cidade.)
@@ -442,3 +442,4 @@ O tempo do jogo anda por quadro: se a máquina virtual desenhar menos de 60 quad
 - [x] RPG, fase 2.1: bichos com nível (vida, mordida e defesa)
 - [x] RPG, fase 2.2: nível pela região
 - [x] RPG, fase 2.8 e 2.9 (parte 1): sombras; lobo e urso animados do designer
+- [x] RPG, fase 2.4: barra do inimigo no topo

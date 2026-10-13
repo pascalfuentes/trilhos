@@ -384,6 +384,16 @@ shot_mode:
     bl      save_bmp
     ldr     x0, [x28, #G_REN]
     bl      F(SDL_RenderPresent)
+    mov     w0, #A_BEAR                 // o mouse em cima do urso: a barra
+    bl      an_first
+    str     w0, [x28, #G_HOVANIM]
+    bl      draw_all
+    LA      x0, s_shot_bar
+    bl      save_bmp
+    ldr     x0, [x28, #G_REN]
+    bl      F(SDL_RenderPresent)
+    mov     w9, #-1
+    str     w9, [x28, #G_HOVANIM]
     mov     w0, #1
     bl      surv_selftest_hunt
 
@@ -3397,6 +3407,7 @@ s_shot_craft:   .asciz "shot_fabricar.bmp"
 s_shot_torch:   .asciz "shot_tocha.bmp"
 s_shot_clima:   .asciz "shot_clima0.bmp"
 s_shot_anim:    .asciz "shot_animais.bmp"
+s_shot_bar:     .asciz "shot_barra.bmp"
 s_shot_fence:   .asciz "shot_cerca.bmp"
 s_shot_farm:    .asciz "shot_plantacao.bmp"
 s_shot_iron:    .asciz "shot_ferro.bmp"

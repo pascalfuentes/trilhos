@@ -3658,17 +3658,9 @@ ui_tip:
     bl      place_tip
     b       ui_pop
 ui_tip2:
-    ldr     w1, [x28, #G_HOVANIM]       // um animal sob o mouse
-    tbnz    w1, #31, ui_tip3
-    LA      x0, lbuf
-    bl      animal_desc
-    mov     w22, #1
-    cbz     w1, 1f
-    mov     w22, #2                     // perigoso: vermelho
-1:  bl      mouse_ui
-    add     w19, w0, #10
-    add     w20, w1, #6
-    bl      tooltip_box
+    ldr     w0, [x28, #G_HOVANIM]       // um animal sob o mouse: a barra
+    tbnz    w0, #31, ui_tip3            // no topo, como no Diablo
+    bl      an_bar
     b       ui_pop
 ui_tip3:
 

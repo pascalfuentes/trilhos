@@ -867,6 +867,36 @@ animal_desc:
     ldp     x29, x30, [sp], #48
     ret
 
+// an_bar(w0 = animal): a barra do topo com "Lobo - Nv 7" e a vida
+    .globl an_bar
+an_bar:
+    stp     x29, x30, [sp, #-32]!
+    mov     x29, sp
+    stp     x19, x20, [sp, #16]
+    LA      x19, animals
+    add     x19, x19, x0, lsl #5
+    ldrb    w9, [x19, #AN_TYPE]
+    cmp     w9, #255
+    b.eq    9f
+    LA      x0, barbuf
+    LA      x1, animnames
+    add     x1, x1, x9, lsl #4
+    bl      strcat_cur
+    LA      x1, s_barnv
+    bl      strcat_cur
+    ldrb    w1, [x19, #AN_LVL]
+    bl      numcat
+    mov     x0, x19
+    bl      an_maxhp
+    mov     w2, w0
+    ldrh    w1, [x19, #AN_HP]
+    LA      x0, barbuf
+    mov     w3, #0                      // campeao e chefe: etapa 2.5
+    bl      enemy_bar
+9:  ldp     x19, x20, [sp, #16]
+    ldp     x29, x30, [sp], #32
+    ret
+
 // melee_attack(w0 = animal) -> w0 = 1 se golpeou (perto o bastante)
     .globl melee_attack
 melee_attack:
@@ -1319,6 +1349,22 @@ en_blit:
     mov     w5, #0
     b       blit
 
+// an_first(w0 = tipo) -> w0 = o primeiro vivo desse tipo (-1)   folha
+    .globl an_first
+an_first:
+    LA      x9, animals
+    mov     w10, #0
+1:  ldrb    w11, [x9, #AN_TYPE]
+    cmp     w11, w0
+    b.eq    2f
+    add     x9, x9, #32
+    add     w10, w10, #1
+    cmp     w10, #MAXANIM
+    b.lt    1b
+    mov     w10, #-1
+2:  mov     w0, w10
+    ret
+
 // ct_animals(w0 = tipo) -> w0 = quantos vivos (teste)
     .globl ct_animals
 ct_animals:
@@ -1420,6 +1466,7 @@ s_ant3:     .asciz " golpe de 6 tira "
 s_ant4:     .asciz " | nivel da regiao (0/64/200 celulas)="
     .p2align 2
 regdist:    .word 0, 64, 200
+s_barnv:    .asciz " - Nv "
 s_anv:      .asciz " Nv "
 s_avida:    .asciz " (vida "
 s_danger:   .asciz " - perigoso!"
@@ -1428,3 +1475,4 @@ s_danger:   .asciz " - perigoso!"
 GBSS animals, 1536                      // 48 animais x 32 bytes
 GBSS arrows,  512                       // 16 flechas x 32 bytes
 GBSS corpses, 256                       // 16 corpos x 16 bytes
+GBSS barbuf, 48
