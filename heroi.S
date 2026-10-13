@@ -100,6 +100,14 @@ hero_draw:
     cmp     w25, #1
     mov     w9, #1
     csel    w25, w9, w25, lt
+    LA      x9, pixshadow               // sombra no chao
+    ldr     x0, [x9]
+    mov     w1, w19
+    mov     w2, w20
+    mov     w3, w25
+    mov     w4, w21
+    mov     w5, #0
+    bl      blit
     LA      x23, pixorder
     add     x23, x23, x22, lsl #3
     mov     w26, #0

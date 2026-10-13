@@ -15,6 +15,12 @@
 .equ PX_TOCHA1, 4
 .equ PX_PENHASCO, 5
 .equ PX_K, 8
+.equ EN_PARADO, 0
+.equ EN_ANDAR, 4
+.equ EN_ATACAR, 12
+.equ EN_GOLPE, 18
+.equ EN_MORRER, 20
+.equ EN_NF, 26
 .equ PX_LVL_N, 8
 .equ UA_TITULO_X, 64
 .equ UA_TITULO_Y, 4

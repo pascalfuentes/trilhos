@@ -18,9 +18,14 @@
 //    golpe a cada 4 niveis (golpe minimo 1). O nivel vem da regiao: 1 +
 //    1 a cada 16 celulas de distancia do comeco da partida, mais 0 a 2
 //    de sorte (region_level).
+//  - Lobo e urso sao os do designer (pedido 2.0), animados: parado,
+//    andar, atacar (logo depois da mordida), golpe (ferido) e morrer. Ao
+//    morrer viram um corpo (corpses) que cai e fica 6 s no chao. Os dois
+//    tem sombra (pixshadow).
 // =====================================================================
 
 #include "comum.h"
+#include "pixel.h"
 
 // animal (32 bytes): u, v, du, dv (float), tipo (255 = vaga), (livre),
 // grupo, ferido (quadros), tempo ate mudar de rumo (u16), espera da
@@ -39,6 +44,11 @@
 .equ AN_DIR,   26                      // direcao em que anda (lobo do designer)
 
 // flecha (32 bytes): u, v, du, dv (float), vida (quadros), altura
+.equ MAXCORPSE, 16                     // corpo no chao (16 bytes): u, v,
+.equ CP_TYPE,  8                       // tipo, direcao, quadros desde
+.equ CP_DIR,   9                       // que morreu (u16; 0 = vaga)
+.equ CP_T,     10
+.equ CP_LIFE,  360                     // 6 s
 .equ AR_LIFE,  16
 .equ AR_E,     20
 
@@ -73,6 +83,12 @@ animals_reset:
     add     x9, x9, #32
     subs    w10, w10, #1
     b.ne    2b
+    LA      x9, corpses
+    mov     w10, #MAXCORPSE
+3:  strh    wzr, [x9, #CP_T]
+    add     x9, x9, #16
+    subs    w10, w10, #1
+    b.ne    3b
     str     wzr, [x28, #G_NANIM]
     mov     w9, #60
     str     w9, [x28, #G_SPAWNT]
@@ -280,6 +296,17 @@ animals_update:
     stp     d8, d9, [sp, #64]
     stp     d10, d11, [sp, #80]
     stp     d12, d13, [sp, #96]
+    LA      x9, corpses                 // corpos: 6 s no chao
+    mov     w10, #MAXCORPSE
+2:  ldrh    w11, [x9, #CP_T]
+    cbz     w11, 3f
+    add     w11, w11, #1
+    cmp     w11, #CP_LIFE
+    csel    w11, wzr, w11, ge
+    strh    w11, [x9, #CP_T]
+3:  add     x9, x9, #16
+    subs    w10, w10, #1
+    b.ne    2b
     // de tempos em tempos tenta aparecer um animal
     ldr     w9, [x28, #G_SPAWNT]
     subs    w9, w9, #1
@@ -717,7 +744,28 @@ animal_hit:
     fmov    s2, #0.5
     fadd    s0, s0, s2
     bl      pile_at
-1:  mov     w9, #255
+1:  cmp     w20, #A_WOLF                // lobo e urso: o corpo cai
+    b.eq    2f
+    cmp     w20, #A_BEAR
+    b.ne    3f
+2:  LA      x9, corpses
+    mov     w10, #MAXCORPSE
+21: ldrh    w11, [x9, #CP_T]
+    cbz     w11, 22f
+    add     x9, x9, #16
+    subs    w10, w10, #1
+    b.ne    21b
+    b       3f
+22: ldr     w11, [x19, #AN_U]
+    str     w11, [x9]
+    ldr     w11, [x19, #AN_V]
+    str     w11, [x9, #4]
+    strb    w20, [x9, #CP_TYPE]
+    ldrb    w11, [x19, #AN_DIR]
+    strb    w11, [x9, #CP_DIR]
+    mov     w11, #1
+    strh    w11, [x9, #CP_T]
+3:  mov     w9, #255
     strb    w9, [x19, #AN_TYPE]
     LA      x0, msgbuf                  // "Abateu: Cervo"
     LA      x1, s_killed
@@ -1065,11 +1113,12 @@ arrows_draw:
 // animals_draw(w0 = escala): so os que estao a vista; ferido pisca
     .globl animals_draw
 animals_draw:
-    stp     x29, x30, [sp, #-64]!
+    stp     x29, x30, [sp, #-96]!
     mov     x29, sp
     stp     x19, x20, [sp, #16]
     stp     x21, x22, [sp, #32]
-    str     x23, [sp, #48]
+    stp     x23, x24, [sp, #48]
+    stp     x25, x26, [sp, #64]
     mov     w23, w0
     LA      x19, animals
     mov     w20, #0
@@ -1077,8 +1126,12 @@ animals_draw:
     cmp     w21, #255
     b.eq    8f
     ldrb    w9, [x19, #AN_HURT]
-    tbnz    w9, #1, 8f
-    ldr     s0, [x19, #AN_U]
+    cmp     w21, #A_WOLF                // lobo e urso: ferido = animacao
+    b.eq    11f
+    cmp     w21, #A_BEAR
+    b.eq    11f
+    tbnz    w9, #1, 8f                  // os outros piscam
+11: ldr     s0, [x19, #AN_U]
     ldr     s1, [x19, #AN_V]
     fcvtzs  w9, s0
     fcvtzs  w10, s1
@@ -1098,23 +1151,73 @@ animals_draw:
     add     w4, w4, #20
     mov     w2, w1
     mov     w1, w0
-    cmp     w21, #A_WOLF                // lobo: o do designer (pixel.S),
-    b.ne    5f                          // virado para onde anda
-    ldr     s0, [x19, #AN_DU]
+    cmp     w21, #A_WOLF                // lobo e urso: os do designer
+    b.eq    51f
+    cmp     w21, #A_BEAR
+    b.ne    5f
+51: mov     w24, w1
+    mov     w25, w2
+    mov     w26, w4
+    ldr     s0, [x19, #AN_DU]           // virado para onde anda
     ldr     s1, [x19, #AN_DV]
     ldrb    w0, [x19, #AN_DIR]
     bl      char_dir                    // (heroi.S; so usa w0, w9, s0-s7)
     strb    w0, [x19, #AN_DIR]
-    ldrh    w10, [x19, #AN_ANIM]
-    lsr     w10, w10, #3
-    and     w10, w10, #3
-    add     w10, w10, w0, lsl #2
-    LA      x9, pixwolf
-    ldr     x0, [x9, x10, lsl #3]
-    ldr     w3, [x28, #G_Z256]
-    lsr     w3, w3, #10
-    mov     w5, #0
-    bl      blit
+    mov     w22, w0
+    mov     w0, w21
+    mov     w1, w24
+    mov     w2, w25
+    mov     w3, w26
+    bl      an_shadow
+    ldrb    w9, [x19, #AN_HURT]         // ferido: golpe (2 quadros)
+    cbz     w9, 52f
+    mov     w10, #16
+    subs    w9, w10, w9
+    csel    w9, wzr, w9, lt
+    lsr     w9, w9, #3
+    cmp     w9, #1
+    mov     w10, #1
+    csel    w9, w10, w9, gt
+    add     w9, w9, #EN_GOLPE
+    b       56f
+52: ldrh    w9, [x19, #AN_CD]           // logo depois da mordida: atacar
+    cmp     w9, #30
+    b.le    53f
+    mov     w10, #60
+    subs    w9, w10, w9
+    csel    w9, wzr, w9, lt
+    mov     w10, #5
+    udiv    w9, w9, w10
+    cmp     w9, #5
+    mov     w10, #5
+    csel    w9, w10, w9, gt
+    add     w9, w9, #EN_ATACAR
+    b       56f
+53: ldr     s0, [x19, #AN_DU]           // andando ou parado
+    ldr     s1, [x19, #AN_DV]
+    fabs    s0, s0
+    fabs    s1, s1
+    fadd    s0, s0, s1
+    ldr     s1, an_still
+    ldr     w9, [x28, #G_FRAME]
+    fcmp    s0, s1
+    b.le    54f
+    mov     w10, #6                     // 10 quadros por segundo
+    udiv    w9, w9, w10
+    and     w9, w9, #7
+    add     w9, w9, #EN_ANDAR
+    b       56f
+54: mov     w10, #10                    // 6 por segundo
+    udiv    w9, w9, w10
+    and     w9, w9, #3
+    add     w9, w9, #EN_PARADO
+56: mov     w10, #EN_NF
+    madd    w9, w22, w10, w9
+    mov     w0, w21
+    mov     w1, w24
+    mov     w2, w25
+    mov     w3, w26
+    bl      en_blit
     b       8f
 5:  LA      x9, atypes
     add     x9, x9, x21, lsl #4
@@ -1132,11 +1235,89 @@ animals_draw:
     add     w20, w20, #1
     cmp     w20, #MAXANIM
     b.lt    1b
-    ldr     x23, [sp, #48]
+    // corpos: caem (morrer, 6 quadros) e ficam no chao
+    LA      x19, corpses
+    mov     w20, #0
+61: ldrh    w9, [x19, #CP_T]
+    cbz     w9, 68f
+    ldr     s0, [x19]
+    ldr     s1, [x19, #4]
+    bl      elev_at
+    ldr     w9, [x28, #G_FLOOD]
+    cmp     w0, w9
+    csel    w0, w9, w0, lt
+    ldr     s0, [x19]
+    ldr     s1, [x19, #4]
+    bl      proj
+    add     w26, w2, #20
+    mov     w24, w0
+    mov     w25, w1
+    ldrb    w21, [x19, #CP_TYPE]
+    mov     w0, w21
+    mov     w1, w24
+    mov     w2, w25
+    mov     w3, w26
+    bl      an_shadow
+    ldrh    w9, [x19, #CP_T]
+    mov     w10, #6
+    udiv    w9, w9, w10
+    cmp     w9, #5
+    mov     w10, #5
+    csel    w9, w10, w9, gt
+    add     w9, w9, #EN_MORRER
+    ldrb    w10, [x19, #CP_DIR]
+    mov     w11, #EN_NF
+    madd    w9, w10, w11, w9
+    mov     w0, w21
+    mov     w1, w24
+    mov     w2, w25
+    mov     w3, w26
+    bl      en_blit
+68: add     x19, x19, #16
+    add     w20, w20, #1
+    cmp     w20, #MAXCORPSE
+    b.lt    61b
+    ldp     x25, x26, [sp, #64]
+    ldp     x23, x24, [sp, #48]
     ldp     x21, x22, [sp, #32]
     ldp     x19, x20, [sp, #16]
-    ldp     x29, x30, [sp], #64
+    ldp     x29, x30, [sp], #96
     ret
+an_still: .float 0.001
+
+// an_shadow(w0 = tipo, w1 x, w2 y, w3 profundidade): sombra no chao
+an_shadow:
+    LA      x9, pixshadow
+    cmp     w0, #A_BEAR
+    mov     w10, #1
+    mov     w11, #2
+    csel    w10, w11, w10, eq
+    ldr     x0, [x9, x10, lsl #3]
+    mov     w4, w3
+    ldr     w3, [x28, #G_Z256]
+    lsr     w3, w3, #10
+    cmp     w3, #1
+    mov     w9, #1
+    csel    w3, w9, w3, lt
+    mov     w5, #0
+    b       blit
+
+// en_blit(w0 = tipo, w1 x, w2 y, w3 profundidade, w9 = quadro): o lobo
+// ou o urso do designer
+en_blit:
+    LA      x10, pixwolf
+    cmp     w0, #A_BEAR
+    b.ne    1f
+    LA      x10, pixbear
+1:  ldr     x0, [x10, x9, lsl #3]
+    mov     w4, w3
+    ldr     w3, [x28, #G_Z256]
+    lsr     w3, w3, #10
+    cmp     w3, #1
+    mov     w9, #1
+    csel    w3, w9, w3, lt
+    mov     w5, #0
+    b       blit
 
 // ct_animals(w0 = tipo) -> w0 = quantos vivos (teste)
     .globl ct_animals
@@ -1246,3 +1427,4 @@ s_danger:   .asciz " - perigoso!"
 // ---- memoria ------------------------------------------------------------
 GBSS animals, 1536                      // 48 animais x 32 bytes
 GBSS arrows,  512                       // 16 flechas x 32 bytes
+GBSS corpses, 256                       // 16 corpos x 16 bytes

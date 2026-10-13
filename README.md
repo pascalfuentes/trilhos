@@ -226,6 +226,9 @@ Os animais aparecem longe da vista, cada um no seu terreno, e somem quando ficam
 - **Defesa:** a cada 4 níveis o bicho tira 1 ponto de cada golpe seu (o golpe mínimo é 1).
 - **Nível pela região:** o nível de um bicho é 1 + 1 a cada 16 células de distância de onde a partida começou, mais 0 a 2 de sorte. Perto do começo: 1 a 3; a 64 células: 5 a 7; a 200 células: 13 a 15. (Quando houver cidades, a conta passa a ser a partir da primeira cidade.)
 
+- **Lobo e urso do designer (pedido 2.0):** animados, com parado, andar, atacar logo depois da mordida, levar golpe quando ferido e morrer. O corpo cai e fica 6 s no chão.
+- **Sombra:** o herói, o lobo e o urso têm uma sombra oval no chão, que escurece o que está embaixo.
+
 **Sobrevivência**
 
 - **Fome:** quando enche (comendo), fica **cheia por 4 minutos** antes de começar a cair. Comer de novo com ela cheia renova esse tempo. Depois cai de cheia a vazia em uns 16 minutos. Sem comida, a vida cai.
@@ -367,7 +370,7 @@ O mundo é difícil de propósito: comida é pouca e estraga, o inverno pesa e a
 | `personagens.S` | os desenhos do personagem (e dos moradores da vila antiga) em 8 direções e 3 poses (gerado por `arte/personagens.py`) |
 | `nivel.S` | nível e XP: a curva 1,5x, subir de nível, o teste |
 | `heroi.S` | desenha o herói camada por camada (corpo, cabelo, botas, peitoral, capacete, espada) pela direção e pelo quadro |
-| `pixel.S` | os desenhos em pixel art do designer: herói em camadas, lobo, árvore, pinheiro, pedra, tocha e penhasco e as imagens da interface da fase 1 (janela C, botão +, ícones, barras de XP) e o efeito de subir de nível. Gerado por `arte/pixel.py` a partir do `design/estilo/designer/ermo_estilo.json` e do `design/fase1/designer/ermo_fase1.json`; paleta em `pixpal.inc`, áreas da janela em `pixel.h` |
+| `pixel.S` | os desenhos em pixel art do designer: herói em camadas, lobo, árvore, pinheiro, pedra, tocha e penhasco e as imagens da interface da fase 1 (janela C, botão +, ícones, barras de XP) e o efeito de subir de nível; o lobo e o urso animados e as sombras. Gerado por `arte/pixel.py` a partir do `design/estilo/designer/ermo_estilo.json`, do `design/fase1/designer/ermo_fase1.json` e do `design/fase2/designer/ermo_fase2.json`; paleta em `pixpal.inc`, áreas da janela em `pixel.h` |
 | `pilhas.S` | pilhas de itens no chão: que item é, quanto cabe, comida que estraga no chão |
 | `construcoes.S` | escolhe o desenho de cada construção (aberto/fechado, aceso/apagado, vizinhos, tamanho da pilha) e as cinzas da fogueira |
 | `estruturas.S` | os desenhos das construções, pilhas e estrada (gerado por `arte/estruturas.py` a partir do `design/estruturas/estruturas.json`) |
@@ -438,3 +441,4 @@ O tempo do jogo anda por quadro: se a máquina virtual desenhar menos de 60 quad
 - [x] RPG, fase 1.5 e 1.6: vida pela Vitalidade, mana pela Energia; o save já guarda tudo
 - [x] RPG, fase 2.1: bichos com nível (vida, mordida e defesa)
 - [x] RPG, fase 2.2: nível pela região
+- [x] RPG, fase 2.8 e 2.9 (parte 1): sombras; lobo e urso animados do designer

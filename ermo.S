@@ -2076,6 +2076,8 @@ b_row:
 b_col:
     ldrb    w12, [x0], #1
     cbz     w12, b_next
+    cmp     w12, #254                   // sombra: escurece o que ja esta ali
+    b.eq    b_shadow
     cmp     w12, #8
     b.lo    1f
     cmp     w12, #9
@@ -2119,6 +2121,38 @@ b_col:
     cmp     w9, w3
     b.lt    5b
 7:  add     w14, w14, #1
+    cmp     w14, w3
+    b.lt    4b
+    b       b_next
+b_shadow:                               // (so na escala 1..4; sem z novo)
+    madd    w13, w10, w3, w2
+    mov     w14, #0
+4:  add     w15, w13, w14
+    cmp     w15, #SCRH
+    b.hs    b_next
+    mov     w9, #0
+5:  madd    w12, w11, w3, w1
+    add     w12, w12, w9
+    cmp     w12, #SCRW
+    b.hs    6f
+    add     w12, w12, w15, lsl #10
+    add     w12, w12, w15, lsl #8
+    ldrh    w7, [x17, w12, uxtw #1]
+    sub     w7, w7, w4
+    cmp     w7, #16
+    b.gt    6f
+    ldr     w8, [x16, w12, uxtw #2]     // metade da cor, mesmo alfa
+    and     w7, w8, #0xFF000000
+    lsr     w13, w8, #1
+    and     w13, w13, #0x7F7F7F7F
+    and     w13, w13, #0xFFFFFF
+    orr     w7, w7, w13
+    str     w7, [x16, w12, uxtw #2]
+    madd    w13, w10, w3, w2
+6:  add     w9, w9, #1
+    cmp     w9, w3
+    b.lt    5b
+    add     w14, w14, #1
     cmp     w14, w3
     b.lt    4b
 b_next:

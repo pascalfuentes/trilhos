@@ -15,8 +15,13 @@
 #  para a textura (o jogo cria na primeira vez) e os pixels.
 #  As areas da janela viram constantes UA_<NOME>_X/Y/W/H no pixel.h.
 #
+#  O quarto argumento (pedido 2.0, ermo_fase2.json) traz o lobo e o urso
+#  animados (parado, andar, atacar, golpe, morrer): tabelas pixwolf e
+#  pixbear, direcao * EN_NF + EN_<ANIMACAO> + quadro.
+#  Sombras (pixshadow): ovais com o indice 254, que o blit escurece.
+#
 #  Uso: python3 arte/pixel.py design/estilo/designer/ermo_estilo.json . \
-#           design/fase1/designer/ermo_fase1.json
+#           design/fase1/designer/ermo_fase1.json design/fase2/designer/ermo_fase2.json
 #
 #  Cada quadro: largura, altura, ancora x, ancora y, k, 0, 0, 0 e os
 #  pixels (indices da paleta, 0 = transparente). k = profundidade por
@@ -46,9 +51,11 @@ for r in pal['rampas']:
         idx[c] = PAL0 + len(cores)
         a = 0xFE if c in GLOW else 0xFF
         cores.append((a << 24) | int(t['hex'].lstrip('#'), 16))
-# rampas novas dos pedidos seguintes (fase 1: luz dourada, brilho)
+# rampas novas dos pedidos seguintes (fase 1: luz dourada; fase 2: pelo
+# do urso, brilho de campeao e de chefe)
 f1 = json.load(open(sys.argv[3])) if len(sys.argv) > 3 else {}
-for r in f1.get('_paleta_adicoes', []):
+f2 = json.load(open(sys.argv[4])) if len(sys.argv) > 4 else {}
+for r in f1.get('_paleta_adicoes', []) + f2.get('_paleta_adicoes', []):
     for t in r['tons']:
         c = t['c']
         assert c not in idx, c
@@ -57,7 +64,8 @@ for r in f1.get('_paleta_adicoes', []):
             GLOW.add(c)
         a = 0xFE if c in GLOW else 0xFF
         cores.append((a << 24) | int(t['hex'].lstrip('#'), 16))
-assert PAL0 + len(cores) <= 256
+assert PAL0 + len(cores) <= 254
+idx['§'] = 254                         # sombra: o blit escurece o que ja esta ali
 
 def check(rows, w, h, nome):
     assert len(rows) == h, (nome, len(rows), h)
@@ -116,7 +124,7 @@ def clip_top(frames, n_por_dir, y0):
 
 w('// =====================================================================')
 w('//  pixel.S - sprites em pixel art do designer (GERADO: nao edite)')
-w('//    python3 arte/pixel.py design/estilo/designer/ermo_estilo.json . design/fase1/designer/ermo_fase1.json')
+w('//    python3 arte/pixel.py design/estilo/designer/ermo_estilo.json . design/fase1/designer/ermo_fase1.json design/fase2/designer/ermo_fase2.json')
 w('//  Cada quadro: largura, altura, ancora x, ancora y, k, 0, 0, 0 e os')
 w('//  pixels (indices da paleta 130.., 0 = transparente).')
 w('// =====================================================================')
@@ -170,15 +178,66 @@ for d in DIRS:
     seq += [255] * (8 - len(seq))
     w('    .byte ' + ', '.join(str(b) for b in seq) + '    // ' + d)
 
-# ---- lobo ----
+# ---- inimigos (pedido 2.0): lobo e urso animados ----
+ANIMS = ['parado', 'andar', 'atacar', 'golpe', 'morrer']
+EN = {}
+if f2:
+    NF = sum(f2['_animacoes'][a] for a in ANIMS)
+    for tab, peca in (('pixwolf', 'lobo_inimigo'), ('pixbear', 'urso_inimigo')):
+        p2 = f2[peca]
+        wd, ht = p2['quadro']
+        ax, ay = p2['ancora']
+        w('')
+        w('// %s (%s): direcao * %d + animacao + quadro' % (tab, peca, NF))
+        labs2 = []
+        for d in DIRS:
+            base = MIRROR.get(d, d)
+            for a in ANIMS:
+                qs = p2['direcoes'][base][a]
+                assert len(qs) == f2['_animacoes'][a], (peca, d, a)
+                for q in qs:
+                    rows = check(q, wd, ht, peca)
+                    if d in MIRROR:
+                        labs2.append(emit(flip(rows), wd - ax, ay))
+                    else:
+                        labs2.append(emit(rows, ax, ay))
+        w('    .p2align 3')
+        w('    .globl %s' % tab)
+        w('%s:' % tab)
+        for i in range(0, len(labs2), 8):
+            w('    .quad ' + ', '.join(labs2[i:i + 8]))
+    b0 = 0
+    for a in ANIMS:
+        EN['EN_' + a.upper()] = b0
+        b0 += f2['_animacoes'][a]
+    EN['EN_NF'] = NF
+else:
+    w('')
+    w('// lobo: direcao * 4 + quadro')
+    lobo = [emit(*f) for f in dir_frames('lobo_cinzento')]
+    w('    .p2align 3')
+    w('    .globl pixwolf')
+    w('pixwolf:')
+    for i in range(0, len(lobo), 8):
+        w('    .quad ' + ', '.join(lobo[i:i + 8]))
+
+# ---- sombras: ovais no chao (indice 254), heroi, lobo e urso ----
+def oval(wd, ht):
+    rows = []
+    for y in range(ht):
+        r = ''
+        for x in range(wd):
+            dx = (x + 0.5 - wd / 2) / (wd / 2)
+            dy = (y + 0.5 - ht / 2) / (ht / 2)
+            r += '§' if dx * dx + dy * dy <= 1.0 else '.'
+        rows.append(r)
+    return rows
 w('')
-w('// lobo: direcao * 4 + quadro')
-lobo = [emit(*f) for f in dir_frames('lobo_cinzento')]
+w('// sombras (heroi, lobo, urso): o blit escurece o chao')
+sl = [emit(oval(sw, sh), sw // 2, sh // 2) for sw, sh in ((22, 8), (30, 8), (44, 12))]
 w('    .p2align 3')
-w('    .globl pixwolf')
-w('pixwolf:')
-for i in range(0, len(lobo), 8):
-    w('    .quad ' + ', '.join(lobo[i:i + 8]))
+w('    .globl pixshadow')
+w('pixshadow: .quad ' + ', '.join(sl))
 
 # ---- objetos ----
 OBJ = [('PX_ARVORE', 'arvore_folha'), ('PX_PINHEIRO', 'pinheiro_neve'),
@@ -334,6 +393,8 @@ H.append('.equ PL_N, %d' % len(CAMADAS))
 for i, o in enumerate(OBJ):
     H.append('.equ %s, %d' % (o[0], i))
 H.append('.equ PX_K, %d' % K)
+for k, v in EN.items():
+    H.append('.equ %s, %d' % (k, v))
 H += UA
 for i, (cod, _) in enumerate(TILES):
     H.append('.equ %s, %d' % (cod, i))
