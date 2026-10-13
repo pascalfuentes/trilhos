@@ -523,6 +523,9 @@ pack_spawn:
     mov     w0, #A_WOLF
     bl      animal_spawn
     tbnz    w0, #31, 51f
+    str     w0, [sp, #-16]!
+    bl      an_spawnlevel               // nivel da regiao (+2 de noite)
+    ldr     w0, [sp], #16
     LA      x9, animals
     add     x9, x9, x0, lsl #5
     mov     w10, #1

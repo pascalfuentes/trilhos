@@ -15,6 +15,7 @@
 .equ PX_TOCHA1, 4
 .equ PX_PENHASCO, 5
 .equ PX_K, 8
+.equ TL_D, 1          // densidade do chao (1: 32 x 16, 2: 64 x 32)
 .equ EN_PARADO, 0
 .equ EN_ANDAR, 4
 .equ EN_ATACAR, 12

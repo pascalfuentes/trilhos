@@ -226,6 +226,8 @@ Os animais aparecem longe da vista, cada um no seu terreno, e somem quando ficam
 - **Defesa:** a cada 4 níveis o bicho tira 1 ponto de cada golpe seu (o golpe mínimo é 1).
 - **Nível pela região:** o nível de um bicho é 1 + 1 a cada 16 células de distância de onde a partida começou, mais 0 a 2 de sorte. Perto do começo: 1 a 3; a 64 células: 5 a 7; a 200 células: 13 a 15. (Quando houver cidades, a conta passa a ser a partir da primeira cidade.)
 
+- **Noite:** lobo e urso que nascem de noite têm **+2 níveis** (mais perigo, mais XP); a alcateia da noite também.
+- **Invasão de elite:** a cada uns 3 minutos, se você está numa área 5 ou mais níveis abaixo do seu, pode aparecer (1 chance em 3) um grupo de **3 lobos do seu nível**, liderado por um campeão, que vem atrás de você. O aviso aparece na tela.
 - **Grupos, campeões e chefes:** lobos vêm em grupos de 2 a 4. Às vezes o líder é um **campeão** (+2 níveis, vida ×1,5, anel azul no chão e placa azul) ou um **chefe** (+4 a +5 níveis, vida ×2, anel dourado, placa dourada e nome próprio, como "Presa Cinzenta"). O urso anda sozinho, mas também pode ser campeão ou chefe ("Garra Velha").
 - **Lobo e urso do designer (pedido 2.0):** animados, com parado, andar, atacar logo depois da mordida, levar golpe quando ferido e morrer. O corpo cai e fica 6 s no chão.
 - **Sombra:** o herói, o lobo e o urso têm uma sombra oval no chão, que escurece o que está embaixo.
@@ -371,6 +373,8 @@ O mundo é difícil de propósito: comida é pouca e estraga, o inverno pesa e a
 | `personagens.S` | os desenhos do personagem (e dos moradores da vila antiga) em 8 direções e 3 poses (gerado por `arte/personagens.py`) |
 | `nivel.S` | nível e XP: a curva 1,5x, subir de nível, o teste |
 | `heroi.S` | desenha o herói camada por camada (corpo, cabelo, botas, peitoral, capacete, espada) pela direção e pelo quadro |
+| `c/` | **código em C** (o jogo está migrando de assembly para C aos poucos): `ermo.h` (base: o estado `G`, que o registrador x28 aponta, e `ASM(nome)` para chamar o assembly), `ermo_equ.h` (as constantes do assembly, geradas por `arte/equ2h.py`), `inimigos.c` (XP dos bichos). Compilado com `-ffixed-x28` para não mexer no x28; o assembly chama funções em C com `bl F(nome)`. |
+| (estilo 2) | `arte/pixel.py` entende `"densidade": 2` no json: cada quadro tem o dobro de pixels e vem com uma cópia pela metade; o jogo desenha a metade da escala (zoom par) ou a cópia (zoom ímpar), e o chão vira 64 × 32 (`TL_D` no `pixel.h`). `python3 arte/pixel.py --dobro ...` amplia a arte de hoje 2× para testar: o jogo sai igual. `ERMO_SEED=123 ./ermo` sempre gera o mesmo mundo. |
 | `pixel.S` | os desenhos em pixel art do designer: herói em camadas, lobo, árvore, pinheiro, pedra, tocha e penhasco e as imagens da interface da fase 1 (janela C, botão +, ícones, barras de XP) e o efeito de subir de nível; o lobo e o urso animados e as sombras. Gerado por `arte/pixel.py` a partir do `design/estilo/designer/ermo_estilo.json`, do `design/fase1/designer/ermo_fase1.json` e do `design/fase2/designer/ermo_fase2.json`; paleta em `pixpal.inc`, áreas da janela em `pixel.h` |
 | `pilhas.S` | pilhas de itens no chão: que item é, quanto cabe, comida que estraga no chão |
 | `construcoes.S` | escolhe o desenho de cada construção (aberto/fechado, aceso/apagado, vizinhos, tamanho da pilha) e as cinzas da fogueira |
@@ -446,3 +450,7 @@ O tempo do jogo anda por quadro: se a máquina virtual desenhar menos de 60 quad
 - [x] RPG, fase 2.4: barra do inimigo no topo
 - [x] RPG, fase 2.5: grupos, campeões e chefes
 - [x] RPG, fase 2.3: XP pelo nível do bicho
+- [x] RPG, fase 2.6 e 2.7: noite +2 níveis; invasões de elite (fase 2 completa)
+- [x] Estilo 2, etapa 0.7 (motor): arte com o dobro de detalhe (densidade 2)
+- [ ] Estilo 2: trocar a arte quando o pedido 0.7 do designer voltar
+- [x] Migração para C, etapa 1: C e assembly no mesmo executável (primeira função: XP dos bichos)

@@ -26,6 +26,12 @@
 //    um campeao (+2 niveis, vida x1,5, anel azul) ou um chefe (+4 a +5
 //    niveis, vida x2, anel dourado, nome proprio); o urso, sozinho, tambem
 //    pode ser campeao ou chefe. A barra do topo usa a placa de cada um.
+//  - Noite (etapa 2.6): lobo e urso que nascem de noite tem +2 niveis
+//    (mais perigo e mais XP); a alcateia da noite tambem.
+//  - Invasao de elite (etapa 2.7): a cada uns 3 minutos, se voce esta
+//    numa area 5 ou mais niveis abaixo do seu, pode aparecer (1 em 3) um
+//    grupo de 3 lobos do seu nivel, com um campeao, que vem atras de voce.
+//    O aviso aparece na tela.
 //  - XP (etapa 2.3): o nivel do bicho (metade nos pacificos), x2 o
 //    campeao e x4 o chefe; acima do seu nivel +10% por nivel (ate +50%),
 //    5-6 abaixo 50%, 7-9 abaixo 25%, 10 ou mais abaixo 10% (minimo 1).
@@ -273,6 +279,7 @@ try_spawn:
     fmov    s0, s8
     fmov    s1, s9
     bl      region_level
+    bl      night_bonus                 // de noite, lobo e urso +2
     str     w0, [sp, #48]
     bl      rng
     and     w9, w0, #3
@@ -369,6 +376,7 @@ animals_update:
 3:  add     x9, x9, #16
     subs    w10, w10, #1
     b.ne    2b
+    bl      elite_tick                  // invasao de elite (etapa 2.7)
     // de tempos em tempos tenta aparecer um animal
     ldr     w9, [x28, #G_SPAWNT]
     subs    w9, w9, #1
@@ -627,48 +635,173 @@ region_level:
     csel    w0, w9, w0, gt
     ret
 
-// an_xp(w0 = nivel, w1 = posto, w2 = perigoso) -> w0 = XP   folha
-    .globl an_xp
-an_xp:
-    mov     w9, w0                      // base: o nivel
-    cbnz    w2, 1f
-    add     w9, w9, #1                  // pacifico: metade
-    lsr     w9, w9, #1
-1:  cmp     w1, #1                      // campeao x2, chefe x4
-    b.ne    2f
-    lsl     w9, w9, #1
-2:  cmp     w1, #2
-    b.ne    3f
-    lsl     w9, w9, #2
-3:  ldr     w10, [x28, #G_LEVEL]        // diferenca de nivel
-    sub     w10, w0, w10
-    mov     w11, #100
-    cmp     w10, #0
-    b.le    4f
-    mov     w12, #10                    // acima: +10% por nivel, ate +50%
-    mul     w12, w10, w12
-    cmp     w12, #50
-    mov     w13, #50
-    csel    w12, w13, w12, gt
-    add     w11, w11, w12
-    b       6f
-4:  cmn     w10, #5                     // abaixo
-    b.gt    6f
-    mov     w11, #50
-    cmn     w10, #7
-    b.gt    6f
-    mov     w11, #25
-    cmn     w10, #10
-    b.gt    6f
-    mov     w11, #10
-6:  mul     w9, w9, w11
-    add     w9, w9, #50                 // arredonda
-    mov     w10, #100
-    udiv    w0, w9, w10
-    cmp     w0, #1
-    mov     w9, #1
-    csel    w0, w9, w0, lt
+// elite_tick: de tempos em tempos, numa area baixa, uma invasao de elite
+elite_tick:
+    stp     x29, x30, [sp, #-16]!
+    mov     x29, sp
+    ldr     w9, [x28, #G_ELITET]
+    subs    w9, w9, #1
+    b.gt    8f
+    bl      rng                         // proxima chance: 3 a 4 min
+    and     w9, w0, #4095
+    mov     w10, #10800
+    add     w9, w9, w10
+    str     w9, [x28, #G_ELITET]
+    ldr     w9, [x28, #G_NOSPAWN]
+    cbnz    w9, 9f
+    ldr     w9, [x28, #G_INSHELTER]
+    cbnz    w9, 9f
+    bl      rng                         // 1 em 3
+    mov     w9, #3
+    udiv    w10, w0, w9
+    msub    w9, w10, w9, w0
+    cbnz    w9, 9f
+    ldr     s0, [x28, #G_PU]            // a area e 5+ niveis abaixo de voce?
+    ldr     s1, [x28, #G_PV]
+    bl      region_level
+    add     w0, w0, #5
+    ldr     w9, [x28, #G_LEVEL]
+    cmp     w9, w0
+    b.lt    9f
+    bl      elite_spawn
+    b       9f
+8:  str     w9, [x28, #G_ELITET]
+9:  ldp     x29, x30, [sp], #16
     ret
+
+// elite_spawn -> w0 = quantos lobos vieram: 3 lobos do seu nivel (o lider
+// campeao) a 18 celulas, que vem atras de voce (grupo 1, como a alcateia)
+    .globl elite_spawn
+elite_spawn:
+    stp     x29, x30, [sp, #-64]!
+    mov     x29, sp
+    stp     x19, x20, [sp, #16]
+    stp     x21, x22, [sp, #32]
+    stp     d8, d9, [sp, #48]
+    mov     w21, #8                     // ate 8 tentativas de lugar
+1:  bl      rng
+    and     w9, w0, #15
+    LA      x10, adirtab
+    add     x10, x10, x9, lsl #2
+    ldrsh   w11, [x10]
+    scvtf   s0, w11
+    ldrsh   w11, [x10, #2]
+    scvtf   s1, w11
+    mov     w9, #18                     // 18/64 x 64 = 18 celulas
+    scvtf   s2, w9
+    LA      x10, aconst
+    ldr     s3, [x10]
+    fmul    s2, s2, s3
+    ldr     s3, [x28, #G_PU]
+    fmadd   s8, s0, s2, s3
+    ldr     s3, [x28, #G_PV]
+    fmadd   s9, s1, s2, s3
+    mov     w9, #4
+    scvtf   s2, w9
+    mov     w9, #507
+    scvtf   s3, w9
+    fcmp    s8, s2
+    b.lt    2f
+    fcmp    s8, s3
+    b.gt    2f
+    fcmp    s9, s2
+    b.lt    2f
+    fcmp    s9, s3
+    b.gt    2f
+    fmov    s0, s8
+    fmov    s1, s9
+    bl      terrain_class
+    tbz     w0, #31, 3f                 // terra: serve
+2:  subs    w21, w21, #1
+    b.ne    1b
+    mov     w0, #0
+    b       9f
+3:  mov     w19, #0                     // quantos vieram
+    mov     w20, #0
+4:  cmp     w20, #3
+    b.ge    6f
+    LA      x10, grpofs
+    add     x10, x10, x20, lsl #3
+    ldr     s0, [x10]
+    ldr     s1, [x10, #4]
+    fadd    s0, s0, s8
+    fadd    s1, s1, s9
+    mov     w0, #A_WOLF
+    bl      animal_spawn
+    tbnz    w0, #31, 5f
+    mov     w22, w0
+    LA      x9, animals
+    add     x9, x9, x22, lsl #5
+    mov     w10, #1                     // grupo: vem atras de voce
+    strb    w10, [x9, #18]
+    ldr     w1, [x28, #G_LEVEL]
+    mov     w0, w22
+    bl      an_setlevel
+    cbnz    w19, 41f                    // o primeiro: campeao (+2)
+    mov     w0, w22
+    mov     w1, #1
+    bl      an_setrank
+41: add     w19, w19, #1
+5:  add     w20, w20, #1
+    b       4b
+6:  cbz     w19, 7f
+    LA      x0, msgbuf                  // "Invasao de elite! Lobos nivel 12..."
+    LA      x1, s_elite1
+    bl      strcat_cur
+    ldr     w1, [x28, #G_LEVEL]
+    bl      numcat
+    LA      x1, s_elite2
+    bl      strcat_cur
+    LA      x0, msgbuf
+    bl      set_msg
+7:  mov     w0, w19
+9:  ldp     d8, d9, [sp, #48]
+    ldp     x21, x22, [sp, #32]
+    ldp     x19, x20, [sp, #16]
+    ldp     x29, x30, [sp], #64
+    ret
+
+// night_bonus(w0 = nivel, w20 = tipo) -> w0: +2 de noite se perigoso
+// folha
+night_bonus:
+    ldr     w9, [x28, #G_NIGHTK]
+    cmp     w9, #128
+    b.lt    1f
+    cmp     w20, #A_WOLF
+    b.eq    2f
+    cmp     w20, #A_BEAR
+    b.ne    1f
+2:  add     w0, w0, #2
+1:  ret
+
+// an_spawnlevel(w0 = animal): nivel da regiao + 0 a 2 de sorte (+2 de
+// noite se perigoso), para quem nasce fora do try_spawn (alcateia)
+    .globl an_spawnlevel
+an_spawnlevel:
+    stp     x29, x30, [sp, #-32]!
+    mov     x29, sp
+    stp     x19, x20, [sp, #16]
+    mov     w19, w0
+    LA      x9, animals
+    add     x9, x9, x19, lsl #5
+    ldrb    w20, [x9, #AN_TYPE]
+    ldr     s0, [x9, #AN_U]
+    ldr     s1, [x9, #AN_V]
+    bl      region_level
+    bl      night_bonus
+    mov     w20, w0
+    bl      rng
+    and     w9, w0, #3
+    cmp     w9, #3
+    csel    w9, wzr, w9, eq
+    add     w1, w20, w9
+    mov     w0, w19
+    bl      an_setlevel
+    ldp     x19, x20, [sp, #16]
+    ldp     x29, x30, [sp], #32
+    ret
+
+// an_xp: em C (c/inimigos.c)
 
 // an_maxhp(x0 = animal) -> w0 = vida maxima: base x (4 + nivel) / 5   folha
     .globl an_maxhp
@@ -851,7 +984,7 @@ an_selftest:
     ldrb    w2, [x9, #2]
     ldrb    w10, [x9, #3]
     str     w10, [x28, #G_LEVEL]
-    bl      an_xp
+    bl      F(an_xp)
     mov     w1, w0
     mov     x0, x21
     bl      numcat
@@ -866,6 +999,48 @@ an_selftest:
     strb    wzr, [x21]
     ldr     w9, [sp, #40]
     str     w9, [x28, #G_LEVEL]
+    bl      elite_spawn                 // invasao: quantos, nivel, campeao
+    mov     w19, w0
+    mov     x0, x21
+    LA      x1, s_ant6
+    bl      strcat_cur
+    mov     w1, w19
+    bl      numcat
+    mov     x21, x0
+    LA      x9, animals                 // conta e some com eles
+    mov     w10, #0
+    mov     w11, #0                     // do seu nivel
+    mov     w12, #0                     // campeoes
+    mov     w13, #MAXANIM
+    ldr     w14, [x28, #G_LEVEL]
+1:  ldrb    w15, [x9, #AN_TYPE]
+    cmp     w15, #A_WOLF
+    b.ne    2f
+    ldrb    w15, [x9, #18]
+    cmp     w15, #1
+    b.ne    2f
+    ldrb    w15, [x9, #AN_RANK]
+    add     w12, w12, w15
+    ldrb    w15, [x9, #AN_LVL]
+    cmp     w15, w14
+    cinc    w11, w11, ge
+    mov     w15, #255
+    strb    w15, [x9, #AN_TYPE]
+2:  add     x9, x9, #32
+    subs    w13, w13, #1
+    b.ne    1b
+    mov     w19, w11                    // (numcat usa x9-x13)
+    mov     w20, w12
+    mov     x0, x21
+    LA      x1, s_ant7
+    bl      strcat_cur
+    mov     w1, w19
+    bl      numcat
+    LA      x1, s_ant8
+    bl      strcat_cur
+    mov     w1, w20
+    bl      numcat
+    mov     x21, x0
 9:  mov     x0, x21
     ldr     x21, [sp, #32]
     ldp     x19, x20, [sp, #16]
@@ -953,7 +1128,7 @@ animal_hit:
     LA      x9, atypes
     add     x9, x9, x20, lsl #4
     ldrb    w2, [x9, #AT_HOST]
-    bl      an_xp
+    bl      F(an_xp)
     bl      xp_gain
 9:  ldp     x21, x22, [sp, #32]
     ldp     x19, x20, [sp, #16]
@@ -1699,6 +1874,11 @@ grpofs:     .float 1.2, 0.4, -0.5, 1.1, 0.6, -1.2
 s_ant5:     .asciz " | XP (lobo 1, lobo 6, campeao 3, chefe 8, cervo 2 / voce 1; lobo 3 / voce 10)="
 xptests:    .byte 1, 0, 1, 1,   6, 0, 1, 1,   3, 1, 1, 1,   8, 2, 1, 1
             .byte 2, 0, 0, 1,   3, 0, 1, 10
+s_ant6:     .asciz " | invasao de elite: lobos="
+s_ant7:     .asciz " do seu nivel ou mais="
+s_ant8:     .asciz " campeoes="
+s_elite1:   .asciz "Invasao de elite! Lobos de nivel "
+s_elite2:   .asciz " vem atras de voce"
 s_anv:      .asciz " Nv "
 s_avida:    .asciz " (vida "
 s_danger:   .asciz " - perigoso!"

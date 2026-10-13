@@ -30773,7 +30773,7 @@ px664:
 pixobj:
     .quad px659, px660, px661, px662, px663, px664
 
-// pixtiles: azulejos do chao, 32 x 16 ARGB (2048 bytes cada)
+// pixtiles: azulejos do chao, 32 x 16 ARGB
     .p2align 4
     .globl pixtiles
 pixtiles:

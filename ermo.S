@@ -721,7 +721,12 @@ new_world:
     msub    w0, w10, w9, w0
     add     w0, w0, #1
     str     w0, [x28, #G_SEED]
-    str     wzr, [x28, #G_INGAME]
+    LA      x0, s_seedenv               // ERMO_SEED=123: sempre o mesmo
+    bl      F(getenv)                   // mundo (para comparar fotos)
+    cbz     x0, 1f
+    bl      F(atoi)
+    str     w0, [x28, #G_SEED]
+1:  str     wzr, [x28, #G_INGAME]
     bl      generate_map
     str     wzr, [x28, #G_CX]
     mov     w9, #16384                  // centro do mapa: 1024 px * 16
@@ -1873,27 +1878,41 @@ tc_water:
 // tc_tex(w9 = azulejo, w10, w11 = u, v 16.16) -> w0 = cor ARGB do pixel do
 // azulejo nesse ponto da celula: o losango 32 x 16 cobre a celula inteira
 // (x = 16 + (fu - fv) * 16, y = (fu + fv) * 8)   folha: usa x1-x6
-tc_tex:
+tc_tex:                                 // (azulejos 32 x 16 x TL_D, pixel.h)
     and     w1, w10, #0xFFFF
     and     w2, w11, #0xFFFF
     sub     w3, w1, w2
+.if TL_D == 2
+    asr     w3, w3, #11
+    add     w3, w3, #32
+.else
     asr     w3, w3, #12
     add     w3, w3, #16
+.endif
     cmp     w3, #0
     csel    w3, wzr, w3, lt
-    mov     w4, #31
+    mov     w4, #(32 * TL_D - 1)
     cmp     w3, w4
     csel    w3, w4, w3, gt
     add     w4, w1, w2
-    subs    w4, w4, #4096               // - meia linha: o meio cai na linha 7
+    subs    w4, w4, #(4096 / TL_D)      // - meia linha: o meio cai na linha 7
     csel    w4, wzr, w4, lt
+.if TL_D == 2
+    lsr     w4, w4, #12
+.else
     lsr     w4, w4, #13
-    mov     w5, #15
+.endif
+    mov     w5, #(16 * TL_D - 1)
     cmp     w4, w5
     csel    w4, w5, w4, gt
     LA      x5, pixtiles
+.if TL_D == 2
+    add     x5, x5, x9, lsl #13
+    add     w6, w3, w4, lsl #6
+.else
     add     x5, x5, x9, lsl #11
     add     w6, w3, w4, lsl #5
+.endif
     ldr     w0, [x5, w6, uxtw #2]
     ret
 
@@ -2072,7 +2091,22 @@ blit:
     strh    w9, [sp, #8]
     strh    wzr, [sp, #10]
     b       92f
-91: strh    w9, [sp, #8]                // ancora y
+91: ldrb    w10, [x0, #5]               // densidade 2: o dobro de detalhe
+    cmp     w10, #2
+    b.ne    94f
+    tbnz    w3, #0, 95f                 // escala par: metade da escala
+    lsr     w3, w3, #1
+    b       94f
+95: ldrb    w10, [x0, #6]               // impar (1x, 3x): a copia pela metade, que
+    ldrb    w11, [x0, #7]               // vem logo depois (deslocamento em
+    add     w10, w10, w11, lsl #8       // blocos de 16 bytes)
+    add     x0, x0, x10, lsl #4
+    ldrb    w6, [x0]
+    ldrb    w7, [x0, #1]
+    str     w7, [sp]
+    ldrb    w8, [x0, #2]
+    ldrb    w9, [x0, #3]
+94: strh    w9, [sp, #8]                // ancora y
     ldrb    w10, [x0, #4]
     strh    w10, [sp, #10]              // k
     add     x0, x0, #8
@@ -3417,6 +3451,7 @@ s_shot_torch:   .asciz "shot_tocha.bmp"
 s_shot_clima:   .asciz "shot_clima0.bmp"
 s_shot_anim:    .asciz "shot_animais.bmp"
 s_shot_bar:     .asciz "shot_barra.bmp"
+s_seedenv:      .asciz "ERMO_SEED"
 s_shot_fence:   .asciz "shot_cerca.bmp"
 s_shot_farm:    .asciz "shot_plantacao.bmp"
 s_shot_iron:    .asciz "shot_ferro.bmp"

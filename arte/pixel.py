@@ -32,8 +32,16 @@
 # =====================================================================
 import json, sys, os
 
+# --dobro (teste do motor): amplia toda a arte 2x e gera como densidade 2;
+# o jogo tem que sair igual.
+DOBRO = '--dobro' in sys.argv
+sys.argv = [a for a in sys.argv if a != '--dobro']
 src = json.load(open(sys.argv[1]))
 out = sys.argv[2] if len(sys.argv) > 2 else '.'
+# densidade 2 (estilo 2, pedido 0.7): o dobro de detalhe; o jogo desenha
+# a 1x o que desenhava a 2x. Cada quadro leva junto uma copia pela metade
+# (para o zoom de 1x) e o chao vira 64 x 32.
+DENS = 2 if DOBRO else src.get('densidade', 1)
 PAL0 = 130
 K = 8
 DIRS = ['S', 'SO', 'O', 'NO', 'N', 'NE', 'L', 'SE']
@@ -82,13 +90,43 @@ S = []
 w = S.append
 lab_n = [0]
 
+def dobra(rows):
+    return [''.join(c + c for c in r) for r in rows for _ in (0, 1)]
+
+def metade(rows):
+    """pela metade: de cada bloco 2 x 2, o primeiro pixel que nao e
+    transparente"""
+    res = []
+    for y in range(0, len(rows) - 1, 2):
+        r = ''
+        for x in range(0, len(rows[0]) - 1, 2):
+            bl = [rows[y][x], rows[y][x + 1], rows[y + 1][x], rows[y + 1][x + 1]]
+            r += next((c for c in bl if c != '.'), '.')
+        res.append(r)
+    return res
+
 def emit(rows, ax, ay):
     lab = 'px%d' % lab_n[0]
     lab_n[0] += 1
+    if DOBRO:
+        rows, ax, ay = dobra(rows), ax * 2, ay * 2
     wd, ht = len(rows[0]), len(rows)
-    data = [wd, ht, ax, ay, K, 0, 0, 0]
-    for r in rows:
-        data += [idx[c] for c in r]
+    if DENS == 2:
+        assert wd <= 255 and ht <= 255, (wd, ht)
+        n = 8 + wd * ht
+        blocos = (n + 15) // 16
+        data = [wd, ht, ax, ay, K // 2, 2, blocos & 255, blocos >> 8]
+        for r in rows:
+            data += [idx[c] for c in r]
+        data += [0] * (blocos * 16 - n)
+        h = metade(rows)
+        data += [len(h[0]), len(h), ax // 2, ay // 2, K, 1, 0, 0]
+        for r in h:
+            data += [idx[c] for c in r]
+    else:
+        data = [wd, ht, ax, ay, K, 0, 0, 0]
+        for r in rows:
+            data += [idx[c] for c in r]
     w('%s:' % lab)
     for i in range(0, len(data), 48):
         w('    .byte ' + ','.join(str(b) for b in data[i:i + 48]))
@@ -287,7 +325,7 @@ def fill(rows):
     mesma linha (o terreno le pelo ponto dentro da celula; nas bordas o
     arredondamento pode cair fora do losango). A 16a linha copia a 15a."""
     rows = [list(r) for r in rows]
-    rows[15] = list(rows[14])
+    rows[-1] = list(rows[-2])
     for r in rows:
         cols = [i for i, c in enumerate(r) if c != '.']
         for i in range(len(r)):
@@ -315,12 +353,15 @@ TILES = [
     ('TL_BURACO', recolor(V('chao_estrada'), {'P': 'Q', 'Q': 'R', 'R': 'S'})),
 ]
 w('')
-w('// pixtiles: azulejos do chao, 32 x 16 ARGB (2048 bytes cada)')
+w('// pixtiles: azulejos do chao, %d x %d ARGB' % (32 * DENS, 16 * DENS))
 w('    .p2align 4')
 w('    .globl pixtiles')
 w('pixtiles:')
 for cod, rows in TILES:
-    rows = fill(check(rows, 32, 16, cod) if len(rows) == 16 else rows)
+    TD = 1 if DOBRO else DENS              # o tamanho que vem no json
+    rows = fill(check(rows, 32 * TD, 16 * TD, cod) if len(rows) == 16 * TD else rows)
+    if DOBRO:
+        rows = dobra(rows)
     w('// %s' % cod)
     for r in rows:
         w('    .word ' + ', '.join('0x%08X' % HEX[c] for c in r))
@@ -430,6 +471,7 @@ H.append('.equ PL_N, %d' % len(CAMADAS))
 for i, o in enumerate(OBJ):
     H.append('.equ %s, %d' % (o[0], i))
 H.append('.equ PX_K, %d' % K)
+H.append('.equ TL_D, %d          // densidade do chao (1: 32 x 16, 2: 64 x 32)' % DENS)
 for k, v in EN.items():
     H.append('.equ %s, %d' % (k, v))
 H += UA
