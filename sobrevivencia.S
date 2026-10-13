@@ -288,7 +288,6 @@ gr_next:
     b       gr_loop
 gr_done:
     bl      build_treegrid
-    bl      dep_dirty
     ldr     x25, [sp, #64]
     ldp     x23, x24, [sp, #48]
     ldp     x21, x22, [sp, #32]
@@ -326,7 +325,6 @@ surv_reset:
     str     wzr, [x28, #G_MINEPROG]
     str     wzr, [x28, #G_NFIRE]
     bl      ash_reset
-    bl      crowd_reset
     str     wzr, [x28, #G_DEAD]
     str     wzr, [x28, #G_PAUSE]
     str     wzr, [x28, #G_POPT]
@@ -423,7 +421,6 @@ sr_found:
     LA      x0, m_start
     bl      set_msg
     bl      iron_reset                  // lampioes, fornalha
-    bl      people_reset                // sem a vila
     ldp     d10, d11, [sp, #48]
     ldp     d8, d9, [sp, #32]
     ldp     x19, x20, [sp, #16]
@@ -686,8 +683,6 @@ harvest:
     b.ne    5f
     mov     w12, #O_BUSHE               // arbusto fica sem frutas
 5:  strb    w12, [x9, #6]
-    mov     w15, #1                     // depositos: refazer as listas
-    str     w15, [x28, #G_DEPDIRTY]
     cmp     w10, #O_ROCK                // pedreira ou veio: vira buraco
     b.eq    51f
     cmp     w10, #O_IRONV
@@ -811,7 +806,6 @@ surv_update:
     stp     x21, x22, [sp, #32]
     stp     d8, d9, [sp, #48]
     stp     d10, d11, [sp, #64]
-    bl      crowd_frame                 // quem esta em cada quadrado (colisao.S)
     ldr     w9, [x28, #G_MSGT]
     cbz     w9, 1f
     sub     w9, w9, #1
@@ -1022,17 +1016,6 @@ surv_update:
     bl      fence_at
     cmp     w0, #1
     b.eq    10f
-    ldr     s4, [x28, #G_PU]            // gente demais no quadrado? (colisao.S)
-    ldr     s5, [x28, #G_PV]
-    fcvtzs  w9, s4
-    fcvtzs  w10, s5
-    add     w1, w9, w10, lsl #9
-    fcvtzs  w9, s10
-    add     w2, w9, w10, lsl #9
-    mov     w0, #MAXPEOPLE
-    mov     w3, #120
-    bl      crowd_try
-    cbz     w0, 10f
     str     s10, [x28, #G_PU]
 10: ldr     s0, [x28, #G_PV]
     fadd    s10, s0, s9
@@ -1045,17 +1028,6 @@ surv_update:
     bl      fence_at
     cmp     w0, #1
     b.eq    su_after_move
-    ldr     s4, [x28, #G_PU]
-    ldr     s5, [x28, #G_PV]
-    fcvtzs  w9, s4
-    fcvtzs  w10, s5
-    add     w1, w9, w10, lsl #9
-    fcvtzs  w10, s10
-    add     w2, w9, w10, lsl #9
-    mov     w0, #MAXPEOPLE
-    mov     w3, #120
-    bl      crowd_try
-    cbz     w0, su_after_move
     str     s10, [x28, #G_PV]
 su_after_move:
     ldr     s0, [x28, #G_PU]
@@ -1099,7 +1071,6 @@ su_after_move:
     str     w9, [x28, #G_HOVOBJ]
     str     w9, [x28, #G_HOVFIRE]
     str     w9, [x28, #G_HOVANIM]
-    str     w9, [x28, #G_HOVPERS]
     ldr     w9, [x28, #G_HOVOK]
     cbz     w9, 11f
     bl      mouse_ui                    // mouse em cima de botao ou janela?
@@ -1109,10 +1080,6 @@ su_after_move:
     ldr     w1, [x28, #G_HOVV]
     bl      animal_at
     str     w0, [x28, #G_HOVANIM]
-    ldr     w0, [x28, #G_HOVU]          // uma pessoa?
-    ldr     w1, [x28, #G_HOVV]
-    bl      person_at
-    str     w0, [x28, #G_HOVPERS]
     ldr     w0, [x28, #G_HOVU]
     ldr     w1, [x28, #G_HOVV]
     bl      find_obj_near
@@ -1395,7 +1362,6 @@ su_food:
     // ---- animais e flechas ----
     bl      animals_update
     bl      arrows_update
-    bl      people_update               // a vila (pessoas.S)
     bl      iron_update                 // perto de uma fornalha?
     bl      fence_drag                  // fileira de cercas seguindo o mouse
     bl      fish_update                 // boia, mordida
@@ -1427,11 +1393,6 @@ su_food:
     // ---- bau aberto: fecha se voce se afastar ----
     ldr     w9, [x28, #G_CHESTOPEN]
     cbz     w9, 231f
-    cmp     w9, #128                    // mochila de alguem: so se morrer
-    b.ls    232f
-    bl      open_check
-    b       231f
-232:
     ldr     w0, [x28, #G_CHESTOBJ]
     bl      obj_dist2
     FC      s1, F_FIRE2
@@ -1670,14 +1631,7 @@ surv_key:
     LA      x0, m_wokeup
     bl      set_msg
     b       9f
-0:  ldr     w9, [x28, #G_NOPEOPLE]      // RPG: sem a vila, P e Z nao
-    cbnz    w9, 18f                     // fazem nada
-    str     w0, [sp, #-16]!
-    bl      people_key                  // P: pessoas, Z: zonas
-    mov     w9, w0
-    ldr     w0, [sp], #16
-    cbnz    w9, 9f
-18: cmp     w0, #8                      // E
+0:  cmp     w0, #8                      // E
     b.ne    1f
     bl      eat_best
     b       9f
@@ -1720,13 +1674,7 @@ surv_key:
 // fecha as janelas); 0 = pode voltar ao menu
     .globl surv_esc
 surv_esc:
-    stp     x29, x30, [sp, #-16]!
-    mov     x29, sp
-    bl      people_esc                  // zonas, painel, selecao
-    ldp     x29, x30, [sp], #16
-    cbz     w0, 0f
-    ret
-0:  ldr     w9, [x28, #G_PLACE]
+    ldr     w9, [x28, #G_PLACE]
     cbz     w9, 1f
     str     wzr, [x28, #G_PLACE]
     mov     w0, #1
@@ -2360,7 +2308,7 @@ chest_move:
     cbz     w9, 9f
     mov     w20, w0
     str     w1, [sp, #-16]!
-    bl      open_ptr                    // bau, deposito ou mochila de alguem
+    bl      open_ptr                    // o bau aberto
     ldr     w1, [sp], #16
     mov     x19, x0
     cbz     x19, 9f
@@ -2378,13 +2326,18 @@ chest_move:
     mov     w0, w20
     bl      inv_add
     LA      x0, p_taken
-2:  str     x0, [sp, #-16]!
-    bl      depot_close_player          // deposito: tira e poe as pilhas
-    ldr     x0, [sp], #16
-    bl      popup
+2:  bl      popup
     bl      calc_stats
 9:  ldp     x19, x20, [sp, #16]
     ldp     x29, x30, [sp], #32
+    ret
+
+// open_ptr -> x0 = contadores do bau aberto   folha
+open_ptr:
+    ldr     w9, [x28, #G_CHESTOPEN]
+    sub     w9, w9, #1
+    LA      x0, chests
+    add     x0, x0, x9, lsl #CHESTSHIFT
     ret
 
 // surv_mouse(w0 = botao, w1 = 1 apertou / 0 soltou)
@@ -2401,7 +2354,6 @@ surv_mouse:
     mov     w19, w0
     mov     w20, w1
     cbnz    w20, 1f
-    bl      zone_release                // soltou: o pincel de zonas para
     cmp     w19, #1                     // soltou o esquerdo: para de coletar
     b.ne    sm_ret
     str     wzr, [x28, #G_LMB]
@@ -2413,16 +2365,7 @@ surv_mouse:
 1:  bl      mouse_ui
     bl      ui_hit
     mov     w21, w1                     // quadrado / receita
-    cmp     w0, #9                      // painel de pessoas / paleta de zonas
-    b.lo    291f
-    cmp     w0, #10
-    b.hi    291f
-    mov     w2, w0
-    mov     w0, w19
-    mov     w1, w21
-    bl      people_ui_click
-    b       sm_ret
-291: cmp    w0, #1                      // botao Mochila
+    cmp    w0, #1                      // botao Mochila
     b.ne    2f
     ldr     w9, [x28, #G_INVOPEN]
     eor     w9, w9, #1
@@ -2530,9 +2473,6 @@ surv_mouse:
     bl      equip
     b       sm_ret
 62: cbnz    w0, sm_ret                  // janela do personagem: nada
-    mov     w0, w19                     // pessoas: selecionar, mandar; zonas
-    bl      people_world_click
-    cbnz    w0, sm_ret
     // ---- no mundo ----
     ldr     w9, [x28, #G_PLACE]         // colocando uma construcao?
     cbz     w9, 7f
@@ -2602,9 +2542,7 @@ surv_mouse:
     str     w9, [x28, #G_INVOPEN]
     str     wzr, [x28, #G_CRAFTOPEN]
     b       sm_ret
-81: bl      depot_click                 // direito num deposito: abre
-    cbnz    w0, sm_ret
-    ldr     w19, [x28, #G_HOVFIRE]      // direito numa fogueira: lenha
+81: ldr     w19, [x28, #G_HOVFIRE]      // direito numa fogueira: lenha
     tbnz    w19, #31, sm_ret
     mov     w0, w19
     bl      fire_dist2
@@ -2685,8 +2623,6 @@ surv_draw:
     bl      arrows_draw
     mov     w0, w21
     bl      fish_draw
-    mov     w0, w21
-    bl      people_draw                 // a vila
     ldr     w9, [x28, #G_SLEEP]         // dormindo: esta dentro da cabana
     cbnz    w9, 50f
     // personagem
@@ -3363,7 +3299,6 @@ update_vision:
     add     w19, w19, #1
     b       2b
 3:  bl      lamps_vision                // lampioes
-    bl      people_vision               // cada morador enxerga em volta
     ldp     x19, x20, [sp, #16]
     ldp     x29, x30, [sp], #32
     ret
@@ -3675,13 +3610,7 @@ ui_tip:
     bl      place_tip
     b       ui_pop
 ui_tip2:
-    ldr     w1, [x28, #G_HOVPERS]       // uma pessoa sob o mouse
-    tbnz    w1, #31, 291f
-    LA      x0, lbuf
-    bl      person_desc
-    mov     w22, #1
-    b       1f
-291: ldr    w1, [x28, #G_HOVANIM]       // um animal sob o mouse
+    ldr     w1, [x28, #G_HOVANIM]       // um animal sob o mouse
     tbnz    w1, #31, ui_tip3
     LA      x0, lbuf
     bl      animal_desc
@@ -4178,8 +4107,6 @@ ui_hit:
     mov     x29, sp
     mov     w4, w0
     mov     w5, w1
-    bl      people_ui_hit               // painel de pessoas / paleta de zonas
-    cbnz    w0, 9f
     mov     w0, w4
     mov     w1, w5
     mov     w2, w0
@@ -4473,9 +4400,7 @@ pile_at:
     sub     w9, w9, #1
     LA      x10, memtype
     strb    w24, [x10, x9]
-9:  mov     w9, #1                      // depositos: refazer as listas
-    str     w9, [x28, #G_DEPDIRTY]
-    ldp     d8, d9, [sp, #64]
+9:  ldp     d8, d9, [sp, #64]
     ldp     x23, x24, [sp, #48]
     ldp     x21, x22, [sp, #32]
     ldp     x19, x20, [sp, #16]
@@ -4687,8 +4612,7 @@ ui_windows:
     ldr     w9, [x28, #G_INVOPEN]
     cbz     w9, 2f
     bl      draw_inv
-2:  bl      people_ui_draw              // painel, zonas, nome do selecionado
-    ldp     x29, x30, [sp], #16
+2:  ldp     x29, x30, [sp], #16
     ret
 
 // icon_fit(x0 sprite, w1 y, w2 x, w3 lado do quadrado): desenha o icone
@@ -5006,12 +4930,6 @@ draw_inv:
     ldr     w9, [x28, #G_CHESTOPEN]
     cbz     w9, 8f
     LA      x2, s_invhint2
-    cmp     w9, #128                    // mochila de alguem: da
-    b.ls    8f
-    LA      x2, s_invhint3
-    cmp     w9, #255
-    b.ne    8f
-    LA      x2, s_invhint4
 8:  mov     w0, #(INV_X + 8)
     mov     w1, #(INV_Y + INV_H - 14)
     bl      text
@@ -5031,8 +4949,7 @@ draw_chest:
     mov     w0, #CRF_X
     mov     w1, #CRF_Y
     mov     w2, #CRF_W
-    bl      open_title                  // "Bau" ou "Mochila de ..."
-    mov     x4, x0
+    LA      x4, s_chesttitle
     mov     w0, #CRF_X
     mov     w1, #CRF_Y
     mov     w2, #CRF_W
@@ -8108,8 +8025,6 @@ s_crafttitle:   .asciz "Fabricar"
 s_chesttitle:   .asciz "Bau (clique: pegar)"
 s_crafthint:    .asciz "Clique numa receita"
 s_invhint2:     .asciz "Clique: guardar no bau"
-s_invhint3:     .asciz "Clique: dar a pessoa"
-s_invhint4:     .asciz "Clique: por no deposito"
 s_chesthint:    .asciz "Clique: pegar"
 s_place1:       .asciz "Clique: colocar "
 s_place2:       .asciz " (dir.: cancela)"

@@ -227,42 +227,18 @@
 .equ G_GRIDREACH, 864        // alcance^2 (linhas mais fortes); -1 = so a grade
 .equ GRIDR2,     400         // a grade aparece ate 20 celulas (some aos poucos)
 .equ G_FARMMODE, 840         // nesta segurada a enxada: 0 nada, 1 ara, 2 desfaz, 3 colhe
-// pessoas (pessoas.S)
-.equ G_HOVPERS,  868         // pessoa sob o mouse (-1)
-.equ G_SELPERS,  872         // pessoa selecionada (-1)
-.equ G_PEOPLEOPEN, 876       // painel de pessoas aberto (P)
-.equ G_ZONEMODE, 880         // pintando zonas (Z): tipo 1..5, 7 apaga; 0 = nao
-.equ G_ZDRAG,    884         // pincel apertado: 1 pinta, 2 apaga
-.equ G_ZAU,      888         // retangulo: celula onde comecou
-.equ G_ZAV,      892
-.equ G_ZBU,      896         // celula sob o mouse (pincel)
-.equ G_ZBV,      900
-.equ G_PLASTDAY, 904         // ultimo dia contado (aniversarios)
-.equ G_NOPEOPLE, 908         // teste: sem a vila
-.equ G_OCCFRAME, 912         // quadro em que a ocupacao foi refeita
-.equ G_PPLFRAME, 916         // quadros da vila
-.equ G_SAPT,     920         // conta quadros ate as mudas crescerem
-.equ G_PNOCHEST, 924         // quando avisou que falta bau
-.equ G_PEOPLEN,  928         // pessoas vivas
-.equ G_ZONESHOW, 932         // zonas no chao neste quadro (grid_prep)
-.equ G_PLCELL,   936         // celula do personagem (caminho)
-.equ G_PTAB,     940         // painel P: 0 Pessoas, 1 Familias
-.equ G_PPAGE,    944         // painel P: pagina
-.equ G_NOLOTT,   948         // quando avisou que falta zona de Moradia
+// 868..951 e 1172..1183, 1204: livres (eram da vila)
 .equ G_NEARFURN, 952         // perto de uma fornalha (receitas de ferro)
 .equ G_FULL,     956         // tela cheia
 .equ G_INV,      960         // mochila: um contador (u32) por item, 48 vagas
 .equ G_IRONDUR,  1152        // usos que restam: machado, picareta, enxada de ferro
 .equ G_NLAMP,    1164        // lampioes
 .equ G_FURNT,    1168        // conta quadros ate olhar a fornalha de novo
-.equ G_ZBRUSH,   1172        // pincel de zonas: tamanho 1..12
-.equ G_NOFISHT,  1176        // quando avisou que o pescador nao tem vara
 .equ G_SPOILT,   1184        // quadros ate a comida estragar um pouco
 .equ G_SPOILK,   1188        // passos (1/32 de dia) contados
 .equ G_PACKU,    1192        // para onde vai a alcateia da noite (float)
 .equ G_PACKV,    1196
 .equ G_HERDID,   1200        // ultimo grupo de manada
-.equ G_DEPDIRTY, 1204        // depositos: refazer as listas
 .equ GSIZE,      1216
 
 .equ W_SUN,      0
@@ -395,28 +371,7 @@
 .equ SPR_COALV,  87
 .equ SPR_ROAD,   88          // estrada (icone)
 .equ MAXLAMP,    64
-// pessoas
-.equ MAXPEOPLE,  64          // vagas (quem morreu fica, para a arvore genealogica)
-.equ PSIZE,      64
-.equ J_FOREST,   1           // tarefas (e tipos de zona)
-.equ J_STONE,    2
-.equ J_FARM,     3
-.equ J_BUILD,    4           // obras: barracos, casas e cercas
-.equ J_SMITH,    5           // ferreiro: barras de ferro e carvao na fornalha
-.equ J_FISH,     6           // pescador: zona de Pesca na agua
-.equ J_SOLDIER,  7           // soldado: defende a vila
-.equ NJOBS,      8
-.equ Z_FOREST,   1
-.equ Z_STONE,    2
-.equ Z_FARM,     3
-.equ Z_HOME,     4           // moradia: onde as familias novas constroem
-.equ Z_FISH,     5           // pesca (na agua)
-.equ Z_LOT,      6           // terreno de uma casa (5 x 5)
-.equ Z_ERASE,    7           // (so o pincel: apaga)
-.equ Z_DEPF,     8           // deposito de comida
-.equ Z_DEPM,     9           // deposito de materiais
-.equ Z_DEPT,     10          // deposito de ferramentas e armas
-.equ Z_DEPG,     11          // deposito geral
+// plantacao
 .equ MAXCROP,    512         // plantas
 .equ CROPRIPE,   192         // maduro (a variante vai de 0 a 192)
 .equ CROPP,      45          // chance de crescer por passo (em 1000)

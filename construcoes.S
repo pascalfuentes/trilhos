@@ -3,17 +3,15 @@
 //
 //  Os quadros vem de estruturas.S (gerado do canvas do designer). Aqui o
 //  jogo escolhe o quadro de cada objeto conforme o estado:
-//    bau aberto/fechado, cerca pelos vizinhos, portao aberto quando tem
-//    alguem perto, casa com as janelas acesas de noite, fornalha acesa
-//    quando o ferreiro trabalha (ou voce esta do lado), lampiao aceso de
-//    noite, pilhas pelo tamanho (pouco, metade, cheia).
+//    bau aberto/fechado, cerca pelos vizinhos, portao aberto quando voce
+//    esta perto, fornalha acesa quando voce esta do lado, lampiao aceso
+//    de noite, pilhas pelo tamanho (pouco, metade, cheia).
 //  Fogueira acesa (animada) e as cinzas da que apagou (somem em 1 dia).
 //  De perto: metade da escala, o dobro de detalhe (como os personagens);
 //  no zoom mais longe, a versao reduzida.
 // =====================================================================
 
 #include "comum.h"
-#include "pessoas.h"
 #include "estruturas.h"
 
 .equ MAXASH,    32                      // cinzas: 16 bytes (u, v, e, idade)
@@ -38,7 +36,7 @@ estr_blit:
     b       blit
 
 // near_someone(w0 = u, w1 = v em 1/64, w2 = raio^2 em (1/64)^2)
-// -> w0 = 1 se voce ou alguem da vila esta ali perto   folha
+// -> w0 = 1 se voce esta ali perto   folha
 near_someone:
     scvtf   s0, w0
     scvtf   s1, w1
@@ -58,30 +56,11 @@ near_someone:
     mov     w0, #1
     fcmp    s4, s3
     b.le    9f
-    ldr     w9, [x28, #G_NOPEOPLE]
-    cbnz    w9, 8f
-    LA      x9, people
-    mov     w10, #MAXPEOPLE
-1:  ldrb    w11, [x9, #P_ALIVE]
-    cbz     w11, 2f
-    ldrb    w11, [x9, #P_FLAGS]         // dentro de casa nao conta
-    tbnz    w11, #0, 2f
-    ldr     s4, [x9, #P_U]
-    fsub    s4, s4, s0
-    ldr     s5, [x9, #P_V]
-    fsub    s5, s5, s1
-    fmul    s4, s4, s4
-    fmadd   s4, s5, s5, s4
-    fcmp    s4, s3
-    b.le    9f
-2:  add     x9, x9, #PSIZE
-    subs    w10, w10, #1
-    b.ne    1b
 8:  mov     w0, #0
 9:  ret
 
-// smelting_near(w0 = u, w1 = v em 1/64) -> w0 = 1 se o ferreiro esta
-// trabalhando nessa fornalha (ou voce esta a ate 2,5 celulas)   folha
+// smelting_near(w0 = u, w1 = v em 1/64) -> w0 = 1 se voce esta a ate
+// 2,5 celulas da fornalha   folha
 smelting_near:
     scvtf   s0, w0
     scvtf   s1, w1
@@ -98,30 +77,6 @@ smelting_near:
     mov     w0, #1
     fcmp    s4, s3
     b.le    9f
-    ldr     w9, [x28, #G_NOPEOPLE]
-    cbnz    w9, 8f
-    fmov    s3, #2.5                    // 1,6 celula
-    LA      x9, people
-    mov     w10, #MAXPEOPLE
-1:  ldrb    w11, [x9, #P_ALIVE]
-    cbz     w11, 2f
-    ldrb    w11, [x9, #P_STATE]
-    cmp     w11, #ST_WORK
-    b.ne    2f
-    ldrb    w11, [x9, #P_WKIND]
-    cmp     w11, #WK_SMELT
-    b.ne    2f
-    ldr     s4, [x9, #P_U]
-    fsub    s4, s4, s0
-    ldr     s5, [x9, #P_V]
-    fsub    s5, s5, s1
-    fmul    s4, s4, s4
-    fmadd   s4, s5, s5, s4
-    fcmp    s4, s3
-    b.le    9f
-2:  add     x9, x9, #PSIZE
-    subs    w10, w10, #1
-    b.ne    1b
 8:  mov     w0, #0
 9:  ret
 

@@ -199,7 +199,7 @@ main_fail:
 
 // ---- ./ermo --novo: comeca um jogo novo como o jogador, salva a foto
 // dos primeiros 10 s (shot_novo.bmp), deixa o tempo correr 2 dias sem
-// tocar em nada e diz quantas pessoas vivem (confere o comeco do jogo
+// tocar em nada e diz o dia e se voce morreu (confere o comeco do jogo
 // sem os atalhos do --shot)
 novo_mode:
     bl      start_game
@@ -214,23 +214,14 @@ novo_mode:
 1:  bl      update
     subs    w21, w21, #1
     b.ne    1b
-    LA      x9, people
-    mov     w10, #0
-    mov     w11, #MAXPEOPLE
-2:  ldrb    w12, [x9, #16]               // P_ALIVE
-    add     w10, w10, w12
-    add     x9, x9, #PSIZE
-    subs    w11, w11, #1
-    b.ne    2b
-    mov     w21, w10
     LA      x0, txt
     LA      x1, s_novo1
     bl      strcat_cur
-    mov     w1, w21
+    ldr     w1, [x28, #G_DAY]
     bl      numcat
     LA      x1, s_novo2
     bl      strcat_cur
-    ldr     w1, [x28, #G_DAY]
+    ldr     w1, [x28, #G_DEAD]
     bl      numcat
     LA      x1, s_nl
     bl      strcat_cur
@@ -431,45 +422,6 @@ shot_mode:
     mov     w0, #1
     bl      farm_selftest
 
-    // pessoas: a vila trabalhando 1 hora (foto pintando zonas), o painel
-    // (foto), mais 2 horas, a noite, 12 dias e um lobo
-    mov     w0, #0
-    bl      people_selftest
-    ldr     w19, [x28, #G_ZOOM]
-    mov     w0, #3
-    bl      set_zoom
-    bl      draw_all
-    LA      x0, s_shot_people
-    bl      save_bmp
-    ldr     x0, [x28, #G_REN]
-    bl      F(SDL_RenderPresent)
-    mov     w0, #2
-    bl      people_selftest
-    bl      draw_all
-    LA      x0, s_shot_panel
-    bl      save_bmp
-    ldr     x0, [x28, #G_REN]
-    bl      F(SDL_RenderPresent)
-    mov     w0, w19
-    bl      set_zoom
-    mov     w0, #1
-    bl      people_selftest
-    ldr     w19, [x28, #G_ZOOM]         // a vila depois das obras
-    mov     w0, #3
-    bl      set_zoom
-    bl      draw_all
-    LA      x0, s_shot_village
-    bl      save_bmp
-    ldr     x0, [x28, #G_REN]
-    bl      F(SDL_RenderPresent)
-    mov     w0, #3                      // arvore genealogica
-    bl      people_selftest
-    bl      draw_all
-    LA      x0, s_shot_family
-    bl      save_bmp
-    ldr     x0, [x28, #G_REN]
-    bl      F(SDL_RenderPresent)
-    str     wzr, [x28, #G_PEOPLEOPEN]
     mov     w0, #0                      // ferro: voce (foto de noite na fornalha)
     bl      iron_selftest
     bl      draw_all
@@ -477,23 +429,6 @@ shot_mode:
     bl      save_bmp
     ldr     x0, [x28, #G_REN]
     bl      F(SDL_RenderPresent)
-    mov     w0, #1                      // ferro: a vila
-    bl      iron_selftest
-    mov     w0, #0                      // pincel, pescador e mochilas
-    bl      mochila_selftest
-    bl      draw_all
-    LA      x0, s_shot_brush
-    bl      save_bmp
-    ldr     x0, [x28, #G_REN]
-    bl      F(SDL_RenderPresent)
-    mov     w0, #1                      // a mochila da pescadora
-    bl      mochila_selftest
-    bl      draw_all
-    LA      x0, s_shot_pbag
-    bl      save_bmp
-    ldr     x0, [x28, #G_REN]
-    bl      F(SDL_RenderPresent)
-    str     wzr, [x28, #G_ZONEMODE]
     str     wzr, [x28, #G_CHESTOPEN]
     str     wzr, [x28, #G_INVOPEN]
     mov     w0, #0                      // desafio: pedreira esgotada
@@ -503,66 +438,17 @@ shot_mode:
     bl      save_bmp
     ldr     x0, [x28, #G_REN]
     bl      F(SDL_RenderPresent)
-    mov     w0, #1                      // desafio: alcateia e soldado
+    mov     w0, #1                      // desafio: alcateia atras de voce
     bl      desafio_selftest
     bl      draw_all
-    LA      x0, s_shot_soldier
+    LA      x0, s_shot_pack
     bl      save_bmp
     ldr     x0, [x28, #G_REN]
     bl      F(SDL_RenderPresent)
     mov     w0, #2
     bl      desafio_selftest
     bl      save_selftest               // salva, bagunca e carrega de volta
-    bl      dep_selftest                // deposito de materiais do seu lado
-    mov     w0, #3
-    bl      set_zoom
-    bl      follow_camera
-    bl      update_ambient
-    bl      update_vision
-    bl      draw_all
-    LA      x0, s_shot_depot
-    bl      save_bmp
-    ldr     x0, [x28, #G_REN]
-    bl      F(SDL_RenderPresent)
-    bl      dep_selftest_done
-    bl      road_selftest               // estradas: voce e a vila
-    bl      crowd_selftest              // 2 por quadrado, ninguem tranca
-    mov     w0, w19
-    bl      set_zoom
-    mov     w9, #1                      // o resto do teste sem a vila
-    str     w9, [x28, #G_NOPEOPLE]
-
-    // vitrine: todas as construcoes lado a lado, de dia e de noite
-    bl      vitrine_setup
-    cbz     w0, 97f
-    mov     w0, #10800                  // meio-dia
-    mov     w1, #3
-    bl      vitrine_frame
-    bl      draw_all
-    LA      x0, s_shot_vitrine
-    bl      save_bmp
-    ldr     x0, [x28, #G_REN]
-    bl      F(SDL_RenderPresent)
-    mov     w0, #28800                  // 22:00
-    mov     w1, #3
-    bl      vitrine_frame
-    bl      draw_all
-    LA      x0, s_shot_vitrine2
-    bl      save_bmp
-    ldr     x0, [x28, #G_REN]
-    bl      F(SDL_RenderPresent)
-    mov     w0, #10800                  // de longe (zoom 1: desenho reduzido)
-    mov     w1, #1
-    bl      vitrine_frame
-    bl      draw_all
-    LA      x0, s_shot_vitrine3
-    bl      save_bmp
-    ldr     x0, [x28, #G_REN]
-    bl      F(SDL_RenderPresent)
-    bl      vitrine_done
-    mov     w0, w19
-    bl      set_zoom
-97:
+    bl      road_selftest               // estradas: voce arrasta e desfaz
 
     // agua: nadando, tubarao chegando e o fim
     mov     w0, #0
@@ -1414,16 +1300,7 @@ he_wheel:
     fneg    s0, s0
 1:  ldr     w9, [x28, #G_STATE]
     cbz     w9, he_loop
-    ldr     w9, [x28, #G_ZONEMODE]      // pintando zonas: tamanho do pincel
-    cbz     w9, 4f
-    fcmp    s0, #0.0
-    b.eq    he_loop
-    mov     w0, #1
-    mov     w9, #-1
-    csel    w0, w0, w9, gt
-    bl      zone_wheel
-    b       he_loop
-4:  ldr     s1, [x28, #G_WHEEL]
+    ldr     s1, [x28, #G_WHEEL]
     fadd    s1, s1, s0
     fmov    s2, #1.0
     fcmp    s1, s2
@@ -1976,7 +1853,6 @@ tc_light:
     orr     w0, w6, w5, lsl #8
     orr     w0, w0, w4, lsl #16
     orr     w0, w0, #0xFF000000
-    bl      tc_zone                     // zonas de trabalho
 69:
     // grade: linha clara na borda de cada quadrado perto do personagem
     // (mais forte no alcance; some aos poucos ate 20 celulas)
@@ -2066,65 +1942,8 @@ tc_water:
     MOVI32  w0, 0x00202020
     add     w5, w5, w0
 4:  mov     w0, w5
-    bl      tc_zone                     // zona de Pesca na agua
     ldp     x29, x30, [sp], #16
     ret
-
-// tc_zone(w0 = cor; w10, w11 = u, v 16.16) -> w0   (usa x1-x9)
-// zonas de trabalho (pintando, ou com o painel de pessoas aberto): a cor
-// de cada tipo; o circulo do pincel sob o mouse aparece mais forte
-tc_zone:
-    ldr     w9, [x28, #G_ZONESHOW]
-    cbz     w9, 69f
-    asr     w2, w10, #16
-    asr     w3, w11, #16
-    cmp     w2, #511
-    b.hi    69f
-    cmp     w3, #511
-    b.hi    69f
-    add     w9, w2, w3, lsl #9
-    LA      x8, zonegrid
-    ldrb    w1, [x8, w9, uxtw]
-    mov     w4, #110
-    ldr     w9, [x28, #G_ZONEMODE]
-    cbz     w9, 62f
-    ldr     w9, [x28, #G_HOVOK]
-    cbz     w9, 62f
-    ldr     w5, [x28, #G_ZBU]
-    sub     w2, w2, w5
-    ldr     w5, [x28, #G_ZBV]
-    sub     w3, w3, w5
-    mul     w2, w2, w2
-    madd    w2, w3, w3, w2
-    ldr     w5, [x28, #G_ZBRUSH]
-    sub     w5, w5, #1
-    madd    w6, w5, w5, w5              // raio^2 + raio
-    cmp     w2, w6
-    b.gt    62f
-    ldr     w1, [x28, #G_ZONEMODE]
-    mov     w4, #170
-62: cbz     w1, 69f
-    LA      x9, zonecolors
-    ldr     w9, [x9, w1, uxtw #2]
-    ubfx    w5, w0, #16, #8
-    ubfx    w6, w9, #16, #8
-    sub     w6, w6, w5
-    mul     w6, w6, w4
-    add     w5, w5, w6, asr #8
-    ubfx    w2, w0, #8, #8
-    ubfx    w6, w9, #8, #8
-    sub     w6, w6, w2
-    mul     w6, w6, w4
-    add     w2, w2, w6, asr #8
-    and     w3, w0, #255
-    and     w6, w9, #255
-    sub     w6, w6, w3
-    mul     w6, w6, w4
-    add     w3, w3, w6, asr #8
-    orr     w0, w3, w2, lsl #8
-    orr     w0, w0, w5, lsl #16
-    orr     w0, w0, #0xFF000000
-69: ret
 
 // =====================================================================
 //  Objetos (sprites com teste de profundidade)
@@ -2411,10 +2230,7 @@ draw_all:
     cbnz    w9, 3f
     bl      draw_title
     b       4f
-3:  LA      x9, noui                    // fotos da vitrine: sem a interface
-    ldrb    w9, [x9]
-    cbnz    w9, 4f
-    bl      draw_ui
+3:  bl      draw_ui
 4:  mov     w0, #1
     bl      setscale
     ldp     x29, x30, [sp], #16
@@ -3513,8 +3329,8 @@ s_shot_f12:     .asciz "ermo.bmp"
 s_shot_title:   .asciz "shot_titulo.bmp"
 s_shot_novo:    .asciz "shot_novo.bmp"
 s_novoarg:      .asciz "--novo"
-s_novo1:        .asciz "novo jogo: pessoas vivas="
-s_novo2:        .asciz " dia="
+s_novo1:        .asciz "novo jogo: dia="
+s_novo2:        .asciz " morreu="
 s_shot_game:    .asciz "shot_jogo.bmp"
 s_shot_far:     .asciz "shot_longe.bmp"
 s_shot_near:    .asciz "shot_perto.bmp"
@@ -3528,19 +3344,9 @@ s_shot_clima:   .asciz "shot_clima0.bmp"
 s_shot_anim:    .asciz "shot_animais.bmp"
 s_shot_fence:   .asciz "shot_cerca.bmp"
 s_shot_farm:    .asciz "shot_plantacao.bmp"
-s_shot_people:  .asciz "shot_pessoas.bmp"
-s_shot_panel:   .asciz "shot_painel.bmp"
-s_shot_village: .asciz "shot_vila.bmp"
-s_shot_family:  .asciz "shot_familias.bmp"
 s_shot_iron:    .asciz "shot_ferro.bmp"
-s_shot_brush:   .asciz "shot_pincel.bmp"
-s_shot_pbag:    .asciz "shot_morador.bmp"
 s_shot_quarry:  .asciz "shot_pedreira.bmp"
-s_shot_soldier: .asciz "shot_soldado.bmp"
-s_shot_depot: .asciz "shot_deposito.bmp"
-s_shot_vitrine: .asciz "shot_estruturas.bmp"
-s_shot_vitrine2: .asciz "shot_estruturas_noite.bmp"
-s_shot_vitrine3: .asciz "shot_estruturas_longe.bmp"
+s_shot_pack: .asciz "shot_alcateia.bmp"
     .p2align 2
 // buracos de pedreira e de mina e o chao delas (duas cores cada)
 pitcolors:

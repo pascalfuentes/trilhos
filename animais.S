@@ -318,13 +318,6 @@ au_loop:
     ldrb    w9, [x22, #AT_HOST]
     cbz     w9, au_passive
     // ---- perigoso ----
-    mov     x0, x20                     // uma pessoa da vila mais perto?
-    mov     x1, x22
-    fmov    s0, s10
-    bl      beast_people
-    cmp     w0, #1
-    b.eq    au_move
-    b.hi    au_next
     ldr     w9, [x28, #G_DEAD]
     cbnz    w9, au_wander
     ldr     w9, [x28, #G_NEARFIRE]      // medo de fogo; nao entra no abrigo

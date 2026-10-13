@@ -3,18 +3,17 @@
 //
 //  O mundo (relevo, umidade, luz) sai da semente: ao carregar ele e
 //  gerado de novo e depois o que muda e lido do arquivo: o estado G, os
-//  objetos, as grades (terra arada, o que voce ja viu, cercas, zonas,
-//  caminhos, buracos de pedreira), os animais, as fogueiras, os baus, as
-//  pessoas da vila, as mochilas, o parentesco e as casas.
+//  objetos, as grades (terra arada e estradas, o que voce ja viu, arvores,
+//  cercas, buracos de pedreira), os animais, as flechas, os lampioes, as
+//  fogueiras, os baus, os abrigos e a plantacao.
 //
 //  Arquivo: cabecalho de 32 bytes ("ERMOSAV1", versao, semente, dia,
 //  objetos, tamanho de G) e os blocos na ordem da tabela savtab.
 // =====================================================================
 
 #include "comum.h"
-#include "pessoas.h"
 
-.equ SAVVER,    1
+.equ SAVVER,    2                       // 2: o RPG (sem a vila)
 .equ HDRSIZE,   32
 
     .text
@@ -347,12 +346,7 @@ load_game:
     b       1b
 2:  mov     x0, x19
     bl      F(fclose)
-    mov     w9, #-1                     // a ocupacao e refeita
-    str     w9, [x28, #G_OCCFRAME]
-    mov     w9, #1                      // e as listas dos depositos
-    str     w9, [x28, #G_DEPDIRTY]
-    bl      crowd_reset                 // as contas da colisao e as cinzas
-    bl      ash_reset
+    bl      ash_reset                   // as cinzas
     ldr     w0, [x28, #G_ZOOM]
     bl      set_zoom
     bl      follow_camera
@@ -460,11 +454,10 @@ save_selftest:
     str     w9, [x24, #4]
     ldr     w9, [x28, #G_NOBJ]
     str     w9, [x24, #8]
-    ldr     w9, [x28, #G_PEOPLEN]
+    ldr     w9, [x28, #G_PU]            // onde voce esta
     str     w9, [x24, #12]
-    LA      x9, people
-    ldr     w10, [x9, #P_U]
-    str     w10, [x24, #16]
+    ldr     w9, [x28, #G_PV]
+    str     w9, [x24, #16]
     LA      x9, chests
     ldr     w10, [x9, #(4 * IT_WOOD)]
     str     w10, [x24, #20]
@@ -482,14 +475,14 @@ save_selftest:
     bl      sav_total
     lsr     x0, x0, #10
     str     w0, [x24, #36]
-    // bagunca: outro dia, a pessoa longe, o bau cheio, o personagem sem
-    // pedra e os objetos pela metade
+    // bagunca: outro dia, voce longe, o bau cheio, sem pedra na mochila e
+    // os objetos pela metade
     ldr     w9, [x28, #G_DAY]
     add     w9, w9, #7
     str     w9, [x28, #G_DAY]
-    LA      x9, people
     mov     w10, #0x42c80000            // 100.0
-    str     w10, [x9, #P_U]
+    str     w10, [x28, #G_PU]
+    str     w10, [x28, #G_PV]
     LA      x9, chests
     mov     w10, #999
     str     w10, [x9, #(4 * IT_WOOD)]
@@ -513,12 +506,11 @@ save_selftest:
     ldr     w10, [x24, #8]
     cmp     w9, w10
     cinc    w21, w21, eq
-    ldr     w9, [x28, #G_PEOPLEN]
+    ldr     w9, [x28, #G_PU]
     ldr     w10, [x24, #12]
     cmp     w9, w10
     cinc    w21, w21, eq
-    LA      x9, people
-    ldr     w9, [x9, #P_U]
+    ldr     w9, [x28, #G_PV]
     ldr     w10, [x24, #16]
     cmp     w9, w10
     cinc    w21, w21, eq
@@ -606,12 +598,10 @@ sv_num:
     .p2align 3
 // o que vai no arquivo depois de G, dos objetos e do memtype
 savtab:
-    .quad overlay,   (MAPN * MAPN)      // terra arada e caminhos
+    .quad overlay,   (MAPN * MAPN)      // terra arada e estradas
     .quad seen,      (MAPN * MAPN)      // o que voce ja viu
     .quad treecnt,   (MAPN * MAPN)      // arvores por celula
     .quad fencegrid, (MAPN * MAPN)      // cercas e portoes
-    .quad zonegrid,  (MAPN * MAPN)      // zonas
-    .quad walkgrid,  (MAPN * MAPN)      // passadas
     .quad pitgrid,   (MAPN * MAPN)      // pedreiras e buracos
     .quad animals,   1536
     .quad arrows,    512
@@ -621,11 +611,6 @@ savtab:
     .quad chestused, 64
     .quad shelters,  128
     .quad croplist,  (MAXCROP * 4)
-    .quad people,    (MAXPEOPLE * PSIZE)
-    .quad pinv,      (MAXPEOPLE * 256)
-    .quad kin,       (MAXPEOPLE * 8)
-    .quad fams,      (MAXFAM * FSIZE)
-    .quad vstat,     16
     .quad 0, 0
 savpath:    .quad s_savfile
 s_magic:    .ascii "ERMOSAV1"

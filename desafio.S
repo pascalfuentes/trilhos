@@ -9,15 +9,11 @@
 //    quarto (pelo menos 1) a cada periodo; no bau, metade da velocidade.
 //  - Cervos andam em manada (seguem o primeiro do grupo e fogem juntos).
 //  - Noites perigosas: a partir do 2o dia, ao anoitecer, pode vir uma
-//    alcateia atras da vila (mais provavel e maior a cada dia, e no
+//    alcateia atras de voce (mais provavel e maior a cada dia, e no
 //    inverno). De manha os lobos que sobraram vao embora.
-//  - Soldado: tarefa da vila. Pega uma espada no bau, patrulha em volta
-//    do bau, nao dorme (fica de vigia) e corre atras de lobos e ursos que
-//    chegam perto (16 celulas). Com espada: 6 de dano; sem: 2.
 // =====================================================================
 
 #include "comum.h"
-#include "pessoas.h"
 
 .equ AN_U,      0
 .equ AN_V,      4
@@ -160,8 +156,6 @@ quarry_done:
     mov     w10, #2
 1:  LA      x11, pitgrid
     strb    w10, [x11, w9, uxtw]
-    mov     w10, #-1
-    str     w10, [x28, #G_OCCFRAME]
     ret
 
 // ---------------------------------------------------------------------
@@ -197,8 +191,8 @@ rot1:
 8:  mov     w0, #0
     ret
 
-// spoil_step: estraga o que esta no periodo (sua mochila, as mochilas da
-// vila; os baus na metade da velocidade) e avisa o que estragou na sua
+// spoil_step: estraga o que esta no periodo (sua mochila; os baus na
+// metade da velocidade; as pilhas no chao) e avisa o que estragou na sua
     .globl spoil_step
 spoil_step:
     stp     x29, x30, [sp, #-64]!
@@ -225,15 +219,7 @@ spoil_step:
     cbz     w0, 2f
     mov     w23, w21
     mov     w24, w0
-2:  LA      x9, pinv                    // as mochilas da vila
-    add     x9, x9, x21, lsl #2
-    mov     w10, #MAXPEOPLE
-3:  mov     x0, x9
-    bl      rot1
-    add     x9, x9, #256
-    subs    w10, w10, #1
-    b.ne    3b
-    lsl     w9, w22, #1                 // baus: a cada 2 periodos
+2:  lsl     w9, w22, #1                 // baus: a cada 2 periodos
     udiv    w10, w19, w9
     msub    w10, w10, w9, w19
     cbnz    w10, 1b
@@ -246,7 +232,7 @@ spoil_step:
     subs    w10, w10, #1
     b.ne    4b
     b       1b
-8:  mov     w0, w19                     // pilhas no chao e nos depositos
+8:  mov     w0, w19                     // pilhas no chao (pilhas.S)
     LA      x1, spoiltab
     bl      spoil_piles
     tbnz    w23, #31, 9f
@@ -274,7 +260,7 @@ spoil_step:
 // ---------------------------------------------------------------------
 
 // group_steer(x20 = animal, x22 = tipo, w19 = numero) -> w0 = 1 se
-// mudou o rumo: a alcateia vai para a vila; na manada, cada um segue o
+// mudou o rumo: a alcateia vai atras de voce; na manada, cada um segue o
 // primeiro do grupo   folha
     .globl group_steer
 group_steer:
@@ -284,8 +270,8 @@ group_steer:
     ldr     s1, [x20, #AN_V]
     cmp     w9, #1
     b.ne    2f
-    ldr     s2, [x28, #G_PACKU]
-    ldr     s3, [x28, #G_PACKV]
+    ldr     s2, [x28, #G_PU]
+    ldr     s3, [x28, #G_PV]
     LA      x10, dconst
     ldr     s6, [x10, #4]               // alcateia: 1,8x a velocidade de andar
     b       5f
@@ -459,8 +445,7 @@ night_tick:
     ldp     x29, x30, [sp], #32
 9:  ret
 
-// pack_spawn(w0 = lobos) -> w0 = quantos apareceram: a 22 celulas da vila
-// (o bau mais perto de voce, se estiver a ate 45 celulas; senao, voce)
+// pack_spawn(w0 = lobos) -> w0 = quantos apareceram: a 22 celulas de voce
     .globl pack_spawn
 pack_spawn:
     stp     x29, x30, [sp, #-112]!
@@ -474,24 +459,6 @@ pack_spawn:
     mov     w19, w0
     ldr     s8, [x28, #G_PU]
     ldr     s9, [x28, #G_PV]
-    fmov    s0, s8                      // o deposito mais perto de voce
-    fmov    s1, s9
-    bl      dep_find_any
-    tbnz    w0, #31, 1f
-    and     w9, w0, #511
-    lsr     w10, w0, #9
-    scvtf   s0, w9
-    scvtf   s1, w10
-    fsub    s2, s0, s8
-    fsub    s3, s1, s9
-    fmul    s2, s2, s2
-    fmadd   s2, s3, s3, s2
-    LA      x9, dconst
-    ldr     s3, [x9, #16]               // 45^2
-    fcmp    s2, s3
-    b.gt    1f
-    fmov    s8, s0
-    fmov    s9, s1
 1:  str     s8, [x28, #G_PACKU]
     str     s9, [x28, #G_PACKV]
     bl      rng                         // de onde vem: uma das 16 direcoes
@@ -521,7 +488,7 @@ pack_spawn:
     ldr     w9, [x28, #G_FLOOD]
     cmp     w0, w9
     b.lt    3f
-    mov     w23, #21                    // e terra no caminho ate a vila
+    mov     w23, #21                    // e terra no caminho ate voce
     LA      x9, dir16
     add     x9, x9, x21, lsl #3
     ldr     s12, [x9]
@@ -581,208 +548,6 @@ pack_spawn:
     ldp     x21, x22, [sp, #32]
     ldp     x19, x20, [sp, #16]
     ldp     x29, x30, [sp], #112
-    ret
-
-// ---------------------------------------------------------------------
-//  Soldado (x19 = pessoa, w20 = numero)
-// ---------------------------------------------------------------------
-
-// hostile_near(s0 = u, s1 = v, s2 = distancia^2 maxima) -> w0 = lobo ou
-// urso mais perto (-1)   folha
-hostile_near:
-    mov     w0, #-1
-    LA      x9, animals
-    mov     w10, #0
-1:  ldrb    w12, [x9, #AN_TYPE]
-    cmp     w12, #A_WOLF
-    b.eq    2f
-    cmp     w12, #A_BEAR
-    b.ne    3f
-2:  ldr     s3, [x9, #AN_U]
-    fsub    s3, s3, s0
-    ldr     s4, [x9, #AN_V]
-    fsub    s4, s4, s1
-    fmul    s3, s3, s3
-    fmadd   s3, s4, s4, s3
-    fcmp    s3, s2
-    b.ge    3f
-    fmov    s2, s3
-    mov     w0, w10
-3:  add     x9, x9, #32
-    add     w10, w10, #1
-    cmp     w10, #MAXANIM
-    b.lt    1b
-    ret
-
-// soldier_frame -> w0 = 1 se cuidou deste quadro (lutando ou indo lutar)
-    .globl soldier_frame
-soldier_frame:
-    ldrb    w9, [x19, #P_STATE]
-    cmp     w9, #ST_SLEEP
-    b.eq    8f
-    cmp     w9, #ST_FIGHT
-    b.eq    soldier_fight
-    ldr     w9, [x28, #G_PPLFRAME]      // a cada 16 quadros olha em volta
-    add     w9, w9, w20
-    tst     w9, #15
-    b.ne    8f
-    stp     x29, x30, [sp, #-16]!
-    mov     x29, sp
-    ldr     s0, [x19, #P_U]
-    ldr     s1, [x19, #P_V]
-    LA      x9, dconst
-    ldr     s2, [x9, #32]               // 16 celulas^2
-    bl      hostile_near
-    ldp     x29, x30, [sp], #16
-    tbnz    w0, #31, 8f
-    str     w0, [x19, #P_TARGET]
-    mov     w9, #ST_FIGHT
-    strb    w9, [x19, #P_STATE]
-    strb    wzr, [x19, #P_NEXT]
-    strb    wzr, [x19, #P_WKIND]
-    strh    wzr, [x19, #P_TIMER]
-    strh    wzr, [x19, #P_BLOCK]
-    strh    wzr, [x19, #P_DET]
-    mov     w0, #1
-    ret
-8:  mov     w0, #0
-    ret
-
-// soldier_fight: corre atras do bicho e golpeia (a cada 40 quadros)
-// -> w0 = 1
-soldier_fight:
-    stp     x29, x30, [sp, #-64]!
-    mov     x29, sp
-    stp     x21, x22, [sp, #16]
-    stp     x23, x24, [sp, #32]
-    stp     d8, d9, [sp, #48]
-    ldr     w21, [x19, #P_TARGET]
-    tbnz    w21, #31, 80f
-    cmp     w21, #MAXANIM
-    b.hs    80f
-    LA      x22, animals
-    add     x22, x22, x21, lsl #5
-    ldrb    w23, [x22, #AN_TYPE]
-    cmp     w23, #A_WOLF
-    b.eq    1f
-    cmp     w23, #A_BEAR
-    b.ne    80f
-1:  ldr     s0, [x22, #AN_U]
-    ldr     s1, [x19, #P_U]
-    fsub    s8, s0, s1
-    ldr     s0, [x22, #AN_V]
-    ldr     s1, [x19, #P_V]
-    fsub    s9, s0, s1
-    fmul    s2, s8, s8
-    fmadd   s2, s9, s9, s2
-    LA      x9, dconst
-    ldr     s3, [x9, #36]               // longe demais (30 celulas)^2: desiste
-    fcmp    s2, s3
-    b.gt    80f
-    ldr     s3, [x9, #40]               // perto (1,1 celula)^2: golpeia
-    fcmp    s2, s3
-    b.le    3f
-    ldr     s0, [x22, #AN_U]            // corre atras
-    str     s0, [x19, #P_GU]
-    ldr     s0, [x22, #AN_V]
-    str     s0, [x19, #P_GV]
-    bl      ppl_walk
-    b       90f
-3:  ldrh    w9, [x19, #P_TIMER]
-    cbz     w9, 4f
-    sub     w9, w9, #1
-    strh    w9, [x19, #P_TIMER]
-    b       90f
-4:  mov     w9, #40
-    strh    w9, [x19, #P_TIMER]
-    mov     w0, #IT_SWORD               // espada: 6; sem: 2
-    bl      pinv_get
-    mov     w1, #2
-    cbz     w0, 5f
-    mov     w1, #6
-5:  mov     w0, w21
-    bl      animal_hit
-    ldrb    w9, [x22, #AN_TYPE]
-    cmp     w9, #255
-    b.ne    90f
-    LA      x9, dstat                   // abateu
-    ldr     w10, [x9]
-    add     w10, w10, #1
-    str     w10, [x9]
-    LA      x0, pmsgbuf                 // "Ana Silva (soldado) abateu: Lobo"
-    mov     w1, w20
-    bl      ppl_namecat
-    LA      x1, s_soldkill
-    bl      strcat_cur
-    LA      x1, animnames
-    add     x1, x1, x23, lsl #4
-    bl      strcat_cur
-    LA      x0, pmsgbuf
-    bl      set_msg
-80: mov     w9, #ST_IDLE                // volta a patrulhar
-    strb    w9, [x19, #P_STATE]
-    mov     w9, #20
-    strh    w9, [x19, #P_THINK]
-    mov     w9, #-1
-    str     w9, [x19, #P_TARGET]
-90: mov     w0, #1
-    ldp     d8, d9, [sp, #48]
-    ldp     x23, x24, [sp, #32]
-    ldp     x21, x22, [sp, #16]
-    ldp     x29, x30, [sp], #64
-    ret
-
-// soldier_patrol -> w0 = 1: anda ate um ponto a ate 6 celulas do bau mais
-// perto (a vila) e fica de vigia
-    .globl soldier_patrol
-soldier_patrol:
-    stp     x29, x30, [sp, #-64]!
-    mov     x29, sp
-    stp     x21, x22, [sp, #16]
-    stp     d8, d9, [sp, #32]
-    stp     d10, d11, [sp, #48]
-    ldr     s8, [x19, #P_U]
-    ldr     s9, [x19, #P_V]
-    bl      dep_home                    // em volta do deposito
-    tbnz    w0, #31, 1f
-    and     w9, w0, #511
-    lsr     w10, w0, #9
-    scvtf   s8, w9
-    scvtf   s9, w10
-1:  mov     w21, #6                     // ate 6 tentativas
-2:  mov     w0, #13
-    bl      rng_mod
-    sub     w0, w0, #6
-    scvtf   s10, w0
-    mov     w0, #13
-    bl      rng_mod
-    sub     w0, w0, #6
-    scvtf   s11, w0
-    fadd    s10, s10, s8
-    fadd    s11, s11, s9
-    fmov    s0, s10
-    fmov    s1, s11
-    bl      ppl_land
-    cbnz    w0, 3f
-    subs    w21, w21, #1
-    b.ne    2b
-    mov     w9, #ST_WAIT                // nao achou: vigia ali mesmo
-    strb    w9, [x19, #P_STATE]
-    mov     w9, #120
-    strh    w9, [x19, #P_TIMER]
-    b       9f
-3:  fmov    s0, s10
-    fmov    s1, s11
-    bl      ppl_gopoint
-    strb    wzr, [x19, #P_NEXT]
-    strb    wzr, [x19, #P_WKIND]
-    mov     w9, #-1
-    str     w9, [x19, #P_TARGET]
-9:  mov     w0, #1
-    ldp     d10, d11, [sp, #48]
-    ldp     d8, d9, [sp, #32]
-    ldp     x21, x22, [sp, #16]
-    ldp     x29, x30, [sp], #64
     ret
 
 // ---------------------------------------------------------------------
@@ -855,8 +620,8 @@ dt_alive:
 //   0: conta pedreiras, veios, arbustos e trigo; esgota uma pedreira
 //      (foto da pedreira)
 //   1: comida estraga, inverno, manada; de noite, uma alcateia vem atras
-//      da vila e um soldado com espada defende (foto)
-//   2: o fim da luta e o resultado
+//      de voce (foto)
+//   2: quantos lobos chegaram perto e o resultado
     .globl desafio_selftest
 desafio_selftest:
     stp     x29, x30, [sp, #-96]!
@@ -867,8 +632,6 @@ desafio_selftest:
     stp     x25, x26, [sp, #64]
     stp     d8, d9, [sp, #80]
     LA      x24, dres
-    ldr     w9, [x28, #G_NOPEOPLE]
-    cbnz    w9, dt_ret
     cmp     w0, #1
     b.eq    dt_stage1
     b.hi    dt_stage2
@@ -1005,22 +768,10 @@ desafio_selftest:
     b       dt_ret
 
 dt_stage1:
-    // ---- comida estraga: 8 carnes cruas na mochila e no deposito, 1 dia
+    // ---- comida estraga: 8 carnes cruas na mochila, 1 dia ----
     mov     w9, #8
     str     w9, [x28, #(G_INV + 4 * IT_MEAT)]
-    LA      x19, people
-    mov     w20, #0
-    ldr     s0, [x19, #P_U]             // deposito com lugar para carne
-    ldr     s1, [x19, #P_V]
-    mov     w0, #IT_MEAT
-    bl      dep_find_put_test
-    mov     w21, w0
-    tbnz    w21, #31, 1f
-    bl      ppl_chestptr
-    mov     w9, #8
-    str     w9, [x0, #(4 * IT_MEAT)]
-    bl      store_close
-1:  str     wzr, [x28, #G_SPOILK]
+    str     wzr, [x28, #G_SPOILK]
     mov     w9, #W_SUN                  // de sol (com chuva estraga mais)
     str     w9, [x28, #G_WEATHER]
     mov     w22, #32
@@ -1029,22 +780,12 @@ dt_stage1:
     b.ne    2b
     ldr     w9, [x28, #(G_INV + 4 * IT_MEAT)]
     str     w9, [x24, #36]
-    str     wzr, [x24, #40]
-    tbnz    w21, #31, 3f
-    mov     w0, w21
-    bl      ppl_chestptr
-    ldr     w9, [x0, #(4 * IT_MEAT)]
-    str     w9, [x24, #40]
-    str     wzr, [x0, #(4 * IT_MEAT)]
-    bl      store_close
-3:  str     wzr, [x28, #(G_INV + 4 * IT_MEAT)]
+    str     wzr, [x28, #(G_INV + 4 * IT_MEAT)]
     bl      calc_stats
     // ---- inverno: 10 s de sol, de dia, longe do fogo ----
     ldr     w25, [x28, #G_DAY]          // um dia de inverno (a estacao
-    ldr     w26, [x28, #G_PLASTDAY]     // sai do dia)
-    mov     w9, #(3 * SEASONDAYS + 1)
+    mov     w9, #(3 * SEASONDAYS + 1)   // sai do dia)
     str     w9, [x28, #G_DAY]
-    str     w9, [x28, #G_PLASTDAY]
     mov     w0, #W_SUN
     MOVI32  w1, 14400
     mov     w2, #WFADE
@@ -1060,7 +801,6 @@ dt_stage1:
     fcvtzs  w9, s0
     str     w9, [x24, #44]
     str     w25, [x28, #G_DAY]
-    str     w26, [x28, #G_PLASTDAY]
     FC      s0, F_HUNDRED
     str     s0, [x28, #G_WARM]
     // ---- manada: um cervo a 12 celulas, os outros vem junto ----
@@ -1112,85 +852,14 @@ dt_stage1:
     fcvtzs  w9, s8
     str     w9, [x24, #52]
 5:  bl      animals_reset
-    // ---- de noite: alcateia e soldado ----
-    LA      x19, people                 // voce perto do bau da vila
-    mov     w20, #0
-    mov     w0, #IT_WOOD
-    mov     w1, #0
-    mov     w2, #0
-    mov     w3, #0
-    bl      smith_chest
-    tbnz    w0, #31, 6f
-    and     w9, w0, #511                // o deposito
-    lsr     w10, w0, #9
-    scvtf   s8, w9
-    scvtf   s9, w10
-    LA      x21, ring6                  // um lugar em terra do lado do bau
-    mov     w22, #7
-61: ldr     s0, [x21, #8]
-    ldr     s1, [x21, #12]
-    fmov    s2, #2.0
-    fmadd   s0, s0, s2, s8
-    fmadd   s1, s1, s2, s9
-    bl      ppl_land
-    cbnz    w0, 62f
-    add     x21, x21, #8
-    subs    w22, w22, #1
-    b.ne    61b
-62: ldr     s0, [x21, #8]
-    ldr     s1, [x21, #12]
-    fmov    s2, #2.0
-    fmadd   s0, s0, s2, s8
-    fmadd   s1, s1, s2, s9
-    str     s0, [x28, #G_PU]
-    str     s1, [x28, #G_PV]
-6:  FC      s0, F_HUNDRED
+    // ---- de noite: uma alcateia vem atras de voce ----
+    FC      s0, F_HUNDRED
     str     s0, [x28, #G_HP]
     str     s0, [x28, #G_FOOD]
     str     s0, [x28, #G_WARM]
     str     wzr, [x28, #G_DEAD]
     mov     w9, #(T_NIGHT + 300)
     str     w9, [x28, #G_TIME]
-    LA      x9, dstat
-    str     wzr, [x9]
-    mov     w20, #0                     // soldado: o primeiro adulto vivo
-61: LA      x9, people
-    add     x19, x9, x20, lsl #6
-    ldrb    w9, [x19, #P_ALIVE]
-    cbz     w9, 63f
-    ldrh    w9, [x19, #P_AGE]
-    cmp     w9, #ADULTDAYS
-    b.hs    64f
-63: add     w20, w20, #1
-    cmp     w20, #MAXPEOPLE
-    b.lt    61b
-    mov     w20, #0
-    LA      x9, people
-    mov     x19, x9
-64: str     w20, [x24, #80]
-    mov     w9, #J_SOLDIER
-    strb    w9, [x19, #P_JOB]
-    mov     w9, #ST_IDLE
-    strb    w9, [x19, #P_STATE]
-    strh    wzr, [x19, #P_THINK]
-    ldrb    w9, [x19, #P_FLAGS]
-    bic     w9, w9, #1
-    strb    w9, [x19, #P_FLAGS]
-    mov     w9, #100
-    scvtf   s0, w9
-    str     s0, [x19, #P_HP]
-    str     s0, [x19, #P_FOOD]
-    mov     w0, #IT_SWORD
-    mov     w1, #1
-    bl      pinv_add
-    ldr     s0, [x28, #G_PU]            // ele do seu lado
-    fmov    s1, #0.75
-    fadd    s0, s0, s1
-    str     s0, [x19, #P_U]
-    ldr     s0, [x28, #G_PV]
-    str     s0, [x19, #P_V]
-    ldr     w9, [x28, #G_PEOPLEN]
-    str     w9, [x24, #56]              // pessoas antes
     mov     w0, #4
     bl      pack_spawn
     str     w0, [x24, #60]              // lobos que vieram
@@ -1201,25 +870,39 @@ dt_stage1:
     b       dt_ret
 
 dt_stage2:
-    mov     w0, #1500
+    mov     w0, #600
     bl      dt_frames
-    mov     w0, #1
-    bl      dt_alive
-    str     w0, [x24, #64]              // lobos da alcateia que sobraram
-    LA      x9, dstat
-    ldr     w9, [x9]
-    str     w9, [x24, #68]              // abatidos pelo soldado
-    LA      x10, people
-    ldr     w9, [x24, #80]
-    add     x10, x10, x9, lsl #6
-    ldr     s0, [x10, #P_HP]
+    mov     w10, #0                     // lobos da alcateia a ate 4 celulas
+    LA      x9, animals
+    mov     w11, #MAXANIM
+1:  ldrb    w12, [x9, #AN_TYPE]
+    cmp     w12, #255
+    b.eq    2f
+    ldrb    w12, [x9, #AN_GRP]
+    cmp     w12, #1
+    b.ne    2f
+    ldr     s0, [x9, #AN_U]
+    ldr     s1, [x28, #G_PU]
+    fsub    s0, s0, s1
+    ldr     s1, [x9, #AN_V]
+    ldr     s2, [x28, #G_PV]
+    fsub    s1, s1, s2
+    fmul    s0, s0, s0
+    fmadd   s0, s1, s1, s0
+    fmov    s1, #16.0
+    fcmp    s0, s1
+    b.gt    2f
+    add     w10, w10, #1
+2:  add     x9, x9, #32
+    subs    w11, w11, #1
+    b.ne    1b
+    str     w10, [x24, #64]
+    ldr     s0, [x28, #G_HP]            // sua vida depois do ataque
     fcvtzs  w9, s0
-    ldrb    w10, [x10, #P_ALIVE]
+    ldr     w10, [x28, #G_DEAD]
     cmp     w10, #0
-    csel    w9, wzr, w9, eq
-    str     w9, [x24, #72]              // vida do soldado
-    ldr     w9, [x28, #G_PEOPLEN]
-    str     w9, [x24, #76]
+    csel    w9, wzr, w9, ne
+    str     w9, [x24, #72]
     str     wzr, [x28, #G_NOSPAWN]
     bl      animals_reset
     FC      s0, F_HUNDRED
@@ -1261,9 +944,6 @@ dt_stage2:
     LA      x1, dt_u1
     ldr     w2, [x24, #36]
     bl      dt_num
-    LA      x1, dt_u2
-    ldr     w2, [x24, #40]
-    bl      dt_num
     LA      x1, dt_u3
     ldr     w2, [x24, #44]
     bl      dt_num
@@ -1277,19 +957,10 @@ dt_stage2:
     ldr     w2, [x24, #60]
     bl      dt_num
     LA      x1, dt_u7
-    ldr     w2, [x24, #68]
-    bl      dt_num
-    LA      x1, dt_u8
     ldr     w2, [x24, #64]
     bl      dt_num
     LA      x1, dt_u9
     ldr     w2, [x24, #72]
-    bl      dt_num
-    LA      x1, dt_u10
-    ldr     w2, [x24, #56]
-    bl      dt_num
-    LA      x1, dt_u11
-    ldr     w2, [x24, #76]
     bl      dt_num
     LA      x1, dt_nl
     bl      strcat_cur
@@ -1315,7 +986,7 @@ dconst:
     .float 22.0                         // 20 a alcateia aparece a 22 celulas
     .float 6.0                          // 24 dentro do mapa
     .float 505.0                        // 28
-    .float 256.0                        // 32 16 celulas^2 (soldado ve)
+    .float 256.0                        // 32 (nao usado)
     .float 900.0                        // 36 30 celulas^2 (desiste)
     .float 1.21                         // 40 1,1 celula^2 (golpeia)
     .float 12.0                         // 44
@@ -1340,8 +1011,7 @@ spoiltab:
 s_rot:      .asciz "Estragou: "
 s_sp:       .asciz " "
 s_pack1:    .asciz "Uivos na noite! Uma alcateia de "
-s_pack2:    .asciz " lobos vem atras da vila"
-s_soldkill: .asciz " (soldado) abateu: "
+s_pack2:    .asciz " lobos vem atras de voce"
 dt_t1:  .asciz "desafio: pedreiras (celulas)="
 dt_t2:  .asciz " pedras soltas="
 dt_t3:  .asciz " veios de ferro="
@@ -1352,19 +1022,14 @@ dt_t7:  .asciz " | pedreira: celulas esgotadas="
 dt_t8:  .asciz " buracos="
 dt_t9:  .asciz " pedras tiradas="
 dt_u1:  .asciz "desafio: carne crua 8 em 1 dia -> mochila="
-dt_u2:  .asciz " deposito="
 dt_u3:  .asciz " | inverno, 10 s de sol: calor 60 -> "
 dt_u4:  .asciz " | manada: cervos="
 dt_u5:  .asciz " longe do primeiro (celulas)="
 dt_u6:  .asciz " | noite: alcateia="
-dt_u7:  .asciz " soldado abateu="
-dt_u8:  .asciz " sobraram="
-dt_u9:  .asciz " vida do soldado="
-dt_u10: .asciz " pessoas "
-dt_u11: .asciz " -> "
+dt_u7:  .asciz " perto de voce="
+dt_u9:  .asciz " sua vida="
 dt_nl:  .asciz "\n"
     .p2align 2
-dstat:  .space 16
 dres:   .space 96
 dmsg:   .space 96
 

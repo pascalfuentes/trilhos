@@ -1,24 +1,14 @@
 // =====================================================================
-//  ferro.S - fornalha, lampioes, ferreiro, ferramentas de ferro da vila
-//  e a visao dos moradores
+//  ferro.S - fornalha e lampioes
 //
 //  - Veios de ferro e de carvao nascem nas colinas, rocha e neve; so a
 //    picareta quebra (sobrevivencia.S). Na fornalha: 2 minerio + 1 carvao
 //    = 1 barra de ferro; 3 madeira = 1 carvao.
 //  - Perto de uma fornalha (3 celulas) aparecem as receitas de ferro.
 //  - Lampiao: luz de noite (7 celulas) e visao em volta, sem lenha.
-//  - Ferreiro (tarefa da vila): pega minerio e carvao no bau, trabalha na
-//    fornalha mais perto e guarda a barra; sem minerio, faz carvao de
-//    madeira (ate ter 10 no bau).
-//  - Ferramentas da vila: quem tem tarefa (Floresta, Pedra, Plantar) pega
-//    no bau o machado / picareta / enxada de ferro e trabalha 2x mais
-//    rapido.
-//  - Cada morador enxerga em volta (7 celulas de dia, 3 de noite): o mapa
-//    se revela por onde a vila anda.
 // =====================================================================
 
 #include "comum.h"
-#include "pessoas.h"
 
 // constante float da tabela itf (usa x16)
 .macro PF_IT sreg, off
@@ -174,289 +164,13 @@ lamps_vision:
     ldp     x29, x30, [sp], #32
     ret
 
-// people_vision: cada morador (fora de casa) enxerga em volta: 7 celulas
-// de dia, 3 de noite (menos com chuva e neve), com 120 raios
-    .globl people_vision
-people_vision:
-    stp     x29, x30, [sp, #-48]!
-    mov     x29, sp
-    stp     x19, x20, [sp, #16]
-    stp     d8, d9, [sp, #32]
-    ldr     w9, [x28, #G_NOPEOPLE]
-    cbnz    w9, 9f
-    ldr     w9, [x28, #G_NIGHTK]        // 7 - 4 * noite
-    scvtf   s0, w9
-    LA      x9, fconst
-    ldr     s1, [x9, #12]               // 4 / 256
-    fmul    s0, s0, s1
-    ldr     s8, [x9, #16]               // 7
-    fsub    s8, s8, s0
-    ldr     s1, [x28, #G_WVIS]
-    fmul    s8, s8, s1
-    mov     w20, #0
-1:  cmp     w20, #MAXPEOPLE
-    b.ge    9f
-    LA      x9, people
-    add     x19, x9, x20, lsl #6
-    ldrb    w9, [x19, #P_ALIVE]
-    cbz     w9, 8f
-    ldrb    w9, [x19, #P_FLAGS]         // dentro de casa: nao
-    tbnz    w9, #0, 8f
-    ldr     s0, [x19, #P_U]
-    ldr     s1, [x19, #P_V]
-    fmov    s2, s8
-    LA      x9, fconst
-    ldr     s3, [x9]                    // cos 3 graus
-    ldr     s4, [x9, #4]                // sin 3 graus
-    mov     w0, #120
-    bl      cast_vision_n
-8:  add     w20, w20, #1
-    b       1b
-9:  ldp     d8, d9, [sp, #32]
-    ldp     x19, x20, [sp, #16]
-    ldp     x29, x30, [sp], #48
-    ret
-
-// ---------------------------------------------------------------------
-//  Ferreiro e ferramentas da vila (x19 = pessoa, w20 = numero)
-// ---------------------------------------------------------------------
-
-// furnace_near -> w0 = fornalha mais perto da pessoa (-1)   folha
-furnace_near:
-    mov     w0, #-1
-    LA      x9, fconst
-    ldr     s4, [x9, #20]               // longe demais
-    ldr     w10, [x28, #G_NOBJ]
-    mov     w11, #0
-    LA      x14, objs
-1:  cmp     w11, w10
-    b.ge    9f
-    ldrb    w15, [x14, #6]
-    cmp     w15, #O_FURNACE
-    b.ne    2f
-    ldrh    w15, [x14]
-    ucvtf   s0, w15
-    ldrh    w15, [x14, #2]
-    ucvtf   s1, w15
-    FC      s2, F_INV64
-    fmul    s0, s0, s2
-    fmul    s1, s1, s2
-    ldr     s2, [x19, #P_U]
-    fsub    s0, s0, s2
-    ldr     s2, [x19, #P_V]
-    fsub    s1, s1, s2
-    fmul    s0, s0, s0
-    fmadd   s0, s1, s1, s0
-    fcmp    s0, s4
-    b.ge    2f
-    fmov    s4, s0
-    mov     w0, w11
-2:  add     x14, x14, #8
-    add     w11, w11, #1
-    b       1b
-9:  ret
-
-// smith_chest(w0 item, w1 quantos, w2 item 2, w3 quantos 2 (0 = nada))
-// -> w0 = deposito com isso mais perto da pessoa (-1)   (deposito.S)
-    .globl smith_chest
-smith_chest:
-    b       dep_take_find
-
-// smith_work -> w0 = 1 se o ferreiro achou o que fazer (ja indo)
-    .globl smith_work
-smith_work:
-    stp     x29, x30, [sp, #-32]!
-    mov     x29, sp
-    stp     x21, x22, [sp, #16]
-    bl      furnace_near
-    tbnz    w0, #31, 8f
-    mov     w21, w0
-    ldrb    w9, [x19, #P_BFAM]          // ja pegou o material: fornalha
-    cbz     w9, 1f
-    mov     w0, w21
-    mov     w1, #WK_SMELT
-    bl      ppl_gowork_obj
-    b       7f
-1:  mov     w0, #IT_ORE                 // barra: 2 minerio + 1 carvao
-    mov     w1, #2
-    mov     w2, #IT_COAL
-    mov     w3, #1
-    bl      smith_chest
-    tbnz    w0, #31, 2f
-    mov     w9, #1
-    strb    w9, [x19, #P_BPROJ]
-    mov     w1, #NX_SMITH
-    bl      ppl_gochest
-    b       7f
-2:  mov     w0, #IT_WOOD                // carvao: 3 madeira (se o bau tem pouco)
-    mov     w1, #3
-    mov     w2, #0
-    mov     w3, #0
-    bl      smith_chest
-    tbnz    w0, #31, 8f
-    mov     w22, w0
-    bl      ppl_chestptr
-    ldr     w9, [x0, #(4 * IT_COAL)]
-    cmp     w9, #10
-    b.hs    8f
-    mov     w9, #2
-    strb    w9, [x19, #P_BPROJ]
-    mov     w0, w22
-    mov     w1, #NX_SMITH
-    bl      ppl_gochest
-7:  mov     w0, #1
-    b       9f
-8:  mov     w0, #0
-9:  ldp     x21, x22, [sp, #16]
-    ldp     x29, x30, [sp], #32
-    ret
-
-// smith_pay: o ferreiro chegou ao bau: pega o material e vai a fornalha
-    .globl smith_pay
-smith_pay:
-    stp     x29, x30, [sp, #-16]!
-    mov     x29, sp
-    ldr     w0, [x19, #P_TARGET]
-    bl      ppl_chestptr
-    cbz     x0, 8f
-    ldrb    w9, [x19, #P_BPROJ]
-    cmp     w9, #1
-    b.ne    2f
-    ldr     w10, [x0, #(4 * IT_ORE)]    // barra
-    cmp     w10, #2
-    b.lo    8f
-    ldr     w11, [x0, #(4 * IT_COAL)]
-    cbz     w11, 8f
-    sub     w10, w10, #2
-    str     w10, [x0, #(4 * IT_ORE)]
-    sub     w11, w11, #1
-    str     w11, [x0, #(4 * IT_COAL)]
-    b       3f
-2:  ldr     w10, [x0, #(4 * IT_WOOD)]   // carvao
-    cmp     w10, #3
-    b.lo    8f
-    sub     w10, w10, #3
-    str     w10, [x0, #(4 * IT_WOOD)]
-3:  bl      store_close                 // tira das pilhas
-    mov     w9, #1                      // material na mao
-    strb    w9, [x19, #P_BFAM]
-    bl      furnace_near
-    tbnz    w0, #31, 8f
-    mov     w1, #WK_SMELT
-    bl      ppl_gowork_obj
-    b       9f
-8:  mov     w9, #ST_IDLE
-    strb    w9, [x19, #P_STATE]
-    mov     w9, #30
-    strh    w9, [x19, #P_THINK]
-    mov     w9, #-1
-    str     w9, [x19, #P_TARGET]
-9:  ldp     x29, x30, [sp], #16
-    ret
-
-// smith_valid(w0 = alvo) -> w0 = 1 se ainda e uma fornalha   folha
-    .globl smith_valid
-smith_valid:
-    tbnz    w0, #31, 8f
-    LA      x9, objs
-    add     x9, x9, x0, lsl #3
-    ldrb    w9, [x9, #6]
-    cmp     w9, #O_FURNACE
-    cset    w0, eq
-    ret
-8:  mov     w0, #0
-    ret
-
-// smith_done: saiu da fornalha uma barra de ferro (ou um carvao)
-    .globl smith_done
-smith_done:
-    strb    wzr, [x19, #P_BFAM]
-    ldrb    w9, [x19, #P_BPROJ]
-    mov     w0, #IT_IRON
-    cmp     w9, #1
-    b.eq    1f
-    mov     w0, #IT_COAL
-1:  mov     w1, #1
-    b       pinv_add                    // na mochila
-
-// tool_fetch -> w0 = 1 se vai ao bau pegar a ferramenta de ferro da tarefa
-    .globl tool_fetch
-tool_fetch:
-    stp     x29, x30, [sp, #-16]!
-    mov     x29, sp
-    ldrb    w9, [x19, #P_JOB]
-    LA      x10, jobtool
-    ldrb    w9, [x10, x9]
-    cbz     w9, 8f
-    str     w9, [sp, #-16]!
-    mov     w0, w9                      // ja tem na mochila?
-    bl      pinv_get
-    mov     w10, w0
-    ldr     w9, [sp], #16
-    cbnz    w10, 8f
-    mov     w0, w9
-    mov     w1, #1
-    mov     w2, #0
-    mov     w3, #0
-    bl      smith_chest
-    tbnz    w0, #31, 8f
-    mov     w1, #NX_TOOL
-    bl      ppl_gochest
-    mov     w0, #1
-    b       9f
-8:  mov     w0, #0
-9:  ldp     x29, x30, [sp], #16
-    ret
-
-// tool_take: chegou ao bau: troca pela ferramenta de ferro da tarefa
-    .globl tool_take
-tool_take:
-    stp     x29, x30, [sp, #-16]!
-    mov     x29, sp
-    ldr     w0, [x19, #P_TARGET]
-    bl      ppl_chestptr
-    cbz     x0, 9f
-    ldrb    w9, [x19, #P_JOB]
-    LA      x10, jobtool
-    ldrb    w9, [x10, x9]
-    cbz     w9, 9f
-    ldr     w10, [x0, x9, lsl #2]
-    cbz     w10, 9f
-    sub     w10, w10, #1
-    str     w10, [x0, x9, lsl #2]
-    mov     w0, w9                      // na mochila (a de antes fica la ate
-    mov     w1, #1                      // guardar no deposito)
-    bl      pinv_add
-    bl      store_close
-9:  ldp     x29, x30, [sp], #16
-    ret
-
-// tool_bonus -> w0 = 1 se a pessoa tem a ferramenta de ferro da tarefa  folha
-    .globl tool_bonus
-tool_bonus:
-    ldrb    w9, [x19, #P_JOB]
-    LA      x10, jobtool
-    ldrb    w9, [x10, x9]
-    mov     w0, #0
-    cbz     w9, 9f
-    cmp     w9, #IT_ROD                 // a vara so deixa pescar
-    b.eq    9f
-    LA      x10, pinv
-    add     x10, x10, x20, lsl #8
-    ldr     w10, [x10, x9, lsl #2]
-    cmp     w10, #0
-    cset    w0, ne
-9:  ret
-
 
 // =====================================================================
 //  Teste automatico (--shot)
-//    0: voce: veio sem picareta nao quebra; com ela, minerio e carvao;
+//    voce: veio sem picareta nao quebra; com ela, minerio e carvao;
 //       fornalha, barras, carvao de madeira, ferramentas, espada,
 //       armadura e lampiao; machado de ferro mais rapido; armadura contra
 //       o lobo. Termina de noite ao lado da fornalha e do lampiao (foto)
-//    1: a vila: ferreiro na fornalha, um veio na zona de pedra e o
-//       machado de ferro no bau para quem trabalha na floresta
 // =====================================================================
 
 // it_num(x0 cursor, x1 rotulo, w2 numero) -> x0
@@ -524,10 +238,6 @@ it_freecell:
     LA      x9, fencegrid
     ldrb    w13, [x9, w22, uxtw]
     cbnz    w13, 3f
-    LA      x9, zonegrid
-    ldrb    w13, [x9, w22, uxtw]
-    cmp     w13, #Z_LOT
-    b.eq    3f
     LA      x9, treecnt
     ldrb    w13, [x9, w22, uxtw]
     cbnz    w13, 3f
@@ -583,8 +293,6 @@ it_addobj:
     sub     w0, w0, #1
     LA      x9, memtype
     strb    w20, [x9, w0, uxtw]
-    mov     w9, #-1
-    str     w9, [x28, #G_OCCFRAME]
     ldr     x21, [sp, #32]
     ldp     x19, x20, [sp, #16]
     ldp     x29, x30, [sp], #48
@@ -630,11 +338,8 @@ iron_selftest:
     str     wzr, [x28, #G_CRAFTOPEN]
     str     wzr, [x28, #G_CHESTOPEN]
     str     wzr, [x28, #G_PLACE]
-    str     wzr, [x28, #G_PEOPLEOPEN]
     mov     w9, #6000                   // de dia
     str     w9, [x28, #G_TIME]
-    cmp     w21, #1
-    b.eq    it_stage1
     // ---- etapa 0: voce ----
     LA      x19, itres
     PF_IT   s0, 0                       // vida, fome e calor cheios
@@ -801,10 +506,6 @@ iron_selftest:
     PF_IT   s0, 0
     str     s0, [x28, #G_HP]
     bl      animals_reset
-    ldr     w9, [x28, #G_NOPEOPLE]      // (sem a vila por perto: o lobo vem
-    str     w9, [x19, #60]              // em voce)
-    mov     w9, #1
-    str     w9, [x28, #G_NOPEOPLE]
     mov     w22, #0                     // o lobo do lado, em terra
 33: LA      x9, itwolf
     add     x9, x9, x22, lsl #3
@@ -847,8 +548,6 @@ iron_selftest:
     fsub    s1, s1, s0
     fcvtzs  w9, s1
     str     w9, [x19, #44]
-    ldr     w9, [x19, #60]
-    str     w9, [x28, #G_NOPEOPLE]
     bl      animals_reset
     PF_IT   s0, 0
     str     s0, [x28, #G_HP]
@@ -905,163 +604,6 @@ iron_selftest:
     bl      sk_write
     b       it_ret
 
-    // ---- etapa 1: a vila ----
-it_stage1:
-    ldr     w9, [x28, #G_NOPEOPLE]
-    cbnz    w9, it_ret
-    LA      x19, people                 // deposito com lugar para minerio
-    mov     w20, #0
-    ldr     s0, [x19, #P_U]
-    ldr     s1, [x19, #P_V]
-    mov     w0, #IT_ORE
-    bl      dep_find_put_test
-    tbnz    w0, #31, it_ret
-    mov     w23, w0
-    bl      ppl_chestptr
-    mov     x24, x0
-    mov     w9, #6                      // material: 6 minerio, 3 carvao, um
-    str     w9, [x24, #(4 * IT_ORE)]    // machado de ferro
-    mov     w9, #3
-    str     w9, [x24, #(4 * IT_COAL)]
-    mov     w9, #1
-    str     w9, [x24, #(4 * IT_IAXE)]
-    ldr     w9, [x24, #(4 * IT_WOOD)]
-    add     w9, w9, #12
-    str     w9, [x24, #(4 * IT_WOOD)]
-    str     wzr, [x24, #(4 * IT_IRON)]
-    bl      store_close
-    LA      x9, itcell
-    str     w23, [x9]
-    and     w25, w23, #511              // fornalha 3 celulas ao lado do
-    lsr     w26, w23, #9                // deposito
-    mov     w22, #0
-5:  LA      x9, itoff
-    add     x9, x9, x22, lsl #1
-    ldrsb   w10, [x9]
-    ldrsb   w11, [x9, #1]
-    add     w10, w25, w10
-    add     w11, w26, w11
-    add     w0, w10, w11, lsl #9
-    stp     w10, w11, [sp, #-16]!
-    bl      obj_in_cell
-    ldp     w10, w11, [sp], #16
-    tbz     w0, #31, 51f
-    LA      x9, fencegrid
-    add     w12, w10, w11, lsl #9
-    ldrb    w13, [x9, w12, uxtw]
-    cbnz    w13, 51f
-    LA      x9, elev                    // em terra boa
-    ldrsh   w13, [x9, w12, uxtw #1]
-    ldr     w14, [x28, #G_FLOOD]
-    cmp     w13, w14
-    b.lt    51f
-    cmp     w13, #(E_SAND + 20)
-    b.ge    52f
-51: add     w22, w22, #1
-    cmp     w22, #8
-    b.lt    5b
-    b       it_ret
-52: lsl     w0, w10, #6
-    add     w0, w0, #32
-    lsl     w1, w11, #6
-    add     w1, w1, #32
-    stp     w0, w1, [sp, #-16]!
-    scvtf   s0, w10
-    scvtf   s1, w11
-    bl      elev_at
-    mov     w2, w0
-    ldp     w0, w1, [sp], #16
-    mov     w3, #O_FURNACE
-    mov     w4, #0
-    bl      add_obj
-    // um veio de ferro numa celula livre da zona de pedra
-    mov     w22, #0
-6:  LA      x9, zonegrid
-    ldrb    w9, [x9, x22]
-    cmp     w9, #Z_STONE
-    b.ne    61f
-    mov     w0, w22
-    bl      obj_in_cell
-    tbz     w0, #31, 61f
-    and     w9, w22, #511
-    lsr     w10, w22, #9
-    scvtf   s0, w9
-    scvtf   s1, w10
-    fmov    s2, #0.5
-    fadd    s0, s0, s2
-    fadd    s1, s1, s2
-    bl      elev_at
-    mov     w2, w0
-    and     w9, w22, #511
-    lsl     w0, w9, #6
-    add     w0, w0, #32
-    lsr     w9, w22, #9
-    lsl     w1, w9, #6
-    add     w1, w1, #32
-    mov     w3, #O_IRONV
-    mov     w4, #3
-    bl      add_obj
-    b       62f
-61: add     w22, w22, #1
-    cmp     w22, #64, lsl #12
-    b.lo    6b
-62: mov     w9, #-1                     // ocupacao nova
-    str     w9, [x28, #G_OCCFRAME]
-    LA      x9, people                  // ferreiro: a mae da segunda familia
-    mov     w10, #J_SMITH
-    strb    w10, [x9, #(5 * PSIZE + P_JOB)]
-    strb    wzr, [x9, #(5 * PSIZE + P_BFAM)]
-    mov     w10, #ST_IDLE
-    strb    w10, [x9, #(5 * PSIZE + P_STATE)]
-    ldr     w26, [x24, #(4 * IT_ORE)]
-    mov     w0, #3600                   // 2 horas de jogo
-    bl      it_frames
-    LA      x9, itcell                  // o que tem no deposito agora
-    ldr     w0, [x9]
-    bl      ppl_chestptr
-    mov     x24, x0
-    LA      x19, itres
-    ldr     w9, [x24, #(4 * IT_IRON)]
-    str     w9, [x19]
-    ldr     w9, [x24, #(4 * IT_ORE)]
-    str     w9, [x19, #4]
-    ldr     w9, [x24, #(4 * IT_COAL)]
-    str     w9, [x19, #8]
-    LA      x9, pinv                // alguem pegou o machado de ferro?
-    mov     w10, #0
-    mov     w11, #0
-63: ldr     w12, [x9, #(4 * IT_IAXE)]
-    cmp     w12, #0
-    cinc    w10, w10, ne
-    add     x9, x9, #256
-    add     w11, w11, #1
-    cmp     w11, #MAXPEOPLE
-    b.lt    63b
-    str     w10, [x19, #12]
-
-    mov     w0, #O_IRONV                // o veio da zona de pedra
-    bl      ct_count
-    str     w0, [x19, #16]
-    LA      x0, txt
-    LA      x1, it_u1
-    ldr     w2, [x19]
-    bl      it_num
-    LA      x1, it_u2
-    mov     w2, #6
-    bl      it_num
-    LA      x1, it_u3
-    ldr     w2, [x19, #4]
-    bl      it_num
-    LA      x1, it_u4
-    ldr     w2, [x19, #8]
-    bl      it_num
-    LA      x1, it_u5
-    ldr     w2, [x19, #12]
-    bl      it_num
-
-    LA      x1, it_nl
-    bl      strcat_cur
-    bl      sk_write
 it_ret:
     ldp     d8, d9, [sp, #80]
     ldp     x25, x26, [sp, #64]
@@ -1079,17 +621,11 @@ fconst:
     .float 0.05233596                   //  4 sin 3 graus
     .float 6.0                          //  8 visao do lampiao
     .float 0.015625                     // 12 4 / 256
-    .float 7.0                          // 16 visao do morador
+    .float 7.0                          // 16 (nao usado)
     .float 1.0e9                        // 20 longe demais
     .float 0.015625                     // 24 1/64
-// ferramenta de ferro de cada tarefa (nenhuma, floresta, pedra, plantar,
-// obras, ferreiro)
     .p2align 2
 itcell:     .space 4
-    .globl jobtool
-jobtool:
-    .byte 0, IT_IAXE, IT_IPICK, IT_IHOE, 0, 0, IT_ROD, IT_SWORD
-    .p2align 2
 
 itf:
     .float 100.0
@@ -1112,12 +648,6 @@ it_t9:  .asciz " lampioes="
 it_t10: .asciz " | quadros por madeira: machado de pedra="
 it_t11: .asciz " de ferro="
 it_t12: .asciz " | lobo com armadura: vida -"
-it_u1:  .asciz "ferro na vila: ferreiro fez barras="
-it_u2:  .asciz " (de "
-it_u3:  .asciz " minerio; sobrou "
-it_u4:  .asciz ") carvao no bau="
-it_u5:  .asciz " | machado de ferro com um lenhador="
-
 it_nl:  .asciz "\n"
     .p2align 2
 

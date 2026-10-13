@@ -907,19 +907,13 @@ ovl_cell:
     .globl grid_prep
 grid_prep:
     str     wzr, [x28, #G_GRIDSHOW]
-    str     wzr, [x28, #G_ZONESHOW]
     ldr     w9, [x28, #G_STATE]
     cbz     w9, 9f
     ldr     w9, [x28, #G_SLEEP]
     cbnz    w9, 9f
     ldr     w9, [x28, #G_DEAD]
     cbnz    w9, 9f
-    ldr     w9, [x28, #G_ZONEMODE]      // zonas no chao: pintando ou com o
-    ldr     w11, [x28, #G_PEOPLEOPEN]   // painel de pessoas aberto
-    orr     w11, w11, w9
-    str     w11, [x28, #G_ZONESHOW]
     mov     w10, #-1                    // alcance (linhas mais fortes)
-    cbnz    w9, 2f                      // pintando zonas: a grade tambem
     ldr     w9, [x28, #G_PLACE]
     cbz     w9, 1f
     sub     w9, w9, #1
