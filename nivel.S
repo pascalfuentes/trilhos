@@ -16,6 +16,7 @@
 // =====================================================================
 
 #include "comum.h"
+#include "pixel.h"
 
 .macro RGBA r, g, b, a
     mov     w0, #\r
@@ -212,69 +213,203 @@ attr_add:
     ldp     x29, x30, [sp], #32
     ret
 
-// attr_draw: a janela dos atributos, do lado da do personagem (C)
-    .globl attr_draw
-attr_draw:
+// char_window: a janela do personagem (C) desenhada pelo designer
+// (pedido 1.0): retrato, nome, nivel, XP, os 4 atributos com o botao +,
+// os pontos livres e os valores derivados. As posicoes sao as areas do
+// ermo_fase1.json (UA_* no pixel.h), a partir do canto da janela.
+    .equ WX, CHR_X
+    .equ WY, CHR_Y
+    .globl char_window
+char_window:
+    stp     x29, x30, [sp, #-64]!
+    mov     x29, sp
+    stp     x19, x20, [sp, #16]
+    stp     x21, x22, [sp, #32]
+    stp     x23, x24, [sp, #48]
+    LA      x0, uiwin
+    mov     w1, #WX
+    mov     w2, #WY
+    mov     w3, #0
+    bl      ui_img
+    mov     w0, #(WX + UA_TITULO_X + 4)        // "Personagem" (10 letras em 88)
+    mov     w1, #(WY + UA_TITULO_Y)
+    LA      x2, s_wtitle
+    bl      wtext
+    mov     w0, #(WX + UA_RETRATO_X)
+    mov     w1, #(WY + UA_RETRATO_Y)
+    bl      hero_portrait
+    mov     w0, #(WX + UA_NOME_X)
+    mov     w1, #(WY + UA_NOME_Y)
+    LA      x2, s_heroname
+    bl      wtext
+    LA      x0, xpbuf                          // "Nivel 3"
+    LA      x1, s_nivel
+    bl      strcat_cur
+    ldr     w1, [x28, #G_LEVEL]
+    bl      numcat
+    mov     w0, #(WX + UA_NIVEL_X)
+    mov     w1, #(WY + UA_NIVEL_Y)
+    LA      x2, xpbuf
+    bl      wtext
+    bl      xp_pct                             // barra: round(138 * xp / precisa)
+    mov     w9, #UA_XP_W
+    scvtf   s1, w9
+    fmul    s0, s0, s1
+    mov     w9, #100
+    scvtf   s1, w9
+    fdiv    s0, s0, s1
+    fcvtns  w3, s0
+    cmp     w3, #0
+    b.le    1f
+    LA      x0, uixp
+    mov     w1, #(WX + UA_XP_X)
+    mov     w2, #(WY + UA_XP_Y)
+    bl      ui_img
+1:  LA      x0, xpbuf                          // "XP 3 / 5"
+    LA      x1, s_xptxt
+    bl      strcat_cur
+    ldr     x1, [x28, #G_XP]
+    bl      numcat64
+    LA      x1, s_slash
+    bl      strcat_cur
+    ldr     x1, [x28, #G_XPNEED]
+    bl      numcat64
+    mov     w0, #(WX + UA_XP_TEXTO_X)
+    mov     w1, #(WY + UA_XP_TEXTO_Y)
+    LA      x2, xpbuf
+    bl      wtext
+    // os 4 atributos
+    ldr     w21, [x28, #G_APTS]
+    bl      mouse_ui
+    mov     w22, w0                            // mouse
+    mov     w23, w1
+    mov     x0, #0
+    mov     x1, #0
+    bl      F(SDL_GetMouseState)
+    and     w24, w0, #1                        // botao esquerdo apertado
+    mov     w19, #0
+2:  cmp     w19, #4
+    b.ge    6f
+    mov     w9, #UA_PASSO
+    mul     w20, w19, w9                       // descida da linha
+    LA      x9, uiicons
+    ldr     x0, [x9, x19, lsl #3]
+    mov     w1, #(WX + UA_FORCA_ICONE_X)
+    add     w2, w20, #(WY + UA_FORCA_ICONE_Y)
+    mov     w3, #0
+    bl      ui_img
+    mov     w0, #(WX + UA_FORCA_NOME_X)
+    add     w1, w20, #(WY + UA_FORCA_NOME_Y)
+    LA      x2, attrnames
+    add     x2, x2, x19, lsl #4
+    bl      wtext
+    LA      x0, xpbuf
+    add     x9, x28, #G_STR
+    ldr     w1, [x9, x19, lsl #2]
+    bl      numcat
+    mov     w0, #(WX + UA_FORCA_VALOR_X + UA_FORCA_VALOR_W)
+    add     w1, w20, #(WY + UA_FORCA_VALOR_Y)
+    LA      x2, xpbuf
+    bl      wtext_r
+    mov     w3, #3                             // desligado: sem pontos
+    cbz     w21, 4f
+    mov     w3, #0                             // normal
+    sub     w9, w22, #(WX + UA_FORCA_MAIS_X)
+    cmp     w9, #UA_FORCA_MAIS_W
+    b.hs    4f
+    sub     w9, w23, w20
+    sub     w9, w9, #(WY + UA_FORCA_MAIS_Y)
+    cmp     w9, #UA_FORCA_MAIS_H
+    b.hs    4f
+    mov     w3, #1                             // mouse em cima
+    cbz     w24, 4f
+    mov     w3, #2                             // apertado
+4:  LA      x9, uibtns
+    ldr     x0, [x9, x3, lsl #3]
+    mov     w1, #(WX + UA_FORCA_MAIS_X)
+    add     w2, w20, #(WY + UA_FORCA_MAIS_Y)
+    mov     w3, #0
+    bl      ui_img
+    add     w19, w19, #1
+    b       2b
+6:  mov     w0, #(WX + UA_PONTOS_TEXTO_X)
+    mov     w1, #(WY + UA_PONTOS_TEXTO_Y)
+    LA      x2, s_pts
+    bl      wtext
+    LA      x0, xpbuf
+    mov     w1, w21
+    bl      numcat
+    mov     w0, #(WX + UA_PONTOS_VALOR_X + UA_PONTOS_VALOR_W)
+    mov     w1, #(WY + UA_PONTOS_VALOR_Y)
+    LA      x2, xpbuf
+    bl      wtext_r
+    // derivados: por enquanto a vida e a carga (mana, dano, acerto e
+    // defesa vem na etapa 1.5 e na fase 3)
+    LA      x0, xpbuf                          // "Vida 100"
+    LA      x1, s_vida
+    bl      strcat_cur
+    ldr     s0, [x28, #G_HP]
+    fcvtns  w1, s0
+    bl      numcat
+    mov     w0, #(WX + UA_VIDA_X)
+    mov     w1, #(WY + UA_VIDA_Y)
+    LA      x2, xpbuf
+    bl      wtext
+    LA      x0, xpbuf                          // "Carga 30.1"
+    LA      x1, s_carga2
+    bl      strcat_cur
+    ldr     w1, [x28, #G_CAP]
+    bl      kgcat
+    mov     w0, #(WX + UA_MANA_X)
+    mov     w1, #(WY + UA_MANA_Y)
+    LA      x2, xpbuf
+    bl      wtext
+    ldp     x23, x24, [sp, #48]
+    ldp     x21, x22, [sp, #32]
+    ldp     x19, x20, [sp, #16]
+    ldp     x29, x30, [sp], #64
+    ret
+
+// wtext(w0 x, w1 y, x2 texto): texto da janela, cor Í com sombra Ê
+// 1 px para baixo e para a direita (como pede o designer)
+wtext:
     stp     x29, x30, [sp, #-48]!
     mov     x29, sp
     stp     x19, x20, [sp, #16]
     str     x21, [sp, #32]
-    mov     w0, #ATR_X
-    mov     w1, #ATR_Y
-    mov     w2, #ATR_W
-    mov     w3, #ATR_H
-    LA      x4, s_attrtitle
-    bl      ui_panel
-    ldr     w21, [x28, #G_APTS]
-    mov     w19, #0
-1:  cmp     w19, #4
-    b.ge    5f
-    mov     w9, #20
-    mov     w10, #(ATR_Y + 22)
-    madd    w20, w19, w9, w10           // y da linha
-    RGBA    230, 230, 235, 255          // nome
-    mov     w0, #(ATR_X + 8)
-    add     w1, w20, #3
-    LA      x2, attrnames
-    add     x2, x2, x19, lsl #4
+    mov     w19, w0
+    mov     w20, w1
+    mov     x21, x2
+    RGBA    14, 12, 14, 255
+    add     w0, w19, #1
+    add     w1, w20, #1
+    mov     x2, x21
     bl      text
-    LA      x0, xpbuf                   // valor
-    add     x9, x28, #G_STR
-    ldr     w1, [x9, x19, lsl #2]
-    bl      numcat
-    RGBA    255, 220, 120, 255
-    mov     w0, #(ATR_X + 96)
-    add     w1, w20, #3
-    LA      x2, xpbuf
-    bl      text
-    cbz     w21, 3f                     // botao + (apagado sem pontos)
-    RGBA    200, 160, 60, 255
-    b       4f
-3:  RGBA    60, 60, 66, 255
-4:  mov     w0, #(ATR_X + ATR_W - 20)
+    RGBA    216, 200, 164, 255
+    mov     w0, w19
     mov     w1, w20
-    mov     w2, #13
-    mov     w3, #13
-    bl      fillrect
-    RGBA    20, 14, 10, 255
-    mov     w0, #(ATR_X + ATR_W - 17)
-    add     w1, w20, #3
-    LA      x2, s_plus
+    mov     x2, x21
     bl      text
-    add     w19, w19, #1
-    b       1b
-5:  LA      x0, xpbuf                   // "Pontos: 5"
-    LA      x1, s_pts
-    bl      strcat_cur
-    mov     w1, w21
-    bl      numcat
-    RGBA    150, 230, 150, 255
-    cbnz    w21, 6f
-    RGBA    150, 150, 160, 255
-6:  mov     w0, #(ATR_X + 8)
-    mov     w1, #(ATR_Y + ATR_H - 12)
-    LA      x2, xpbuf
-    bl      text
+    ldr     x21, [sp, #32]
+    ldp     x19, x20, [sp, #16]
+    ldp     x29, x30, [sp], #48
+    ret
+
+// wtext_r(w0 x da direita, w1 y, x2 texto): alinhado a direita
+wtext_r:
+    stp     x29, x30, [sp, #-48]!
+    mov     x29, sp
+    stp     x19, x20, [sp, #16]
+    str     x21, [sp, #32]
+    mov     w19, w0
+    mov     w20, w1
+    mov     x21, x2
+    mov     x0, x2
+    bl      mystrlen
+    sub     w0, w19, w0, lsl #3
+    mov     w1, w20
+    mov     x2, x21
+    bl      wtext
     ldr     x21, [sp, #32]
     ldp     x19, x20, [sp, #16]
     ldp     x29, x30, [sp], #48
@@ -396,9 +531,14 @@ s_t6:       .asciz " | 100 XP no nivel 1 -> nivel="
 s_t7:       .asciz " xp="
 s_t8:       .asciz "/"
 s_plus1:    .asciz "+1 "
-s_plus:     .asciz "+"
-s_pts:      .asciz "Pontos: "
-s_attrtitle: .asciz "Atributos"
+s_pts:      .asciz "Pontos livres:"
+s_wtitle:   .asciz "Personagem"
+s_heroname: .asciz "Andarilho"
+s_nivel:    .asciz "Nivel "
+s_xptxt:    .asciz "XP "
+s_slash:    .asciz " / "
+s_vida:     .asciz "Vida "
+s_carga2:   .asciz "Carga "
 m_nopts:    .asciz "Sem pontos de atributo: suba de nivel"
     .p2align 4
 attrnames:

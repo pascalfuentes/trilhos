@@ -108,28 +108,8 @@ hero_draw:
     ldrb    w0, [x23, x26]
     cmp     w0, #255
     b.eq    9f
-    ldr     w9, [x28, #(G_INV + 4 * IT_ARMOR)]
-    cmp     w0, #PL_CABELO              // com o capacete, o cabelo curto
-    b.ne    3f
-    cbz     w9, 6f
-    mov     w0, #PL_CABELO_ELMO
-    b       6f
-3:  cmp     w0, #PL_PEITO
-    b.eq    4f
-    cmp     w0, #PL_CAPACETE
-    b.ne    5f
-4:  cbz     w9, 8f                      // sem armadura: nada
-    b       6f
-5:  cmp     w0, #PL_BOTAS
-    b.ne    51f
-    ldr     w9, [x28, #(G_INV + 4 * IT_COAT)]
-    cbz     w9, 8f
-    b       6f
-51: cmp     w0, #PL_ARMA
-    b.ne    6f
-    ldr     w9, [x28, #G_HAND]
-    cmp     w9, #(IT_SWORD + 1)
-    b.ne    8f
+    bl      hero_layer
+    tbnz    w0, #31, 8f
 6:  lsl     w0, w0, #5                  // camada * 32 + quadro
     add     w0, w0, w24
     LA      x9, pixhero
@@ -153,3 +133,66 @@ hero_draw:
 pldir:      .byte 0
     .p2align 3
 pllast:     .space 8
+
+    .text
+// hero_layer(w0 = camada) -> w0 = camada a desenhar com o equipamento de
+// agora, ou -1 se nao aparece (sem armadura, sem casaco, sem espada)  folha
+    .globl hero_layer
+hero_layer:
+    ldr     w9, [x28, #(G_INV + 4 * IT_ARMOR)]
+    cmp     w0, #PL_CABELO              // com o capacete, o cabelo curto
+    b.ne    3f
+    cbz     w9, 6f
+    mov     w0, #PL_CABELO_ELMO
+    ret
+3:  cmp     w0, #PL_PEITO
+    b.eq    4f
+    cmp     w0, #PL_CAPACETE
+    b.ne    5f
+4:  cbz     w9, 8f                      // sem armadura: nada
+    ret
+5:  cmp     w0, #PL_BOTAS
+    b.ne    51f
+    ldr     w9, [x28, #(G_INV + 4 * IT_COAT)]
+    cbz     w9, 8f
+    ret
+51: cmp     w0, #PL_ARMA
+    b.ne    6f
+    ldr     w9, [x28, #G_HAND]
+    cmp     w9, #(IT_SWORD + 1)
+    b.ne    8f
+6:  ret
+8:  mov     w0, #-1
+    ret
+
+// hero_portrait(w0 x, w1 y): o heroi de frente na interface (retrato da
+// janela C), com o equipamento de agora, camada por camada
+    .globl hero_portrait
+hero_portrait:
+    stp     x29, x30, [sp, #-48]!
+    mov     x29, sp
+    stp     x19, x20, [sp, #16]
+    stp     x21, x22, [sp, #32]
+    mov     w19, w0
+    mov     w20, w1
+    LA      x21, pixorder               // direcao 0 (S)
+    mov     w22, #0
+1:  cmp     w22, #8
+    b.ge    9f
+    ldrb    w0, [x21, x22]
+    cmp     w0, #255
+    b.eq    9f
+    bl      hero_layer
+    tbnz    w0, #31, 2f
+    LA      x9, uiheros
+    ldr     x0, [x9, x0, lsl #3]
+    mov     w1, w19
+    mov     w2, w20
+    mov     w3, #0
+    bl      ui_img
+2:  add     w22, w22, #1
+    b       1b
+9:  ldp     x21, x22, [sp, #32]
+    ldp     x19, x20, [sp, #16]
+    ldp     x29, x30, [sp], #48
+    ret

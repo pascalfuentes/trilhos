@@ -8,7 +8,15 @@
 #    pixel.h     numeros das camadas e dos objetos
 #    pixpal.inc  a paleta-mestra do designer (indices 130..221)
 #
-#  Uso: python3 arte/pixel.py design/estilo/designer/ermo_estilo.json .
+#  Com o terceiro argumento (pedido 1.0, ermo_fase1.json) gera tambem as
+#  imagens da interface em ARGB: a janela do personagem, a barra de XP,
+#  o botao + nos 4 estados, os icones dos atributos e o retrato do heroi
+#  (as camadas de frente). Cada imagem: largura, altura (.word), um .quad
+#  para a textura (o jogo cria na primeira vez) e os pixels.
+#  As areas da janela viram constantes UA_<NOME>_X/Y/W/H no pixel.h.
+#
+#  Uso: python3 arte/pixel.py design/estilo/designer/ermo_estilo.json . \
+#           design/fase1/designer/ermo_fase1.json
 #
 #  Cada quadro: largura, altura, ancora x, ancora y, k, 0, 0, 0 e os
 #  pixels (indices da paleta, 0 = transparente). k = profundidade por
@@ -97,7 +105,7 @@ def clip_top(frames, n_por_dir, y0):
 
 w('// =====================================================================')
 w('//  pixel.S - sprites em pixel art do designer (GERADO: nao edite)')
-w('//    python3 arte/pixel.py design/estilo/designer/ermo_estilo.json .')
+w('//    python3 arte/pixel.py design/estilo/designer/ermo_estilo.json . design/fase1/designer/ermo_fase1.json')
 w('//  Cada quadro: largura, altura, ancora x, ancora y, k, 0, 0, 0 e os')
 w('//  pixels (indices da paleta 130.., 0 = transparente).')
 w('// =====================================================================')
@@ -230,6 +238,67 @@ for cod, rows in TILES:
     for r in rows:
         w('    .word ' + ', '.join('0x%08X' % HEX[c] for c in r))
 
+# ---- interface (pedido 1.0) ----
+UA = []
+if len(sys.argv) > 3:
+    f1 = json.load(open(sys.argv[3]))
+    for r in f1.get('_paleta_adicoes', []):
+        for t in r['tons']:
+            HEX[t['c']] = 0xFF000000 | int(t['hex'].lstrip('#'), 16)
+
+    def ui_img(lab, rows, cores=None):
+        cmap = dict(HEX)
+        for c, h in (cores or {}).items():
+            cmap[c] = 0xFF000000 | int(h.split()[0].lstrip('#'), 16)
+        wd, ht = len(rows[0]), len(rows)
+        for r in rows:
+            assert len(r) == wd, (lab, len(r), wd)
+        w('    .p2align 3')
+        w('    .globl %s' % lab)
+        w('%s:' % lab)
+        w('    .word %d, %d' % (wd, ht))
+        w('    .quad 0')
+        for r in rows:
+            px = [0 if c == '.' else cmap[c] for c in r]
+            for i in range(0, len(px), 16):
+                w('    .word ' + ', '.join('0x%08X' % v for v in px[i:i + 16]))
+
+    w('')
+    w('// ---- interface: imagens ARGB (largura, altura, textura, pixels) ----')
+    jp = f1['janela_personagem']
+    ui_img('uiwin', jp['linhas'], jp['cores'])
+    xp = f1['xp_cheia_janela']
+    ui_img('uixp', xp['linhas'], xp['cores'])
+    bt = f1['botao_mais']
+    for i, e in enumerate(['normal', 'mouse', 'apertado', 'desligado']):
+        ui_img('uibtn%d' % i, bt['estados'][e], bt['cores'])
+    ic = f1['icones_atributo']
+    for i, e in enumerate(['forca', 'destreza', 'vitalidade', 'energia']):
+        ui_img('uiicon%d' % i, ic['icones'][e], ic['cores'])
+    # retrato: cada camada do heroi de frente (S, quadro 0)
+    for cod, peca in CAMADAS:
+        fr = dir_frames(peca or 'cabelo_homem')
+        if peca is None:
+            fr = clip_top(fr, NQ, 13)
+        ui_img('uihero_%s' % cod.lower(), fr[0][0])
+    w('    .p2align 3')
+    w('    .globl uibtns, uiicons, uiheros')
+    w('uibtns:  .quad uibtn0, uibtn1, uibtn2, uibtn3')
+    w('uiicons: .quad uiicon0, uiicon1, uiicon2, uiicon3')
+    w('uiheros: .quad ' + ', '.join('uihero_%s' % c.lower() for c, _ in CAMADAS))
+    ar = jp['areas']
+    for n, (x, y, wd, ht) in ar.items():
+        UA += ['.equ UA_%s_X, %d' % (n.upper(), x), '.equ UA_%s_Y, %d' % (n.upper(), y),
+               '.equ UA_%s_W, %d' % (n.upper(), wd), '.equ UA_%s_H, %d' % (n.upper(), ht)]
+    ATR = ['forca', 'destreza', 'vitalidade', 'energia']
+    passo = ar['destreza_mais'][1] - ar['forca_mais'][1]
+    for k in ('icone', 'nome', 'valor', 'mais'):
+        ys = [ar['%s_%s' % (a, k)][1] for a in ATR]
+        assert all(ys[i + 1] - ys[i] == passo for i in range(3)), k
+    UA.append('.equ UA_PASSO, %d          // de uma linha de atributo para a outra' % passo)
+    UA.append('.equ UI_WIN_W, %d' % jp['quadro'][0])
+    UA.append('.equ UI_WIN_H, %d' % jp['quadro'][1])
+
 open(os.path.join(out, 'pixel.S'), 'w').write('\n'.join(S) + '\n')
 
 H = ['// pixel.h - camadas do heroi e objetos em pixel art (GERADO por',
@@ -240,6 +309,7 @@ H.append('.equ PL_N, %d' % len(CAMADAS))
 for i, o in enumerate(OBJ):
     H.append('.equ %s, %d' % (o[0], i))
 H.append('.equ PX_K, %d' % K)
+H += UA
 for i, (cod, _) in enumerate(TILES):
     H.append('.equ %s, %d' % (cod, i))
 open(os.path.join(out, 'pixel.h'), 'w').write('\n'.join(H) + '\n')

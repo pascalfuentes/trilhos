@@ -214,7 +214,8 @@ Os animais aparecem longe da vista, cada um no seu terreno, e somem quando ficam
 - Você começa no **nível 1** e ganha **XP** abatendo bichos (por enquanto: coelho, cervo, cabra e caranguejo 1, lobo 2, urso 3; na fase 2 o XP passa a ser o nível do inimigo).
 - Para subir do nível N para o N+1 são precisos round(1,5^(N−1)) de XP: 1, 2, 2, 3, 5, 8, 11, 17, 26, 38… (nível 20: 2.217; nível 40: 7.371.555). Não tem nível máximo; o XP é guardado em 64 bits.
 - O painel mostra **Nv** e a barra roxa de XP (com "atual/precisa"). Ao subir aparece "Você subiu para o nível N!" e o nível pisca em dourado.
-- **Atributos:** Força, Destreza, Vitalidade e Energia, começando em 10. Cada nível dá **5 pontos**: abra a janela **C** e clique no **+** do atributo, no painel "Atributos" do lado. Por enquanto só a **Força** tem efeito: **+1 kg** de carga por ponto acima de 10. Vitalidade (vida) e Energia (mana) vêm na etapa 1.5; Destreza no combate (fase 3).
+- **Janela do personagem (C):** a desenhada pelo designer (pedido 1.0): retrato do herói com o equipamento, nível, barra de XP, os 4 atributos com ícone e botão **+** (acende com o mouse em cima, afunda ao apertar, fica apagado sem pontos), os pontos livres, a vida e a carga. As **skills** ficam num painel do lado.
+- **Atributos:** Força, Destreza, Vitalidade e Energia, começando em 10. Cada nível dá **5 pontos**: abra a janela **C** e clique no **+** do atributo. Por enquanto só a **Força** tem efeito: **+1 kg** de carga por ponto acima de 10. Vitalidade (vida) e Energia (mana) vêm na etapa 1.5; Destreza no combate (fase 3).
 
 **Sobrevivência**
 
@@ -357,7 +358,7 @@ O mundo é difícil de propósito: comida é pouca e estraga, o inverno pesa e a
 | `personagens.S` | os desenhos do personagem (e dos moradores da vila antiga) em 8 direções e 3 poses (gerado por `arte/personagens.py`) |
 | `nivel.S` | nível e XP: a curva 1,5x, subir de nível, o teste |
 | `heroi.S` | desenha o herói camada por camada (corpo, cabelo, botas, peitoral, capacete, espada) pela direção e pelo quadro |
-| `pixel.S` | os desenhos em pixel art do designer: herói em camadas, lobo, árvore, pinheiro, pedra, tocha e penhasco (gerado por `arte/pixel.py` a partir do `design/estilo/designer/ermo_estilo.json`; paleta em `pixpal.inc`) |
+| `pixel.S` | os desenhos em pixel art do designer: herói em camadas, lobo, árvore, pinheiro, pedra, tocha e penhasco e as imagens da interface da fase 1 (janela C, botão +, ícones, barra de XP). Gerado por `arte/pixel.py` a partir do `design/estilo/designer/ermo_estilo.json` e do `design/fase1/designer/ermo_fase1.json`; paleta em `pixpal.inc`, áreas da janela em `pixel.h` |
 | `pilhas.S` | pilhas de itens no chão: que item é, quanto cabe, comida que estraga no chão |
 | `construcoes.S` | escolhe o desenho de cada construção (aberto/fechado, aceso/apagado, vizinhos, tamanho da pilha) e as cinzas da fogueira |
 | `estruturas.S` | os desenhos das construções, pilhas e estrada (gerado por `arte/estruturas.py` a partir do `design/estruturas/estruturas.json`) |

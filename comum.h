@@ -427,14 +427,15 @@
 .equ SLOT_Y,     (INV_Y + 48)
 .equ SLOT,       36          // lado do quadrado
 .equ SLOTSTEP,   40
-.equ CHR_X,      4           // janela do personagem (embaixo do status)
-.equ CHR_Y,      118
+.equ CHR_X,      4           // janela do personagem (C), do designer:
+.equ CHR_Y,      118         // 216 x 232 (nivel.S, char_window)
 .equ CHR_W,      216
-.equ CHR_H,      220
-.equ ATR_X,      224         // janela dos atributos (do lado da do personagem)
-.equ ATR_Y,      118
-.equ ATR_W,      152
-.equ ATR_H,      112
+.equ CHR_H,      232
+.equ SKL_X,      224         // painel das skills, do lado da janela C
+.equ SKL_Y,      118
+.equ SKL_W,      191
+.equ SKL_H,      186
+.equ SKL_DY,     19          // de uma skill para a outra
 .equ BTNF_X,     284         // botao "Fabricar"
 .equ BTNF_W,     116
 .equ CRF_X,      224         // janela de fabricar (e do bau, no mesmo lugar)

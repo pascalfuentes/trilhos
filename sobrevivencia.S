@@ -29,6 +29,7 @@
 // =====================================================================
 
 #include "comum.h"
+#include "pixel.h"
 
 // cor de desenho da interface (chama setcolor; usa x0-x3)
 .macro RGBA r, g, b, a
@@ -4076,6 +4077,7 @@ skill_train:
     ret
 
 // kgcat(x0 = cursor, w1 = decimos de kg) -> x0   ("12.5")
+    .globl kgcat
 kgcat:
     stp     x29, x30, [sp, #-32]!
     mov     x29, sp
@@ -4097,6 +4099,7 @@ kgcat:
     ret
 
 // mouse_ui -> w0 = x, w1 = y no espaco da interface (640 x 360)   folha
+    .globl mouse_ui
 mouse_ui:
     ldr     s0, [x28, #G_MX]
     fcvtzs  w0, s0
@@ -4212,32 +4215,33 @@ ui_hit:
     mov     w0, #0
     ldr     w9, [x28, #G_CHAROPEN]
     cbz     w9, 9f
-    sub     w9, w2, #ATR_X              // atributos: 9 (w1 = linha do +)
-    cmp     w9, #ATR_W
-    b.hs    6f
-    sub     w10, w3, #ATR_Y
-    cmp     w10, #ATR_H
-    b.hs    6f
-    mov     w0, #9
-    sub     w11, w9, #(ATR_W - 20)      // o + ocupa 13 x 13 na direita
-    cmp     w11, #13
+    sub     w9, w2, #CHR_X              // janela do personagem: 4
+    cmp     w9, #CHR_W
+    b.hs    7f
+    sub     w10, w3, #CHR_Y
+    cmp     w10, #CHR_H
+    b.hs    7f
+    mov     w0, #4
+    sub     w11, w9, #UA_FORCA_MAIS_X   // o + de cada atributo: 9 (w1 = linha)
+    cmp     w11, #UA_FORCA_MAIS_W
     b.hs    9f
-    subs    w10, w10, #22
+    subs    w10, w10, #UA_FORCA_MAIS_Y
     b.lt    9f
-    mov     w11, #20
+    mov     w11, #UA_PASSO
     udiv    w12, w10, w11
     msub    w13, w12, w11, w10
-    cmp     w13, #13
+    cmp     w13, #UA_FORCA_MAIS_H
     b.hs    9f
     cmp     w12, #4
     b.hs    9f
+    mov     w0, #9
     mov     w1, w12
     b       9f
-6:  sub     w9, w2, #CHR_X
-    cmp     w9, #CHR_W
+7:  sub     w9, w2, #SKL_X              // painel das skills: 4
+    cmp     w9, #SKL_W
     b.hs    9f
-    sub     w10, w3, #CHR_Y
-    cmp     w10, #CHR_H
+    sub     w10, w3, #SKL_Y
+    cmp     w10, #SKL_H
     b.hs    9f
     mov     w0, #4
 9:  ldp     x29, x30, [sp], #16
@@ -5293,22 +5297,23 @@ draw_char:
     stp     x19, x20, [sp, #16]
     stp     x21, x22, [sp, #32]
     str     d8, [sp, #48]
-    mov     w0, #CHR_X
-    mov     w1, #CHR_Y
-    mov     w2, #CHR_W
-    mov     w3, #CHR_H
+    mov     w0, #SKL_X
+    mov     w1, #SKL_Y
+    mov     w2, #SKL_W
+    mov     w3, #SKL_H
     LA      x4, s_chartitle
     bl      ui_panel
+    bl      char_window                 // a janela C do designer (nivel.S)
     mov     w19, #0
 1:  cmp     w19, #NSKILL
     b.ge    5f
-    mov     w9, #23
-    mov     w10, #(CHR_Y + 22)
+    mov     w9, #SKL_DY
+    mov     w10, #(SKL_Y + 22)
     madd    w20, w19, w9, w10           // y da linha
     add     x9, x28, #G_SKILL
     ldr     s8, [x9, x19, lsl #2]
     RGBA    230, 230, 235, 255          // nome
-    mov     w0, #(CHR_X + 8)
+    mov     w0, #(SKL_X + 8)
     mov     w1, w20
     LA      x2, skillnames
     add     x2, x2, x19, lsl #4
@@ -5321,7 +5326,7 @@ draw_char:
     fcvtzs  w1, s0
     bl      numcat
     RGBA    255, 220, 120, 255
-    mov     w0, #(CHR_X + 120)
+    mov     w0, #(SKL_X + 120)
     mov     w1, w20
     LA      x2, lbuf
     bl      text
@@ -5340,15 +5345,15 @@ draw_char:
     b.le    4f
     RGBA    240, 150, 80, 255
     LA      x22, s_down
-3:  mov     w0, #(CHR_X + CHR_W - 16)
+3:  mov     w0, #(SKL_X + SKL_W - 16)
     mov     w1, w20
     mov     x2, x22
     bl      text
     // barra 0..100 com marcas a cada nivel
 4:  RGBA    40, 40, 46, 255
-    mov     w0, #(CHR_X + 8)
+    mov     w0, #(SKL_X + 8)
     add     w1, w20, #11
-    mov     w2, #(CHR_W - 16)
+    mov     w2, #(SKL_W - 16)
     mov     w3, #6
     bl      fillrect
     LA      x9, skcolors
@@ -5358,19 +5363,20 @@ draw_char:
     and     w2, w9, #255
     mov     w3, #255
     bl      setcolor
-    fmov    s0, #2.0
+    fmov    s0, #1.75                   // 0..100 -> 0..175 px
     fmul    s0, s8, s0
     fcvtzs  w2, s0
     cbz     w2, 41f
-    mov     w0, #(CHR_X + 8)
+    mov     w0, #(SKL_X + 8)
     add     w1, w20, #11
     mov     w3, #6
     bl      fillrect
 41: RGBA    12, 12, 16, 255
     mov     w21, #1
-42: mov     w9, #20
-    mov     w0, #(CHR_X + 8)
-    madd    w0, w21, w9, w0
+42: mov     w9, #35                     // marca a cada 17,5 px
+    mul     w9, w21, w9
+    mov     w0, #(SKL_X + 8)
+    add     w0, w0, w9, lsr #1
     add     w1, w20, #11
     mov     w2, #1
     mov     w3, #6
@@ -5388,16 +5394,15 @@ draw_char:
     LA      x1, s_kg
     bl      strcat_cur
     RGBA    220, 220, 220, 255
-    mov     w0, #(CHR_X + 8)
-    mov     w1, #(CHR_Y + CHR_H - 30)
+    mov     w0, #(SKL_X + 8)
+    mov     w1, #(SKL_Y + SKL_H - 30)
     LA      x2, lbuf
     bl      text
     RGBA    150, 150, 160, 255
-    mov     w0, #(CHR_X + 8)
-    mov     w1, #(CHR_Y + CHR_H - 16)
+    mov     w0, #(SKL_X + 8)
+    mov     w1, #(SKL_Y + SKL_H - 16)
     LA      x2, s_legend
     bl      text
-    bl      attr_draw                   // atributos (nivel.S)
     ldr     d8, [sp, #48]
     ldp     x21, x22, [sp, #32]
     ldp     x19, x20, [sp, #16]
@@ -8140,7 +8145,7 @@ s_excl:         .asciz "!"
 s_btninv:       .asciz "Mochila [I]"
 s_btnchar:      .asciz "Personagem [C]"
 s_invtitle:     .asciz "Mochila"
-s_chartitle:    .asciz "Personagem - skills"
+s_chartitle:    .asciz "Skills"
 s_peso:         .asciz "Peso "
 s_slash:        .asciz " / "
 s_kg:           .asciz " kg"

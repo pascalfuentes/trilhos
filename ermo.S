@@ -449,6 +449,16 @@ shot_mode:
     mov     w0, #2
     bl      desafio_selftest
     bl      xp_selftest                 // nivel: a curva e subir de nivel
+    mov     w9, #1                      // janela C com pontos para gastar
+    str     w9, [x28, #G_CHAROPEN]
+    str     wzr, [x28, #G_INVOPEN]
+    str     wzr, [x28, #G_CHESTOPEN]
+    bl      draw_all
+    LA      x0, s_shot_char
+    bl      save_bmp
+    ldr     x0, [x28, #G_REN]
+    bl      F(SDL_RenderPresent)
+    str     wzr, [x28, #G_CHAROPEN]
     bl      save_selftest               // salva, bagunca e carrega de volta
     bl      road_selftest               // estradas: voce arrasta e desfaz
 
@@ -2168,6 +2178,69 @@ setcolor:
     ldr     x0, [x28, #G_REN]
     b       F(SDL_SetRenderDrawColor)
 
+// ui_img(x0 = imagem ARGB de pixel.S, w1 x, w2 y, w3 colunas; 0 = todas):
+// desenha uma imagem da interface (coordenadas da interface, 640 x 360).
+// Na primeira vez cria a textura e guarda no cabecalho da imagem.
+    .globl ui_img
+ui_img:
+    stp     x29, x30, [sp, #-64]!
+    mov     x29, sp
+    stp     x19, x20, [sp, #16]
+    stp     x21, x22, [sp, #32]
+    mov     x19, x0
+    mov     w20, w1
+    mov     w21, w2
+    ldr     w9, [x19]
+    cmp     w3, #0
+    csel    w22, w9, w3, eq
+    cmp     w22, w9
+    csel    w22, w9, w22, gt
+    cmp     w22, #0
+    b.le    9f
+    ldr     x0, [x19, #8]
+    cbnz    x0, 1f
+    ldr     x0, [x28, #G_REN]
+    MOVI32  w1, 0x16362004              // SDL_PIXELFORMAT_ARGB8888
+    mov     w2, #0                      // SDL_TEXTUREACCESS_STATIC
+    ldr     w3, [x19]
+    ldr     w4, [x19, #4]
+    bl      F(SDL_CreateTexture)
+    cbz     x0, 9f
+    str     x0, [x19, #8]
+    mov     w1, #1                      // SDL_BLENDMODE_BLEND
+    bl      F(SDL_SetTextureBlendMode)
+    ldr     x0, [x19, #8]
+    mov     w1, #0                      // SDL_SCALEMODE_NEAREST
+    bl      F(SDL_SetTextureScaleMode)
+    ldr     x0, [x19, #8]
+    mov     x1, #0
+    add     x2, x19, #16
+    ldr     w3, [x19]
+    lsl     w3, w3, #2
+    bl      F(SDL_UpdateTexture)
+    ldr     x0, [x19, #8]
+1:  movi    d0, #0                      // origem: 0, 0, colunas, altura
+    str     d0, [sp, #48]
+    scvtf   s0, w22
+    str     s0, [sp, #56]
+    ldr     w9, [x19, #4]
+    scvtf   s1, w9
+    str     s1, [sp, #60]
+    scvtf   s2, w20                     // destino: x, y, colunas, altura
+    scvtf   s3, w21
+    stp     s2, s3, [sp, #-16]!
+    stp     s0, s1, [sp, #8]
+    mov     x1, x0
+    ldr     x0, [x28, #G_REN]
+    add     x2, sp, #64
+    mov     x3, sp
+    bl      F(SDL_RenderTexture)
+    add     sp, sp, #16
+9:  ldp     x21, x22, [sp, #32]
+    ldp     x19, x20, [sp, #16]
+    ldp     x29, x30, [sp], #64
+    ret
+
     .globl setscale
 setscale:
     scvtf   s0, w0
@@ -3272,6 +3345,7 @@ s_shot_farm:    .asciz "shot_plantacao.bmp"
 s_shot_iron:    .asciz "shot_ferro.bmp"
 s_shot_quarry:  .asciz "shot_pedreira.bmp"
 s_shot_pack: .asciz "shot_alcateia.bmp"
+s_shot_char:    .asciz "shot_personagem.bmp"
     .p2align 2
 // buracos de pedreira e de mina e o chao delas (duas cores cada)
 pitcolors:
