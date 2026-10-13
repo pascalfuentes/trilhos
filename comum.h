@@ -238,7 +238,9 @@
 .equ G_ENE,      904         //   e energia (comecam em 10)
 .equ G_APTS,     908         // pontos de atributo para distribuir
 .equ G_MP,       912         // mana (float 0..100, % da maxima; nivel.S)
-// 916..951 e 1172..1183, 1204: livres (eram da vila)
+.equ G_HOMEU,    916         // onde a partida comecou (float; nivel da regiao)
+.equ G_HOMEV,    920
+// 924..951 e 1172..1183, 1204: livres (eram da vila)
 .equ G_NEARFURN, 952         // perto de uma fornalha (receitas de ferro)
 .equ G_FULL,     956         // tela cheia
 .equ G_INV,      960         // mochila: um contador (u32) por item, 48 vagas

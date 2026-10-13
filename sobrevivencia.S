@@ -417,6 +417,8 @@ sr_d:
 sr_found:
     str     s8, [x28, #G_PU]
     str     s9, [x28, #G_PV]
+    str     s8, [x28, #G_HOMEU]         // o comeco: nivel 1 dos bichos
+    str     s9, [x28, #G_HOMEV]
     str     w0, [x28, #G_PE]
     bl      follow_camera
     LA      x0, m_start

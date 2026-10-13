@@ -69,7 +69,13 @@ xp_reset:
 // xp_fix: jogo salvo antes da fase 1 (nivel 0): comeca no nivel 1
     .globl xp_fix
 xp_fix:
-    ldr     w9, [x28, #G_LEVEL]
+    ldr     w9, [x28, #G_HOMEU]         // save sem o comeco: aqui mesmo
+    cbnz    w9, 2f
+    ldr     w9, [x28, #G_PU]
+    str     w9, [x28, #G_HOMEU]
+    ldr     w9, [x28, #G_PV]
+    str     w9, [x28, #G_HOMEV]
+2:  ldr     w9, [x28, #G_LEVEL]
     cbz     w9, xp_reset
     ldr     w9, [x28, #G_STR]           // salvo antes dos atributos
     cbnz    w9, 1f

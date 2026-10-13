@@ -14,9 +14,10 @@
 //  - Abatidos, deixam pilhas de carne e couro no chao.
 //  - Flechas voam em linha reta ate acertar um animal ou cair.
 //  - Nivel (RPG, fase 2): cada bicho tem um nivel. Vida e mordida crescem
-//    20% por nivel acima do 1 (an_scale); a defesa tira 1 ponto de cada
-//    golpe a cada 4 niveis (golpe minimo 1). Lobo e urso nascem com
-//    nivel 1 a 3 por enquanto (a regiao vem na etapa 2.2).
+//    20% por nivel acima do 1 (an_maxhp); a defesa tira 1 ponto de cada
+//    golpe a cada 4 niveis (golpe minimo 1). O nivel vem da regiao: 1 +
+//    1 a cada 16 celulas de distancia do comeco da partida, mais 0 a 2
+//    de sorte (region_level).
 // =====================================================================
 
 #include "comum.h"
@@ -164,7 +165,7 @@ animal_spawn:
 // try_spawn: um animal novo fora da vista, de acordo com o terreno
 // -> w0 = 1 se o lugar sorteado nao servia (agua, fora do mapa)
 try_spawn:
-    stp     x29, x30, [sp, #-48]!
+    stp     x29, x30, [sp, #-64]!
     mov     x29, sp
     stp     x19, x20, [sp, #16]
     stp     d8, d9, [sp, #32]
@@ -243,20 +244,21 @@ try_spawn:
     fmov    s1, s9
     bl      animal_spawn
     tbnz    w0, #31, 9f
-    cmp     w20, #A_WOLF                // lobo e urso: nivel 1 a 3
-    b.eq    3f
-    cmp     w20, #A_BEAR
-    b.ne    4f
-3:  mov     w19, w0
+    mov     w19, w0                     // nivel da regiao + 0 a 2
+    fmov    s0, s8
+    fmov    s1, s9
+    bl      region_level
+    str     w0, [sp, #48]
     bl      rng
     and     w9, w0, #3
     cmp     w9, #3
     csel    w9, wzr, w9, eq
-    add     w1, w9, #1
+    ldr     w1, [sp, #48]
+    add     w1, w1, w9
     mov     w0, w19
     bl      an_setlevel
     mov     w0, w19
-4:  cmp     w20, #A_DEER                // cervo: vem em manada
+    cmp     w20, #A_DEER                // cervo: vem em manada
     b.ne    9f
     tbnz    w0, #31, 9f
     bl      herd_spawn
@@ -264,7 +266,7 @@ try_spawn:
 91: mov     w0, w9
     ldp     d8, d9, [sp, #32]
     ldp     x19, x20, [sp, #16]
-    ldp     x29, x30, [sp], #48
+    ldp     x29, x30, [sp], #64
     ret
 
 // animals_update: aparecer, andar, fugir, perseguir e morder
@@ -519,6 +521,26 @@ au_done:
     ldp     x29, x30, [sp], #128
     ret
 
+// region_level(s0 = u, s1 = v) -> w0 = nivel da regiao: 1 + distancia
+// do comeco da partida / 16 celulas   folha
+    .globl region_level
+region_level:
+    ldr     s2, [x28, #G_HOMEU]
+    ldr     s3, [x28, #G_HOMEV]
+    fsub    s0, s0, s2
+    fsub    s1, s1, s3
+    fmul    s0, s0, s0
+    fmadd   s0, s1, s1, s0
+    fsqrt   s0, s0
+    fmov    s1, #16.0
+    fdiv    s0, s0, s1
+    fcvtzs  w0, s0
+    add     w0, w0, #1
+    cmp     w0, #250
+    mov     w9, #250
+    csel    w0, w9, w0, gt
+    ret
+
 // an_maxhp(x0 = animal) -> w0 = vida maxima: base x (4 + nivel) / 5   folha
     .globl an_maxhp
 an_maxhp:
@@ -620,6 +642,30 @@ an_selftest:
     mov     x21, x0
     mov     w9, #255                    // some
     strb    w9, [x20, #AN_TYPE]
+    mov     x0, x21                     // regiao: no comeco, a 64 e a 200
+    LA      x1, s_ant4
+    bl      strcat_cur
+    mov     x21, x0
+    mov     w19, #0
+1:  ldr     s0, [x28, #G_HOMEU]
+    ldr     s1, [x28, #G_HOMEV]
+    LA      x9, regdist
+    ldr     w9, [x9, x19, lsl #2]
+    scvtf   s2, w9
+    fadd    s0, s0, s2
+    bl      region_level
+    mov     w1, w0
+    mov     x0, x21
+    bl      numcat
+    cmp     w19, #2
+    b.eq    2f
+    mov     w9, #47
+    strb    w9, [x0], #1
+    strb    wzr, [x0]
+2:  mov     x21, x0
+    add     w19, w19, #1
+    cmp     w19, #3
+    b.lt    1b
 9:  mov     x0, x21
     ldr     x21, [sp, #32]
     ldp     x19, x20, [sp, #16]
@@ -1190,6 +1236,9 @@ s_killed:   .asciz "Abateu: "
 s_ant1:     .asciz " | lobo nv 1 vida="
 s_ant2:     .asciz " nv 6 vida="
 s_ant3:     .asciz " golpe de 6 tira "
+s_ant4:     .asciz " | nivel da regiao (0/64/200 celulas)="
+    .p2align 2
+regdist:    .word 0, 64, 200
 s_anv:      .asciz " Nv "
 s_avida:    .asciz " (vida "
 s_danger:   .asciz " - perigoso!"
