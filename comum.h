@@ -431,11 +431,11 @@
 .equ CHR_Y,      118         // 216 x 232 (nivel.S, char_window)
 .equ CHR_W,      216
 .equ CHR_H,      232
-.equ SKL_X,      224         // painel das skills, do lado da janela C
+.equ SKL_X,      445         // painel das skills, na direita (some com a mochila aberta)
 .equ SKL_Y,      118
 .equ SKL_W,      191
-.equ SKL_H,      186
-.equ SKL_DY,     19          // de uma skill para a outra
+.equ SKL_H,      178
+.equ SKL_DY,     18          // de uma skill para a outra
 .equ BTNF_X,     284         // botao "Fabricar"
 .equ BTNF_W,     116
 .equ CRF_X,      224         // janela de fabricar (e do bau, no mesmo lugar)

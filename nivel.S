@@ -370,6 +370,56 @@ char_window:
     ldp     x29, x30, [sp], #64
     ret
 
+// xp_hudbar: a barra de XP da tela (pedido 1.0), em cima da barra "na
+// mao", sempre visivel: pontas e meio do designer, roxo pela porcentagem
+    .equ XB_X, HB_X
+    .equ XB_Y, (HB_Y - 9)
+    .equ XB_W, (NHOTBAR * SLOTSTEP - 4)
+    .globl xp_hudbar
+xp_hudbar:
+    stp     x29, x30, [sp, #-32]!
+    mov     x29, sp
+    str     x19, [sp, #16]
+    LA      x0, uixpl
+    mov     w1, #XB_X
+    mov     w2, #XB_Y
+    mov     w3, #0
+    bl      ui_img
+    LA      x0, uixpm
+    mov     w1, #(XB_X + 5)
+    mov     w2, #XB_Y
+    mov     w3, #(XB_W - 10)
+    bl      ui_stretch
+    LA      x0, uixpr
+    mov     w1, #(XB_X + XB_W - 5)
+    mov     w2, #XB_Y
+    mov     w3, #0
+    bl      ui_img
+    bl      xp_pct                      // colunas = round((W - 10) * pct)
+    mov     w9, #(XB_W - 10)
+    scvtf   s1, w9
+    fmul    s0, s0, s1
+    mov     w9, #100
+    scvtf   s1, w9
+    fdiv    s0, s0, s1
+    fcvtns  w19, s0
+    cmp     w19, #0
+    b.le    9f
+    LA      x0, uixpf
+    mov     w1, #(XB_X + 5)
+    mov     w2, #(XB_Y + 1)
+    mov     w3, w19
+    bl      ui_stretch
+    LA      x0, uixpp                   // a ponta clara
+    mov     w1, #(XB_X + 4)
+    add     w1, w1, w19
+    mov     w2, #(XB_Y + 1)
+    mov     w3, #0
+    bl      ui_img
+9:  ldr     x19, [sp, #16]
+    ldp     x29, x30, [sp], #32
+    ret
+
 // wtext(w0 x, w1 y, x2 texto): texto da janela, cor Í com sombra Ê
 // 1 px para baixo e para a direita (como pede o designer)
 wtext:

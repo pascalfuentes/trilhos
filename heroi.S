@@ -122,7 +122,23 @@ hero_draw:
     bl      blit
 8:  add     w26, w26, #1
     b       2b
-9:  ldp     x25, x26, [sp, #64]
+9:  ldr     w9, [x28, #G_LVLT]          // subiu de nivel: a luz dourada sobe
+    mov     w10, #180                   // (8 quadros, 5 frames cada)
+    subs    w9, w10, w9
+    b.lt    10f
+    mov     w10, #5
+    udiv    w9, w9, w10
+    cmp     w9, #PX_LVL_N
+    b.hs    10f
+    LA      x10, pixlvl
+    ldr     x0, [x10, x9, lsl #3]
+    mov     w1, w19
+    mov     w2, w20
+    mov     w3, w25
+    mov     w4, w21
+    mov     w5, #0
+    bl      blit
+10: ldp     x25, x26, [sp, #64]
     ldp     x23, x24, [sp, #48]
     ldp     x21, x22, [sp, #32]
     ldp     x19, x20, [sp, #16]

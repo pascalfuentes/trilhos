@@ -1,4 +1,4 @@
-// pixpal.inc - paleta-mestra do designer, indices 130..221
+// pixpal.inc - paleta-mestra do designer, indices 130..224
 // (GERADO por arte/pixel.py; cores de brilho com alfa 0xFE)
     .word 0xFF120E14, 0xFF8A9A4A, 0xFF5E7034, 0xFF3E4E26  // 130-133
     .word 0xFF232E1A, 0xFF7E5E3C, 0xFF574029, 0xFF33241A  // 134-137
@@ -23,3 +23,4 @@
     .word 0xFEB83010, 0xFED8C4FF, 0xFE8A5CFF, 0xFE4A22B0  // 210-213
     .word 0xFEFF4A2A, 0xFFC8A060, 0xFF7E5A2E, 0xFF3A2814  // 214-217
     .word 0xFF1E1A1C, 0xFF0E0C0E, 0xFFD8C8A4, 0xFF8A7C66  // 218-221
+    .word 0xFEFFF6D2, 0xFEFFD866, 0xFEE0A030  // 222-224

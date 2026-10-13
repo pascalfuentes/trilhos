@@ -4237,7 +4237,9 @@ ui_hit:
     mov     w0, #9
     mov     w1, w12
     b       9f
-7:  sub     w9, w2, #SKL_X              // painel das skills: 4
+7:  ldr     w9, [x28, #G_INVOPEN]
+    cbnz    w9, 9f
+    sub     w9, w2, #SKL_X              // painel das skills: 4
     cmp     w9, #SKL_W
     b.hs    9f
     sub     w10, w3, #SKL_Y
@@ -4667,6 +4669,7 @@ ui_windows:
     cbz     w9, 12f
     bl      draw_craft
 12: bl      draw_hotbar
+    bl      xp_hudbar                   // barra de XP da tela (nivel.S)
     ldr     w9, [x28, #G_INVOPEN]
     cbz     w9, 2f
     bl      draw_inv
@@ -5297,13 +5300,15 @@ draw_char:
     stp     x19, x20, [sp, #16]
     stp     x21, x22, [sp, #32]
     str     d8, [sp, #48]
+    bl      char_window                 // a janela C do designer (nivel.S)
+    ldr     w9, [x28, #G_INVOPEN]       // as skills na direita, onde fica a
+    cbnz    w9, 99f                     // mochila (com ela aberta, nao)
     mov     w0, #SKL_X
     mov     w1, #SKL_Y
     mov     w2, #SKL_W
     mov     w3, #SKL_H
     LA      x4, s_chartitle
     bl      ui_panel
-    bl      char_window                 // a janela C do designer (nivel.S)
     mov     w19, #0
 1:  cmp     w19, #NSKILL
     b.ge    5f
@@ -5395,7 +5400,7 @@ draw_char:
     bl      strcat_cur
     RGBA    220, 220, 220, 255
     mov     w0, #(SKL_X + 8)
-    mov     w1, #(SKL_Y + SKL_H - 30)
+    mov     w1, #(SKL_Y + SKL_H - 28)
     LA      x2, lbuf
     bl      text
     RGBA    150, 150, 160, 255
@@ -5403,7 +5408,7 @@ draw_char:
     mov     w1, #(SKL_Y + SKL_H - 16)
     LA      x2, s_legend
     bl      text
-    ldr     d8, [sp, #48]
+99: ldr     d8, [sp, #48]
     ldp     x21, x22, [sp, #32]
     ldp     x19, x20, [sp, #16]
     ldp     x29, x30, [sp], #64

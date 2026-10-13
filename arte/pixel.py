@@ -46,6 +46,17 @@ for r in pal['rampas']:
         idx[c] = PAL0 + len(cores)
         a = 0xFE if c in GLOW else 0xFF
         cores.append((a << 24) | int(t['hex'].lstrip('#'), 16))
+# rampas novas dos pedidos seguintes (fase 1: luz dourada, brilho)
+f1 = json.load(open(sys.argv[3])) if len(sys.argv) > 3 else {}
+for r in f1.get('_paleta_adicoes', []):
+    for t in r['tons']:
+        c = t['c']
+        assert c not in idx, c
+        idx[c] = PAL0 + len(cores)
+        if r.get('brilho'):
+            GLOW.add(c)
+        a = 0xFE if c in GLOW else 0xFF
+        cores.append((a << 24) | int(t['hex'].lstrip('#'), 16))
 assert PAL0 + len(cores) <= 256
 
 def check(rows, w, h, nome):
@@ -240,8 +251,7 @@ for cod, rows in TILES:
 
 # ---- interface (pedido 1.0) ----
 UA = []
-if len(sys.argv) > 3:
-    f1 = json.load(open(sys.argv[3]))
+if f1:
     for r in f1.get('_paleta_adicoes', []):
         for t in r['tons']:
             HEX[t['c']] = 0xFF000000 | int(t['hex'].lstrip('#'), 16)
@@ -281,6 +291,21 @@ if len(sys.argv) > 3:
         if peca is None:
             fr = clip_top(fr, NQ, 13)
         ui_img('uihero_%s' % cod.lower(), fr[0][0])
+    # barra de XP da tela: pontas, meio (esticado) e o preenchimento
+    bx = f1['barra_xp_tela']
+    for lab, k in (('uixpl', 'esquerda'), ('uixpm', 'meio'), ('uixpr', 'direita'),
+                   ('uixpf', 'preenchimento'), ('uixpp', 'preenchimento_ponta')):
+        ui_img(lab, bx[k], bx['cores'])
+    # efeito de subir de nivel: quadros do mundo (paleta, brilho)
+    ef = f1['efeito_subir_nivel']
+    ew, eh = ef['quadro']
+    eax, eay = ef['ancora']
+    w('// efeito de subir de nivel: 8 quadros de %d x %d' % (ew, eh))
+    elabs = [emit(check(q, ew, eh, 'efeito'), eax, eay) for q in ef['quadros']]
+    w('    .p2align 3')
+    w('    .globl pixlvl')
+    w('pixlvl: .quad ' + ', '.join(elabs))
+    UA.append('.equ PX_LVL_N, %d' % len(elabs))
     w('    .p2align 3')
     w('    .globl uibtns, uiicons, uiheros')
     w('uibtns:  .quad uibtn0, uibtn1, uibtn2, uibtn3')

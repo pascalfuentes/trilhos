@@ -15,6 +15,7 @@
 .equ PX_TOCHA1, 4
 .equ PX_PENHASCO, 5
 .equ PX_K, 8
+.equ PX_LVL_N, 8
 .equ UA_TITULO_X, 64
 .equ UA_TITULO_Y, 4
 .equ UA_TITULO_W, 88
